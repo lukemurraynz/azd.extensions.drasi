@@ -1,0 +1,5 @@
+# Exclude structured instruction and agent files from markdown linting.
+# These files use dense formatting conventions not compatible with standard
+# markdown style guides (no blank lines around headings/lists/fences).
+.github/agents/**
+.github/instructions/**

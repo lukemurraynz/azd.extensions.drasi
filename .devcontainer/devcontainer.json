@@ -1,0 +1,73 @@
+{
+  "name": "Azure Development",
+  "image": "mcr.microsoft.com/devcontainers/base:ubuntu-24.04",
+  "remoteUser": "vscode",
+  "privileged": false,
+  "shutdownAction": "stopContainer",
+  "init": true,
+
+  "features": {
+    "ghcr.io/devcontainers/features/azure-cli:1": {
+      "version": "2.75",
+      "installBicep": true,
+      "installUsingPython": true
+    },
+    "ghcr.io/devcontainers/features/powershell:2": {
+      "version": "7.5"
+    },
+    // Required for az prototype (copilot and github-models providers).
+    "ghcr.io/devcontainers/features/github-cli:1": {
+      "version": "2.74"
+    },
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {
+      "moby": true,
+      "azureDnsAutoDetection": true,
+      "installDockerBuildx": true,
+      "installDockerComposeSwitch": true,
+      "version": "28",
+      "dockerDashComposeVersion": "v2"
+    },
+    "ghcr.io/devcontainers/features/terraform:1": {
+      "version": "1.12",
+      "tflint": "0.55",
+      "terragrunt": "0.72",
+      "installTerraformDocs": true
+    },
+    "ghcr.io/azure/azure-dev/azd:0": {
+      "version": "1.23"
+    },
+    "ghcr.io/devcontainers-extra/features/checkov:1": {},
+    "ghcr.io/prulloac/devcontainer-features/pre-commit:1.0.3": {}
+  },
+
+  "postCreateCommand": "bash .devcontainer/post-create.sh",
+  "postStartCommand": "bash .devcontainer/post-start.sh",
+
+  "customizations": {
+    "vscode": {
+      "settings": {
+        "editor.formatOnSaveMode": "file",
+        "bicep.experimental.deployPane": true,
+        "github.copilot.chat.codeGeneration.useInstructionFiles": true
+      },
+      "extensions": [
+        "ms-azuretools.vscode-azurecontainerapps",
+        "ms-azuretools.vscode-azureresourcegroups",
+        "ms-azuretools.vscode-bicep",
+        "editorconfig.editorconfig",
+        "ms-azuretools.vscode-azure-mcp-server",
+        "GitHub.copilot",
+        "GitHub.copilot-chat",
+        "ms-vscode.azure-account",
+        "hashicorp.terraform",
+        "GitHub.vscode-pull-request-github",
+        "ms-kubernetes-tools.aks-devx-tools",
+        "ms-azuretools.vscode-azure-github-copilot",
+        "ms-azuretools.azure-dev",
+        "vscode-icons-team.vscode-icons",
+        "ise-hve-essentials.hve-core",
+        "Upstash.context7-mcp"
+      ]
+    }
+  }
+}
