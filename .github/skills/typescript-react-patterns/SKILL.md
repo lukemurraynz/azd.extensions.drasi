@@ -819,6 +819,7 @@ Expected behavior — selection is cleared in `useEffect` when the `alerts` arra
 
 - **typescript.instructions.md**: `.github/instructions/typescript.instructions.md`
 - **Fluent UI v9**: https://react.fluentui.dev/
+- **Fluent UI icon browser (flicon.io)**: https://flicon.io/ — searchable reference for `@fluentui/react-icons` icon names
 - **SignalR JS client**: https://learn.microsoft.com/aspnet/core/signalr/javascript-client
 - **Vite env vars**: https://vitejs.dev/guide/env-and-mode.html
 - **Azure Maps React**: https://github.com/Azure/react-azure-maps

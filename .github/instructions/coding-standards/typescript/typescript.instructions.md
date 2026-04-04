@@ -1539,4 +1539,5 @@ See [typescript-tests.instructions.md](typescript-tests.instructions.md) for ful
 - React docs: https://react.dev/
 - ISE JS/TS code reviews: https://microsoft.github.io/code-with-engineering-playbook/code-reviews/recipes/javascript-and-typescript/
 - Fluent UI React v9: https://react.fluentui.dev/
+- Fluent UI icon browser (flicon.io): https://flicon.io/ — searchable reference for `@fluentui/react-icons` icon names
 - Vite env vars: https://vitejs.dev/guide/env-and-mode.html

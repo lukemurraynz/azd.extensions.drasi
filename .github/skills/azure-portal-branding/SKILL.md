@@ -16,6 +16,7 @@ license: MIT
 
 > [!IMPORTANT]
 > Enforce Fluent v9-only imports in CI. Add to your lint configuration or pre-commit hook:
+>
 > ```bash
 > # Detect Fluent v8 imports (fail build)
 > grep -r "@fluentui/react\"" src/ --include="*.ts" --include="*.tsx" | grep -v "react-components" && echo "ERROR: Fluent UI v8 detected — use @fluentui/react-components (v9)" && exit 1
@@ -298,6 +299,7 @@ import { DismissRegular } from "@fluentui/react-icons";
 ## References
 
 - [Fluent UI React v9 Components](https://react.fluentui.dev/) — Primary component reference
+- [Fluent UI Icon Browser (flicon.io)](https://flicon.io/) — Searchable reference for `@fluentui/react-icons` icon names
 - [Fluent 2 Design System](https://fluent2.microsoft.design/) — Design principles, tokens, accessibility
 - [Fluent UI React v9 Storybook](https://master--628d031b55e942004ac95df1.chromatic.com/) — Interactive component examples
 - [Azure Portal Design Patterns](https://learn.microsoft.com/azure/azure-portal/) — Portal UX conventions
