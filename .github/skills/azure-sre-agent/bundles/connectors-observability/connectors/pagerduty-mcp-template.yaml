@@ -1,0 +1,12 @@
+api_version: azuresre.ai/v1
+kind: DataConnector
+spec:
+  name: pagerduty-mcp
+  type: Mcp
+  endpoint: https://mcp.pagerduty.com/mcp
+  auth:
+    type: Header
+    headerName: Authorization
+    headerValue: Token <PAGERDUTY_USER_API_TOKEN>
+
+# For EU accounts use: https://mcp.eu.pagerduty.com/mcp

@@ -1,0 +1,14 @@
+api_version: azuresre.ai/v1
+kind: ScheduledTask
+metadata:
+  name: aks-daily-health
+spec:
+  name: aks-daily-health
+  description: Daily AKS health and reliability scan.
+  cron: "0 7 * * *"
+  agent_prompt: |
+    Diagnose AKS health for <cluster-name> in <resource-group>:
+    1. Verify node readiness and capacity pressure.
+    2. List unhealthy workloads and restart patterns.
+    3. Summarize top errors from the last 24 hours.
+    4. Recommend remediation candidates with risk and rollback.

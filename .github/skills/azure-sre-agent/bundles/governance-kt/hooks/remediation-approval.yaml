@@ -1,0 +1,22 @@
+name: remediation-approval
+event_type: Stop
+activation_mode: always
+description: Requires explicit approval before production write actions.
+hook:
+  type: prompt
+  prompt: |
+    Review the response.
+
+    If it proposes production write actions, reject and request explicit
+    approval before completion. If read-only or reporting-only, approve.
+
+    $ARGUMENTS
+
+    Return JSON only:
+    {"ok": true, "reason": "Read-only response."}
+    or
+    {"ok": false, "reason": "Approval required for production write action."}
+  model: ReasoningFast
+  timeout: 30
+  fail_mode: Block
+  max_rejections: 3

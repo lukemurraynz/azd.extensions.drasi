@@ -53,9 +53,7 @@ venv/
 .pytest_cache/
 .ruff_cache/
 htmlcov/
-.github/
-.vscode/
-.specify/
+
 
 # =============================================================================
 # Rust

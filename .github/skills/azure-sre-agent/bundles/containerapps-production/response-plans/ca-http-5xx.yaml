@@ -1,0 +1,12 @@
+api_version: azuresre.ai/v2
+kind: IncidentFilter
+metadata:
+  name: ca-http-5xx
+spec:
+  incidentPlatform: AzMonitor
+  titleContains: "5xx"
+  agentMode: Review
+  maxAutomatedInvestigationAttempts: 3
+  isEnabled: true
+  azMonitorFilterSettings:
+    targetResourceType: Microsoft.App/containerApps

@@ -1,0 +1,17 @@
+name: base-core
+version: 1.0.0
+description: Core production baseline capability pack.
+depends_on: []
+resources:
+  agents:
+    - ./agents/diagnostics-agent.yaml
+    - ./agents/remediation-review.yaml
+    - ./agents/incident-notifier.yaml
+  response_plans:
+    - ./response-plans/core-high-severity.yaml
+  scheduled_tasks:
+    - ./scheduled-tasks/daily-health-check.yaml
+  hooks:
+    - ./hooks/remediation-approval.yaml
+  checklists:
+    - ./checklists/acceptance-tests.md

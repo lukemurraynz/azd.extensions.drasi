@@ -1,0 +1,23 @@
+name: tool-audit
+event_type: PostToolUse
+activation_mode: always
+description: Audits tool executions and injects audit context.
+hook:
+  type: command
+  matcher: "*"
+  timeout: 30
+  fail_mode: allow
+  script: |
+    #!/usr/bin/env python3
+    import json
+    import sys
+
+    context = json.load(sys.stdin)
+    tool_name = context.get("tool_name", "unknown")
+    output = {
+      "decision": "allow",
+      "hookSpecificOutput": {
+        "additionalContext": f"[AUDIT] Tool executed: {tool_name}"
+      }
+    }
+    print(json.dumps(output))

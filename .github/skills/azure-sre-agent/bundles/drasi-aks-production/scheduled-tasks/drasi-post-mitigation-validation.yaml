@@ -1,0 +1,13 @@
+api_version: azuresre.ai/v1
+kind: ScheduledTask
+metadata:
+  name: drasi-post-mitigation-validation
+spec:
+  name: drasi-post-mitigation-validation
+  description: Bounded post-mitigation validation for Drasi stability.
+  cron: "*/1 * * * *"
+  agent_prompt: |
+    Validate Drasi recovery for up to 30 runs:
+    1. Check lag, staleness, error trends, and pod health.
+    2. Escalate immediately on regression with evidence.
+    3. On stable recovery, record pass/fail summary and stop.
