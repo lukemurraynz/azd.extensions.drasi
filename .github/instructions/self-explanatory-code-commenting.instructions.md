@@ -24,7 +24,7 @@ Comments should help future maintainers understand decisions that are not obviou
 1. **Better names** (variables, functions, types, modules)
 2. **Smaller units** (extract function, early returns, reduce nesting)
 3. **Stronger types / invariants** (validation, domain types, enums)
-4. **Tests** that demonstrate behavior and edge-cases
+4. **Tests** that demonstrate behavior and edge cases
 5. **Doc comments / docstrings** for public API usage & contracts
 6. **A comment** explaining WHY / constraints / tradeoffs
 
@@ -34,16 +34,11 @@ Comments should help future maintainers understand decisions that are not obviou
 
 Before writing a comment, ask:
 
-1. **Is the code already clear?**
-   - → No comment.
-2. **Could a rename or extraction remove the need?**
-   - → Refactor instead.
-3. **Does this explain WHY or constraints, not line-by-line behavior?**
-   - → Comment may be justified.
-4. **Will this still be true in 6 months?**
-   - → If not, don’t write it or reframe it.
-5. **Is this public API surface?**
-   - → Use doc comments / docstrings, not inline comments.
+1. **Is the code already clear?** → No comment.
+2. **Could a rename or extraction remove the need?** → Refactor instead.
+3. **Does this explain WHY or constraints, not line-by-line behavior?** → Comment may be justified.
+4. **Will this still be true in 6 months?** → If not, don't write it or reframe it.
+5. **Is this public API surface?** → Use doc comments / docstrings, not inline comments.
 
 ---
 
@@ -67,7 +62,7 @@ await rate_limiter.wait();
 
 // SECURITY: Validate and normalize user input before building the query to avoid injection.
 
-// Using Floyd–Warshall because we need all-pairs distances (graph is small: n <= 300).
+// Using Floyd-Warshall because we need all-pairs distances (graph is small: n <= 300).
 
 // Matches email-like strings: local@domain.tld (basic validation, not RFC-complete).
 const email_pattern = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
@@ -101,6 +96,10 @@ For public functions, classes, or modules:
 - Avoid internal implementation details
 - Use the language-appropriate format: JSDoc for JavaScript/TypeScript, XML doc comments for C#, docstrings for Python, Javadoc for Java
 
+Language-specific note:
+
+- Go: For exported identifiers, use a doc comment that starts with the identifier name (Godoc convention).
+
 ```js
 /**
  * Calculates compound interest.
@@ -127,6 +126,14 @@ Use consistent tags so intent is searchable and reviewable:
 - `SECURITY`: security-sensitive logic
 - `DEPRECATED`: replacement and removal timeline
 
+Use the exact format (including capitalization and the colon) so it's greppable and consistent:
+
+- `// NOTE: ...`
+- `// WARNING: ...`
+- `// PERF: ...`
+- `// SECURITY: ...`
+- `// DEPRECATED: ...`
+
 ```js
 // TODO(ABC-1234): Replace polling with webhooks once partner supports callbacks.
 // HACK(DEF-987): Work around upstream bug in v2.1.0; remove after upgrade.
@@ -139,7 +146,7 @@ Use consistent tags so intent is searchable and reviewable:
 ## Comment style rules
 
 - Use sentence case and proper punctuation
-- Be specific and neutral; avoid words like “obviously” or “just”
+- Be specific and neutral; avoid words like "obviously" or "just"
 - Do not include secrets, credentials, or sensitive customer data
 - Place comments immediately above the code they describe
 - If a change makes a comment inaccurate, update or delete the comment in the same change
