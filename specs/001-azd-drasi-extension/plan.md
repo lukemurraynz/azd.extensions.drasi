@@ -225,6 +225,27 @@ azd.extensions.drasi/
     └── troubleshooting.md           # Error codes, common failures, diagnostic steps
 ```
 
+### Scaffolded Project Output (created by `azd drasi init`)
+
+`azd drasi init` MUST generate a self-contained azd project on disk. In particular, IaC lives **in the user project** (as azd expects), and the extension copies the canonical embedded templates into the scaffold output.
+
+```text
+<new project>/
+├── azure.yaml
+├── drasi/
+│   ├── drasi.yaml
+│   ├── environments/
+│   │   └── dev.yaml
+│   ├── sources/
+│   ├── queries/
+│   └── reactions/
+├── infra/
+│   ├── main.bicep
+│   ├── main.parameters.bicepparam
+│   └── modules/
+└── docker-compose.yml
+```
+
 ---
 
 ## Implementation Phases

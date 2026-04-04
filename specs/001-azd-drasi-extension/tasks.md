@@ -98,23 +98,25 @@ Fix and re-run; confirm exit 0.
 **Goal**: `azd drasi init` scaffolds a complete project in an empty directory. Re-running is
 idempotent. `--template cosmos-change-feed` pre-populates a working configuration.
 
-**Independent Test**: Run `azd drasi init` in a temp dir. Confirm all declared files exist and
-are valid YAML. Run again — no files modified (idempotent). Run `azd drasi validate` on the
-output; exit 0 with no errors. No Azure subscription needed.
+**Independent Test**: Run `azd drasi init` in a temp dir. Confirm all declared files exist,
+all YAML files parse, and `infra/main.bicep` compiles (`bicep build`). Run again — no files
+modified (idempotent). Run `azd drasi validate` on the output; exit 0 with no errors. No
+Azure subscription needed.
 
 ### Tests (write before implementation)
 
-- [ ] T032 [TEST] [US1] Write scaffold engine test: blank template creates expected 6 files, conflict on re-run without --force, --force overwrites, returned file list matches actual FS — `internal/scaffold/engine_test.go`
+- [ ] T032 [TEST] [US1] Write scaffold engine test: blank template creates expected scaffold tree (`azure.yaml`, `infra/`, `drasi/`, `docker-compose.yml`, `.vscode/launch.json`), conflict on re-run without --force, --force overwrites, returned file list matches actual FS — `internal/scaffold/engine_test.go`
 - [ ] T033 [TEST] [P] [US1] Write init command test: --template flag accepted (blank/cosmos-change-feed/event-hub-routing/query-subscription), --force flag, --output json emits file list only, idempotent re-run exits 0 with no-changes message — `cmd/init_test.go`
 
 ### Implementation
 
 - [ ] T034 [US1] Create blank template files — `internal/scaffold/templates/blank/`:
+  - `azure.yaml` (required by spec US1): minimal valid azd project file referencing `infra/` for provisioning; must be usable in a freshly scaffolded directory
   - `drasi/drasi.yaml` with `includes`, `environments`, and `featureFlags` stubs (all values empty/false by default so validate exits 0 on a blank scaffold)
   - `drasi/sources/example-source.yaml`, `drasi/queries/example-query.yaml`, `drasi/reactions/example-reaction.yaml`
   - `drasi/environments/dev.yaml` (empty overlay showing the merge format, with inline comments)
   - `docker-compose.yml` (FR-036): binds a local Drasi server (`ghcr.io/drasi-project/drasi:${DRASI_VERSION:-0.10.0}`) + Dapr sidecar service; **[VERIFY]** exact image reference against `https://github.com/orgs/drasi-project/packages` before committing — the image name and tag format must be confirmed from the published packages list
-  - `infra/README.md` placeholder file: contains one sentence pointing to `../../infra/main.bicep` and instructs user to run `azd drasi provision` rather than deploying directly; NOT a Bicep module itself
+  - `infra/` Bicep baseline (required by spec US1): `infra/main.bicep`, `infra/main.parameters.bicepparam`, and `infra/modules/*` so the scaffolded project is self-contained and does not rely on any repo-relative `../../infra` references
   - `.vscode/launch.json` stub with a Go extension debug configuration targeting `main.go`; inline comment marking it as a development convenience stub (not production-required) so contributors can F5-debug the extension binary without confusion about whether it does anything deployment-related
 - [ ] T035 [P] [US1] Create cosmos-change-feed template: Cosmos Gremlin Source yaml (KV refs for connection), Cypher ContinuousQuery yaml with explicit `queryLanguage: Cypher`, dapr-pubsub Reaction yaml, all secrets as `{kind: secret, vaultName: ..., secretName: ...}` refs, inline comments explaining each field — `internal/scaffold/templates/cosmos-change-feed/`
 - [ ] T036 [P] [US1] Create event-hub-routing template: Event Hub Source yaml, query yaml, reaction yaml with inline comments — `internal/scaffold/templates/event-hub-routing/`
@@ -163,7 +165,7 @@ all role assignments are present, no secrets in any deployment output, exit 0.
 ## Phase 6: User Story 3 — Deploy Drasi Components (Priority: P3)
 
 **Goal**: `azd drasi deploy` validates, translates KV refs to K8s Secrets, and idempotently
-applies sources → queries → reactions to the Drasi runtime on AKS.
+applies sources → queries → middleware → reactions to the Drasi runtime on AKS.
 
 **Independent Test**: Run `azd drasi deploy` on a provisioned environment with a sample config.
 Confirm all components Online. Re-run without changes — no-op (all hashes match). Change one
@@ -178,13 +180,13 @@ query file, re-run — only that query is deleted and re-applied.
 - [ ] T058 [TEST] [P] [US3] Write list test: parse tabular output to []ComponentSummary, empty list returns empty slice, parse error surfaced — `internal/drasi/list_test.go`
 - [ ] T059 [TEST] [P] [US3] Write describe test: parse component detail struct including status and error reason, component not found returns typed error — `internal/drasi/describe_test.go`
 - [ ] T060 [TEST] [US3] Write deployment diff test: unchanged hash → NoOp; changed hash → DeleteThenApply; missing key in state → Create; key format DRASI_HASH_CONTINUOUSQUERY_my-id — `internal/deployment/diff_test.go`
-- [ ] T061 [TEST] [P] [US3] Write deployment order test: SortForDeploy produces sources→queries→reactions order; SortForDelete produces exact reverse — `internal/deployment/order_test.go`
+- [ ] T061 [TEST] [P] [US3] Write deployment order test: SortForDeploy produces sources→queries→middleware→reactions order; SortForDelete produces exact reverse (reactions→middleware→queries→sources) — `internal/deployment/order_test.go`
 - [ ] T062 [TEST] [P] [US3] Write state test: ReadHash returns empty string for missing key; WriteHash persists; round-trip preserves hash — `internal/deployment/state_test.go`
 - [ ] T063 [TEST] [P] [US3] Write timeout test: per-component 5min deadline, total 15min deadline, ERR_COMPONENT_TIMEOUT includes component identity — `internal/deployment/timeout_test.go`
 - [ ] T064 [TEST] [US3] Write engine test: happy-path all Create, hash written after each success; partial failure leaves already-written hashes intact; dry-run makes no FS or subprocess calls — `internal/deployment/engine_test.go`
 - [ ] T065 [TEST] [P] [US3] Write KV translator test: SecretRef replaced with K8s Secret ref; plain string value passes through; missing KV secret returns typed error — `internal/keyvault/translator_test.go`
 - [ ] T066 [TEST] [US3] Write deploy command test: validation gate blocks deploy on invalid config; --dry-run emits plan without side effects; --environment wires correct env state; ERR_DAPR_NOT_READY when Dapr absent — `cmd/deploy_test.go`
-- [ ] T067 [TEST] [P] [US3] Write teardown command test: missing --force exits 2 with ERR_FORCE_REQUIRED; --infrastructure flag accepted; components deleted in reverse order reactions→queries→sources — `cmd/teardown_test.go`
+- [ ] T067 [TEST] [P] [US3] Write teardown command test: missing --force exits 2 with ERR_FORCE_REQUIRED; --infrastructure flag accepted; components deleted in reverse order reactions→middleware→queries→sources — `cmd/teardown_test.go`
 
 ### Implementation
 
@@ -201,7 +203,7 @@ query file, re-run — only that query is deleted and re-applied.
   > - `azdClient.Environment().SetEnvironmentValue(ctx, &azdext.SetEnvRequest{EnvName: envName, Key: key, Value: hash})`
   >   The `AzdClient` must be injected as an interface dependency (not constructed inside `state.go`) to keep the package testable without a live gRPC connection.
 - [ ] T075 [P] [US3] Create deployment diff: `ComputeHash(component any) string` using SHA-256 of canonical YAML (keys sorted); `BuildPlan(manifest ResolvedManifest, state StateReader) DeploymentPlan` comparing hashes — `internal/deployment/diff.go`
-- [ ] T076 [P] [US3] Create deployment order: `SortForDeploy(plan DeploymentPlan)` → sources, queries, reactions, middleware; `SortForDelete(plan)` → reverse — `internal/deployment/order.go`
+- [ ] T076 [P] [US3] Create deployment order: `SortForDeploy(plan DeploymentPlan)` → sources, queries, middleware, reactions; `SortForDelete(plan)` → reverse (reactions, middleware, queries, sources) — `internal/deployment/order.go`
 - [ ] T077 [P] [US3] Create deployment timeout: `PerComponentTimeout = 5 * time.Minute`; `TotalDeployTimeout = 15 * time.Minute`; `WithComponentDeadline(ctx, componentID)` → derived context + ERR_COMPONENT_TIMEOUT helper — `internal/deployment/timeout.go`
 - [ ] T078 [US3] Create deployment engine: `Deploy(ctx, plan, drasiClient, stateStore) DeploymentResult`; ordered execution of Create/DeleteThenApply/NoOp actions; write hash after each successful apply+wait; preserve partial-failure state on next run by not writing hash for failed components — `internal/deployment/engine.go`
 - [ ] T079 [US3] Create Key Vault client: `GetSecret(ctx context.Context, vaultName, secretName string) (string, error)` using `azsecrets.NewClient` + `DefaultAzureCredential` — `internal/keyvault/client.go`
@@ -210,7 +212,7 @@ query file, re-run — only that query is deleted and re-applied.
 - [ ] T080 [P] [US3] Create KV→K8s Secret translator: `TranslateRefs(ctx, manifest ResolvedManifest, kvClient KVClient, k8sClient K8sClient, namespace string) (ResolvedManifest, error)`; walk all `Value` fields; for each `SecretRef` fetch KV secret, write K8s Secret (`drasi-secret-<vaultName>-<secretName>`), replace with K8s Secret ref — `internal/keyvault/translator.go`
 - [ ] T081 [US3] Implement `cmd/deploy.go`: validate gate (exit 1 if fails) → KV translation → BuildPlan → dry-run branch (print plan, exit 0) or execute → format DeploymentResult with per-component status — `cmd/deploy.go`
   > **featureFlags gate (spec FR-007 / spec line 60)**: After BuildPlan and before execution, filter out any component marked `experimental: true` when `manifest.FeatureFlags.EnableExperimentalQueries == false`. Emit a `WARN` log for each skipped component (`slog.Warn("skipping experimental component", "id", id, "kind", kind)`). This filter must apply in both dry-run and live-execute paths.
-- [ ] T082 [P] [US3] Implement `cmd/teardown.go`: require `--force` (exit 2 with ERR_FORCE_REQUIRED if absent); call drasi delete in reverse order reactions→queries→sources; `--infrastructure` flag triggers Bicep teardown — `cmd/teardown.go`
+- [ ] T082 [P] [US3] Implement `cmd/teardown.go`: require `--force` (exit 2 with ERR_FORCE_REQUIRED if absent); call drasi delete in reverse order reactions→middleware→queries→sources; `--infrastructure` flag triggers Bicep teardown — `cmd/teardown.go`
 
 **Checkpoint**: `azd drasi deploy` idempotently deploys 3 components; re-deploy with unchanged YAML is all-NoOp; change one query file and re-deploy — only that query is DeleteThenApply; partial failure on component 2 leaves component 1 hash written for recovery.
 
@@ -331,7 +333,7 @@ Phase 2 (Foundational) — BLOCKS all user stories
 | Phase 6: US3 Deploy    | P3    | T054–T082               | 22        | 14         |
 | Phase 7: US4 Operate   | P4    | T083–T091               | 7         | 4          |
 | Phase 8: Polish        | —     | T092–T099               | 6         | 1          |
-| **Total**              |       | **100**                 | **75**    | **32**     |
+| **Total**              |       | **99**                  | **75**    | **32**     |
 
 **MVP Scope** (US1 P1 + prerequisites): Phases 1, 2, and 4 = **T001–T015 + T032–T040** (24 tasks).
 After MVP: US5 validate (Phase 3) is the next highest-value increment before deploy (Phase 6 requires it).
