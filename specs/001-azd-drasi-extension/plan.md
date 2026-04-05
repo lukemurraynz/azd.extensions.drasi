@@ -29,8 +29,6 @@ connection strings or service principal secrets.
 - `github.com/spf13/cobra` v1.8+ — CLI command framework
 - `gopkg.in/yaml.v3` — YAML loading/serialisation
 - `github.com/santhosh-tekuri/jsonschema/v6` — JSON Schema validation
-- `github.com/azure/azure-sdk-for-go/sdk/security/keyvault/azsecrets` — Key Vault secret reads (NOTE: `sdk/keyvault/azsecrets` is deprecated; always use this `sdk/security/keyvault/` path)
-- `github.com/azure/azure-sdk-for-go/sdk/azidentity` — DefaultAzureCredential
 - `github.com/stretchr/testify` — unit test assertions
 - `github.com/testcontainers/testcontainers-go` — integration test containers
 
@@ -47,7 +45,7 @@ Azure Key Vault for secrets (read-only at deploy time); no database
 
 **Performance Goals**:
 
-- `azd drasi validate` (offline): < 2 seconds for any project size
+- `azd drasi validate` (offline): < 2 seconds for projects up to 200 component YAML files (sources + queries + reactions + middleware) on a standard CI runner
 - `azd drasi deploy` end-to-end: < 15 minutes total (5 min per-component timeout)
 - `azd drasi provision` (new cluster + Drasi install): 8–12 minutes typical
 
@@ -73,7 +71,7 @@ _GATE: Must pass before Phase 0 research. Re-checked after Phase 1 design — PA
 | II   | Idempotency                         | All `azd drasi` commands re-entrant; missing state = create        | ✅ PASS            | Content-hash change detection ensures safe re-runs                                            |
 | III  | Composable with azd                 | Registers as azd extension; supports `lifecycle-events` capability | ✅ PASS            | `extension.yaml` declares `custom-commands` + `lifecycle-events`                              |
 | IV   | Secure by Default (NON-NEGOTIABLE)  | No connection strings; Workload Identity; Key Vault secrets only   | ✅ PASS            | OIDC + FederatedIdentityCredential; KV→K8s Secret translation                                 |
-| V    | Developer Experience                | `azd drasi` namespace; `--output json`; `--dry-run`; < 2s validate | ✅ PASS            | All 8 commands follow consistent flag/output contract                                         |
+| V    | Developer Experience                | `azd drasi` namespace; `--output json`; `--dry-run`; < 2s validate | ✅ PASS            | Core 8 commands plus `upgrade` stub follow a consistent flag/output contract                  |
 | VI   | AKS Required (NON-NEGOTIABLE)       | Drasi components MUST run on AKS                                   | ✅ PASS (OVERRIDE) | User plan input specified Container Apps — **overridden**. AKS with OIDC + Workload Identity. |
 | VII  | Observable by Default               | OTel → Log Analytics workspace; structured structured error codes  | ✅ PASS            | `observability/` package; ContainerLogV2; Managed Prometheus                                  |
 | VIII | Test-First Quality (NON-NEGOTIABLE) | TDD; 80% coverage; `golangci-lint`; `bicep lint`                   | ✅ PASS            | Tests written before implementation in each phase                                             |
@@ -118,14 +116,15 @@ azd.extensions.drasi/
 │  # Cobra command layer
 ├── cmd/
 │   ├── root.go                      # NewRootCommand(); --output --debug flags; version string
-│   ├── init.go                      # azd drasi init  [--template] [--force]
+│   ├── init.go                      # azd drasi init  [--template] [--force] [--environment]
 │   ├── provision.go                 # azd drasi provision [--environment]
 │   ├── deploy.go                    # azd drasi deploy [--config] [--environment] [--dry-run]
 │   ├── status.go                    # azd drasi status [--environment]
-│   ├── logs.go                      # azd drasi logs [--component] [--kind] [--tail] [--follow]
+│   ├── logs.go                      # azd drasi logs [--component] [--kind] [--tail] [--follow] [--environment]
 │   ├── diagnose.go                  # azd drasi diagnose [--environment]
-│   ├── validate.go                  # azd drasi validate [--config] [--strict]
-│   └── teardown.go                  # azd drasi teardown --force [--infrastructure]
+│   ├── validate.go                  # azd drasi validate [--config] [--strict] [--environment]
+│   ├── teardown.go                  # azd drasi teardown --force [--infrastructure] [--environment]
+│   └── upgrade.go                   # azd drasi upgrade (FR-010 stub)
 │
 │  # Business logic (no cobra, no azdext, no os.Exit)
 ├── internal/
@@ -170,7 +169,7 @@ azd.extensions.drasi/
 │   │
 │   │  # Key Vault → K8s Secret translation
 │   ├── keyvault/
-│   │   ├── client.go                # Azure Key Vault client; DefaultAzureCredential
+│   │   ├── spc.go                   # SecretProviderClass + synced Secret manifest generator
 │   │   └── translator.go            # TranslateRefs(manifest) → replaces SecretRef with K8s Secret ref
 │   │
 │   │  # Project scaffolding
@@ -201,7 +200,7 @@ azd.extensions.drasi/
 │       ├── keyvault.bicep           # Key Vault; RBAC enabled; 2-phase public→locked pattern
 │       ├── uami.bicep               # User-Assigned MI + 3 role assignments (KV, Monitoring, optional AcrPull)
 │       ├── loganalytics.bicep       # Log Analytics workspace; ContainerLogV2; OTel config
-│       ├── fedcred.bicep            # FederatedIdentityCredential; subject=system:serviceaccount:drasi-system:drasi-api
+│       ├── fedcred.bicep            # FederatedIdentityCredential; subject=system:serviceaccount:drasi-system:drasi-resource-provider
 │       ├── acr.bicep                # ACR (conditional; enabled by usePrivateAcr Bicep param)
 │       ├── cosmos.bicep             # Optional Cosmos DB (conditional)
 │       ├── eventhub.bicep           # Optional Event Hubs namespace (conditional)
@@ -266,9 +265,9 @@ _See [research.md](./research.md) for all findings._
 Verified items:
 
 - azd `azdext` SDK gRPC model and extension.yaml manifest contract
-- Drasi CLI positional-arg syntax for all 5 commands (`apply`, `wait`, `delete`, `list`, `describe`)
+- Drasi CLI positional-arg syntax for extension command set (`init`, `apply`, `wait`, `delete`, `list`, `describe`)
 - AKS-only Drasi hosting model (Container Apps override documented)
-- Workload Identity FederatedIdentityCredential subject (`system:serviceaccount:drasi-system:drasi-api`)
+- Workload Identity FederatedIdentityCredential subject (`system:serviceaccount:drasi-system:drasi-resource-provider`)
 - Content-hash state management via azd environment state file
 - Key Vault RBAC roles (GUIDs verified from `secret-management` skill)
 - Multi-file YAML config engine design decisions
@@ -281,14 +280,14 @@ Verified items:
 Generated:
 
 - [data-model.md](./data-model.md) — Go type definitions for all 8 entities
-- [contracts/cli-contract.md](./contracts/cli-contract.md) — CLI surface (all 8 commands, flags, exit codes, JSON shapes)
+- [contracts/cli-contract.md](./contracts/cli-contract.md) — CLI surface (8 core commands + `upgrade` stub, flags, exit codes, JSON shapes)
 - [quickstart.md](./quickstart.md) — 10-step getting-started guide
 
 ---
 
 ### Phase 2: Extension Scaffold + Command Framework
 
-**Goal**: Runnable `azd drasi --help` and all 8 command stubs with correct flags.
+**Goal**: Runnable `azd drasi --help` with the full command inventory from `contracts/cli-contract.md` registered and validated.
 
 **Deliverables**:
 
@@ -297,8 +296,8 @@ Generated:
 - `extension.yaml`: namespace `drasi`, capabilities, OS-specific `executablePath`, `minAzdVersion: "1.10.0"`
 - `version.txt`: `1.0.0`
 - `cmd/root.go`: root command, `--output` flag (table/json), `--debug` flag; registers all subcommands including `newListenCommand()`
-- `cmd/listen.go`: `newListenCommand()` \u2014 `RunE` uses `azdext.WithAccessToken(cmd.Context())`, `azdext.NewEventManager(azdClient)`, subscribes to `postprovision`/`predeploy` events, calls `eventManager.Receive(ctx)` (blocking); required by the `lifecycle-events` capability in extension.yaml
-- Command stubs: all 8 commands in `cmd/`, correct flags, exit codes, placeholder output
+- `cmd/listen.go`: `newListenCommand()` \u2014 `RunE` uses `azdext.WithAccessToken(cmd.Context())`, `azdext.NewEventManager(azdClient)`, subscribes to `postProvision`/`preDeploy` events, calls `eventManager.Receive(ctx)` (blocking); required by the `lifecycle-events` capability in extension.yaml
+- Command stubs: full command inventory from `contracts/cli-contract.md` in `cmd/`, correct flags, exit codes, placeholder output
 - `internal/output/formatter.go`: `Format()` for table + JSON modes
 - `internal/output/errors.go`: `FormatError()` for all error codes
 - `build.ps1` + `build.sh`: cross-compile scripts for all 4 target platforms
@@ -376,14 +375,14 @@ Approach: Mock subprocess outputs via `fakeDrasi` test helper (in-process fake b
 
 **Deliverables**:
 
-- `internal/deployment/state.go`: `ReadHash(env, kind, id)` / `WriteHash(env, kind, id, hash)` using azd env file; `[VERIFY]` whether azdext SDK exposes env file API or direct file access is needed
+- `internal/deployment/state.go`: `ReadHash(env, kind, id)` / `WriteHash(env, kind, id, hash)` using azdext Environment gRPC service (GetEnvironmentValue/SetEnvironmentValue); no direct `.azure/<env>/.env` file I/O
 - `internal/deployment/diff.go`: `ComputeHash(component)` (SHA-256 of canonical YAML); `BuildPlan(manifest, state)` → `DeploymentPlan` with Create/DeleteThenApply/NoOp per component
-- `internal/deployment/order.go`: `SortForDeploy()` → sources, queries, reactions, middleware; `SortForDelete()` → reverse
+- `internal/deployment/order.go`: `SortForDeploy()` → sources, queries, middleware, reactions; `SortForDelete()` → reverse
 - `internal/deployment/timeout.go`: per-component context with 5min deadline; total deployment context with 15min deadline; emit `ERR_COMPONENT_TIMEOUT`
 - `internal/deployment/engine.go`: `Deploy(ctx, plan, drasiClient)` → executes ordered actions; updates hashes on success; preserves partial-failure state for next-run recovery
-- Key Vault translation: Before deploy, translate all `SecretRef` values in `ResolvedManifest` to K8s Secrets via `internal/keyvault/translator.go`
-- `internal/keyvault/client.go`: `GetSecret(ctx, vaultName, secretName)` via `azsecrets` SDK + `DefaultAzureCredential`
-- `internal/keyvault/translator.go`: `TranslateRefs(ctx, manifest)` → walks all properties, replaces `SecretRef` with K8s Secret reference
+- Key Vault translation: Before deploy, translate all `SecretRef` values in `ResolvedManifest` to K8s Secret references via `internal/keyvault/translator.go`
+- `internal/keyvault/spc.go`: `BuildSecretProviderClass(manifest)` produces Secrets Store CSI manifests for the deploy scope
+- `internal/keyvault/translator.go`: `TranslateRefs(ctx, manifest)` walks all properties, emits SecretProviderClass/synced Secret manifests, and replaces `SecretRef` with K8s Secret reference
 - `cmd/deploy.go`: implemented (validation gate → KV translation → build plan → dry-run or execute → output result)
 
 **Tests (TDD — write first)**:
@@ -419,9 +418,9 @@ complete Drasi hosting environment in one `azd drasi provision` invocation.
     - AcrPull (`7f951dda-4ed3-4680-a7ca-43fe172d538d`) on ACR (conditional on `usePrivateAcr`)
 - `infra/modules/fedcred.bicep`:
   - `FederatedIdentityCredential` on the UAMI
-  - Subject: `system:serviceaccount:${drasiNamespace}:drasi-api`
+  - Subject: `system:serviceaccount:${drasiNamespace}:drasi-resource-provider`
   - Audience: `api://AzureADTokenExchange`
-  - `[VERIFY]` SA name `drasi-api` at implementation time against `drasi-platform` installer source
+  - Service account identity aligned to current upstream installer manifests for the resource provider
 - `infra/modules/loganalytics.bicep`:
   - Log Analytics workspace
   - ContainerLogV2 data collection rule
@@ -437,6 +436,7 @@ complete Drasi hosting environment in one `azd drasi provision` invocation.
 - `bicep build` must succeed (zero warnings)
 - `az deployment what-if --template-file infra/main.bicep` in CI pipeline
 - Unit test: `cmd/provision_test.go` (flag parsing, env write)
+- Integration tests: deployment/provision boundary coverage (containerized and/or ephemeral Azure env), including provider registration and idempotent recovery paths
 
 ---
 
@@ -468,7 +468,7 @@ complete Drasi hosting environment in one `azd drasi provision` invocation.
 
 - `cmd/status.go`: calls `drasiClient.ListComponents()` per kind → formats health table; exit 1 if any non-Online
 - `cmd/logs.go`: shell out to `kubectl logs` for Drasi pods in `drasiNamespace`; supports `--follow` streaming
-- `cmd/diagnose.go`: 5 checks (AKS reachable, Drasi API pod running, Dapr injector running, KV auth, Log Analytics data flowing); structured pass/fail output
+- `cmd/diagnose.go`: 5 checks (AKS reachable, Drasi API pod running, Dapr injector running, Secrets Store CSI sync health for generated SecretProviderClass objects, Log Analytics data flowing); structured pass/fail output
 - `internal/observability/tracer.go`: OTel trace provider → Azure Monitor OTLP endpoint; `APPLICATIONINSIGHTS_CONNECTION_STRING` from azd env
 - `internal/observability/metrics.go`: OTel meter provider; emit deployment metrics (components deployed, errors, duration)
 
@@ -489,9 +489,12 @@ Every semver tag produces cross-compiled binaries and a GitHub Release.
 
 - `.github/workflows/ci.yml`:
   - Trigger: `push` to any branch, `pull_request`
-  - Steps: `go build ./...`, `go test ./... -coverprofile=coverage.out`, `golangci-lint run`, `bicep build infra/main.bicep`, `yamllint drasi/`
+  - Steps: `go build ./...`, `go test ./... -coverprofile=coverage.out`, `golangci-lint run`, `bicep build infra/main.bicep`, `bicep lint infra/main.bicep`, `yamllint drasi/`, Azure-authenticated `az deployment what-if --template-file infra/main.bicep`
   - Coverage gate: fail if `go tool cover -func=coverage.out` < 80%
   - Matrix: `ubuntu-latest` (primary); `windows-latest` for cross-compile verification
+- `.github/workflows/e2e-pr.yml`:
+  - Trigger: `pull_request` (targeted paths)
+  - Steps: `azd drasi provision` → `azd drasi deploy` → `azd drasi validate` against ephemeral environment using GitHub OIDC; enforce <20 min budget; always teardown/cleanup
 - `.github/workflows/release.yml`:
   - Trigger: `push` to `v[0-9]+.*` tags
   - Steps: run CI checks, cross-compile 4 targets (`build.sh` + `build.ps1`), create GitHub Release with binary assets, update `registry.yaml` in extension registry (PR or direct commit)
@@ -519,13 +522,13 @@ Every semver tag produces cross-compiled binaries and a GitHub Release.
 
 ## Risk Register
 
-| Risk                                                        | Probability | Impact | Mitigation                                                                                                               |
-| ----------------------------------------------------------- | ----------- | ------ | ------------------------------------------------------------------------------------------------------------------------ |
-| SA name `drasi-api` is wrong — Workload Identity won't bind | Medium      | High   | [VERIFY] block in FR-045; check drasi-platform installer source before coding `infra/modules/fedcred.bicep`              |
-| azd state file API not exposed by azdext SDK                | Medium      | Medium | Fall back to direct read/write of `.azure/<env>/.env`; implement thin abstraction in `deployment/state.go` to swap later |
-| `drasi wait` does not honour `--timeout` in v0.10.0         | Low         | Medium | Add extension-level context timeout as belt-and-suspenders; tested via integration test                                  |
-| Key Vault purge-protection lockout during teardown testing  | Low         | Low    | Document in troubleshooting.md; use unique KV names per test environment                                                 |
-| golangci-lint version drift between dev and CI              | Low         | Low    | Pin golangci-lint version in `ci.yml`; same version in devcontainer                                                      |
+| Risk                                                                             | Probability | Impact | Mitigation                                                                                                                                  |
+| -------------------------------------------------------------------------------- | ----------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| Upstream ServiceAccount naming changes in future Drasi releases break WI binding | Medium      | High   | Pin tested Drasi version in release notes; add CI smoke check validating expected ServiceAccount exists before fedcred apply                |
+| azd state file API behavior changes in azdext SDK                                | Medium      | Medium | Keep `deployment/state.go` behind an adapter interface; validate against azdext gRPC Environment service in CI and fail fast if unavailable |
+| `drasi wait` does not honour `--timeout` in v0.10.0                              | Low         | Medium | Add extension-level context timeout as belt-and-suspenders; tested via integration test                                                     |
+| Key Vault purge-protection lockout during teardown testing                       | Low         | Low    | Document in troubleshooting.md; use unique KV names per test environment                                                                    |
+| golangci-lint version drift between dev and CI                                   | Low         | Low    | Pin golangci-lint version in `ci.yml`; same version in devcontainer                                                                         |
 
 ---
 
@@ -561,14 +564,14 @@ Phases 3+4, Phase 6+7 can proceed concurrently once Phase 2 is complete.
 
 ## Key Technical Decisions Summary
 
-| Decision            | Choice                                                       | Alternative Rejected                                           |
-| ------------------- | ------------------------------------------------------------ | -------------------------------------------------------------- |
-| Extension runtime   | Go + azdext gRPC SDK                                         | Python/shell — constitution locks Go                           |
-| Drasi hosting       | AKS                                                          | Azure Container Apps — Principle VI violation                  |
-| Identity            | OIDC + Workload Identity + FederatedIdentityCredential       | Service principal secret — Principle IV violation              |
-| Config format       | Declarative YAML with glob includes                          | Single monolithic file — does not scale                        |
-| Validation          | Offline JSON Schema + cross-reference + DAG cycle detection  | Online-only — poor DX for iterate-and-test                     |
-| State management    | azd env file + SHA-256 content hash                          | Separate state file — creates drift risk                       |
-| Secret access       | Key Vault Secrets read at deploy time → K8s Secrets          | Secrets in config file — Principle IV violation                |
-| CLI validation gate | Pre-deploy pass required; deploy fails if validate fails     | Warn-only — production deployments corrupted by invalid config |
-| KV lockdown         | 2-phase deployment (public during IaC, locked after secrets) | Lock from start — pipeline locked out of its own vault         |
+| Decision            | Choice                                                                                                                                   | Alternative Rejected                                           |
+| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
+| Extension runtime   | Go + azdext gRPC SDK                                                                                                                     | Python/shell — constitution locks Go                           |
+| Drasi hosting       | AKS                                                                                                                                      | Azure Container Apps — Principle VI violation                  |
+| Identity            | OIDC + Workload Identity + FederatedIdentityCredential                                                                                   | Service principal secret — Principle IV violation              |
+| Config format       | Declarative YAML with glob includes                                                                                                      | Single monolithic file — does not scale                        |
+| Validation          | Offline JSON Schema + cross-reference + DAG cycle detection                                                                              | Online-only — poor DX for iterate-and-test                     |
+| State management    | azd env file + SHA-256 content hash                                                                                                      | Separate state file — creates drift risk                       |
+| Secret access       | Secret material resolved in-cluster via Secrets Store CSI + Workload Identity; deploy translates Key Vault refs to K8s Secret references | Secrets in config file — Principle IV violation                |
+| CLI validation gate | Pre-deploy pass required; deploy fails if validate fails                                                                                 | Warn-only — production deployments corrupted by invalid config |
+| KV lockdown         | 2-phase deployment (public during IaC, locked after secrets)                                                                             | Lock from start — pipeline locked out of its own vault         |
