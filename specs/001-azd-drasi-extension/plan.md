@@ -120,7 +120,7 @@ azd.extensions.drasi/
 │   ├── provision.go                 # azd drasi provision [--environment]
 │   ├── deploy.go                    # azd drasi deploy [--config] [--environment] [--dry-run]
 │   ├── status.go                    # azd drasi status [--environment]
-│   ├── logs.go                      # azd drasi logs [--component] [--kind] [--tail] [--follow] [--environment]
+│   ├── logs.go                      # azd drasi logs [--component] [--kind] [--tail] [--environment] [--follow(alias)]
 │   ├── diagnose.go                  # azd drasi diagnose [--environment]
 │   ├── validate.go                  # azd drasi validate [--config] [--strict] [--environment]
 │   ├── teardown.go                  # azd drasi teardown --force [--infrastructure] [--environment]
@@ -252,9 +252,8 @@ azd.extensions.drasi/
 > **Note**: tests are written BEFORE implementation code in each phase (TDD — Constitution Principle VIII).
 > Each phase ends with `go test ./...` green + `golangci-lint` clean before moving on.
 
-> **Phase numbering**: plan.md uses Phase 0 (research/design) as pre-work. The implementation phases in `tasks.md` begin at **Phase 1** and run through **Phase 8**. The mapping is:
-> `plan.md Phase 0 (Research)` → no tasks.md equivalent (complete)
-> `tasks.md Phase 1` → Setup | `Phase 2` → Foundational | `Phases 3–7` → User Stories (US5, US1, US2, US3, US4 in dependency order) | `Phase 8` → Polish
+> **Phase numbering**: plan.md uses Phase 0 as research pre-work and Phase 1 as completed design artifacts. Implementation in this plan continues through Phase 10. `tasks.md` intentionally condenses plan Phases 8-10 into a single Polish phase.
+> Mapping: `plan.md Phase 0` → pre-work complete | `plan.md Phase 1` → design artifacts complete | `tasks.md Phase 1` → Setup | `tasks.md Phase 2` → Foundational | `tasks.md Phases 3-7` → User Stories (US5, US1, US2, US3, US4) | `tasks.md Phase 8` → plan.md Phases 8-10 (Observability + CI/CD + Documentation)
 
 ---
 
@@ -299,7 +298,8 @@ Generated:
 - `cmd/listen.go`: `newListenCommand()` \u2014 `RunE` uses `azdext.WithAccessToken(cmd.Context())`, `azdext.NewEventManager(azdClient)`, subscribes to `postProvision`/`preDeploy` events, calls `eventManager.Receive(ctx)` (blocking); required by the `lifecycle-events` capability in extension.yaml
 - Command stubs: full command inventory from `contracts/cli-contract.md` in `cmd/`, correct flags, exit codes, placeholder output
 - `internal/output/formatter.go`: `Format()` for table + JSON modes
-- `internal/output/errors.go`: `FormatError()` for all error codes
+- `internal/output/errors.go`: `FormatError()` for all error codes (including `ERR_DRASI_CLI_ERROR`)
+- `internal/output/audit.go`: shared structured audit event formatter for mutating commands
 - `build.ps1` + `build.sh`: cross-compile scripts for all 4 target platforms
 
 **Tests (TDD — write first)**:
@@ -421,6 +421,7 @@ complete Drasi hosting environment in one `azd drasi provision` invocation.
   - Subject: `system:serviceaccount:${drasiNamespace}:drasi-resource-provider`
   - Audience: `api://AzureADTokenExchange`
   - Service account identity aligned to current upstream installer manifests for the resource provider
+  - Runtime ServiceAccount annotation (`azure.workload.identity/client-id`) and runtime pod label (`azure.workload.identity/use: "true"`) applied via Bicep-driven patch artifacts
 - `infra/modules/loganalytics.bicep`:
   - Log Analytics workspace
   - ContainerLogV2 data collection rule
@@ -429,7 +430,7 @@ complete Drasi hosting environment in one `azd drasi provision` invocation.
 - `infra/modules/cosmos.bicep` (conditional): Cosmos DB Gremlin account
 - `infra/modules/eventhub.bicep` (conditional): Event Hubs namespace
 - `infra/main.bicep`: root module wiring all sub-modules; `drasiNamespace`, `usePrivateAcr`, `enableCosmosDb`, `enableEventHub` params
-- `cmd/provision.go`: implemented — calls Bicep via azd lifecycle, then runs `drasi init --context <aks-context>`; writes `DRASI_PROVISIONED=true` to azd env
+- `cmd/provision.go`: implemented — calls Bicep via azd lifecycle, runs `drasi init --context <aks-context>`, applies runtime identity and observability patches, validates probe coverage, emits unmanaged-resource warnings (no mutation), writes `DRASI_PROVISIONED=true` to azd env, and emits structured audit events
 
 **Tests**:
 
@@ -452,7 +453,7 @@ complete Drasi hosting environment in one `azd drasi provision` invocation.
 - `internal/scaffold/templates/query-subscription/`: generic source + parametric Cypher query
 - `internal/scaffold/engine.go`: `Scaffold(template, dir, force)` → copy/render template files; reject on conflict unless `--force`
 - `cmd/init.go`: implemented — calls scaffold engine, reports created files
-- `.devcontainer/devcontainer.json`: installs azd ≥ 1.10.0 via azd feature, drasi ≥ 0.10.0, dapr, go 1.22, kubectl, bicep, azure-cli
+- `.devcontainer/devcontainer.json`: installs azd ≥ 1.10.0 via azd feature, drasi CLI minimum version from FR-046, dapr, go 1.22, kubectl, bicep, azure-cli
 
 **Tests (TDD — write first)**:
 
@@ -467,8 +468,8 @@ complete Drasi hosting environment in one `azd drasi provision` invocation.
 **Deliverables**:
 
 - `cmd/status.go`: calls `drasiClient.ListComponents()` per kind → formats health table; exit 1 if any non-Online
-- `cmd/logs.go`: shell out to `kubectl logs` for Drasi pods in `drasiNamespace`; supports `--follow` streaming
-- `cmd/diagnose.go`: 5 checks (AKS reachable, Drasi API pod running, Dapr injector running, Secrets Store CSI sync health for generated SecretProviderClass objects, Log Analytics data flowing); structured pass/fail output
+- `cmd/logs.go`: shell out to `kubectl logs` for Drasi pods in `drasiNamespace`; streams by default, with `--follow` accepted as compatibility alias
+- `cmd/diagnose.go`: 6 checks (AKS reachable, Drasi API pod running, Dapr injector running, Secrets Store CSI sync health for generated SecretProviderClass objects, Log Analytics data flowing, required workload probes present); structured pass/fail output
 - `internal/observability/tracer.go`: OTel trace provider → Azure Monitor OTLP endpoint; `APPLICATIONINSIGHTS_CONNECTION_STRING` from azd env
 - `internal/observability/metrics.go`: OTel meter provider; emit deployment metrics (components deployed, errors, duration)
 
@@ -526,7 +527,7 @@ Every semver tag produces cross-compiled binaries and a GitHub Release.
 | -------------------------------------------------------------------------------- | ----------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------- |
 | Upstream ServiceAccount naming changes in future Drasi releases break WI binding | Medium      | High   | Pin tested Drasi version in release notes; add CI smoke check validating expected ServiceAccount exists before fedcred apply                |
 | azd state file API behavior changes in azdext SDK                                | Medium      | Medium | Keep `deployment/state.go` behind an adapter interface; validate against azdext gRPC Environment service in CI and fail fast if unavailable |
-| `drasi wait` does not honour `--timeout` in v0.10.0                              | Low         | Medium | Add extension-level context timeout as belt-and-suspenders; tested via integration test                                                     |
+| `drasi wait` does not honour `--timeout` in the minimum supported CLI version    | Low         | Medium | Add extension-level context timeout as belt-and-suspenders; tested via integration test                                                     |
 | Key Vault purge-protection lockout during teardown testing                       | Low         | Low    | Document in troubleshooting.md; use unique KV names per test environment                                                                    |
 | golangci-lint version drift between dev and CI                                   | Low         | Low    | Pin golangci-lint version in `ci.yml`; same version in devcontainer                                                                         |
 

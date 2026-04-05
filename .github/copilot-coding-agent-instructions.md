@@ -6,11 +6,11 @@ This file governs how GitHub Copilot behaves when it autonomously picks up issue
 
 Before starting work on an issue, rate your fit:
 
-| Fit | When | Action |
-|-----|------|--------|
-| 🟢 **Proceed** | Issue is clear, scoped, and within your skillset | Start work following the workflow below |
-| 🟡 **Proceed with caveat** | Issue is mostly clear but has ambiguous edges | Start on the clear parts; surface ambiguity in the PR description |
-| 🔴 **Decline** | Issue requires domain expertise you do not have, is underspecified, or conflicts with existing architecture | Comment on the issue explaining what is unclear or out of scope |
+| Fit                        | When                                                                                                        | Action                                                            |
+| -------------------------- | ----------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| 🟢 **Proceed**             | Issue is clear, scoped, and within your skillset                                                            | Start work following the workflow below                           |
+| 🟡 **Proceed with caveat** | Issue is mostly clear but has ambiguous edges                                                               | Start on the clear parts; surface ambiguity in the PR description |
+| 🔴 **Decline**             | Issue requires domain expertise you do not have, is underspecified, or conflicts with existing architecture | Comment on the issue explaining what is unclear or out of scope   |
 
 Treat 🔴 issues as blocked — comment and wait for clarification rather than guessing.
 
@@ -23,6 +23,7 @@ chore/{issue-number}-{short-slug}
 ```
 
 **Examples:**
+
 - `feature/42-add-cosmos-skill`
 - `fix/17-broken-devcontainer-path`
 - `chore/88-update-bicep-api-versions`
@@ -33,17 +34,17 @@ Use `feature/` for new capabilities, `fix/` for bugs, `chore/` for maintenance o
 
 Engage the appropriate agent before or during implementation:
 
-| Issue type | Agent to engage |
-|------------|----------------|
-| Azure infrastructure design or service selection | `azure-architect` |
-| New skill creation or skill compliance review | `creating-agent-skill-agent` |
-| DevContainer setup or tooling configuration | `creating-devcontainers-agent` |
-| Architecture diagrams needed | `diagram-smith` |
-| Documentation updates (README, ADRs) | `documentation-specialist` |
-| Security review of IaC or code changes | `security-specialist` |
-| Tests not compiling or test/implementation mismatch | `test-validation-specialist` |
-| Root cause unclear or system behaving unexpectedly | `troubleshooting-specialist` |
-| Backlog item needs acceptance criteria | `backlog-refinement-specialist` |
+| Issue type                                          | Agent to engage                 |
+| --------------------------------------------------- | ------------------------------- |
+| Azure infrastructure design or service selection    | `azure-architect`               |
+| New skill creation or skill compliance review       | `creating-agent-skill-agent`    |
+| DevContainer setup or tooling configuration         | `creating-devcontainers-agent`  |
+| Architecture diagrams needed                        | `diagram-smith`                 |
+| Documentation updates (README, ADRs)                | `documentation-specialist`      |
+| Security review of IaC or code changes              | `security-specialist`           |
+| Tests not compiling or test/implementation mismatch | `test-validation-specialist`    |
+| Root cause unclear or system behaving unexpectedly  | `troubleshooting-specialist`    |
+| Backlog item needs acceptance criteria              | `backlog-refinement-specialist` |
 
 For issues spanning multiple domains, engage `team-orchestrator` to coordinate parallel agent work.
 
@@ -63,6 +64,28 @@ For issues that are non-trivial (more than a single-file edit):
 2. List the files you expect to change
 3. Identify any decisions that need to be made and state your intended choice
 
+### 2.1 Delegation Prompt Contract (Mandatory)
+
+When delegating work to a specialist agent, provide a complete prompt contract.
+
+Required sections (all required):
+
+1. **TASK**: One atomic objective
+2. **EXPECTED OUTCOME**: Concrete deliverable
+3. **REQUIRED SKILLS**: Explicit skill list (or `[]`)
+4. **REQUIRED TOOLS**: Must-use tools and constraints
+5. **MUST DO**: Hard requirements
+6. **MUST NOT DO**: Prohibited actions
+7. **CONTEXT**: Relevant files, patterns, references, and boundaries
+
+If any section is missing, stop and complete the prompt before delegation.
+
+Additional hard requirements:
+
+- Delegation prompts must be self-contained (no hidden dependency on prior conversation context).
+- Do not use lazy phrasing such as "based on your findings". Summarize findings into a concrete spec before delegation.
+- After delegation, report launch status only. Do not infer or predict results before worker completion.
+
 ### 3. Implementation
 
 - Follow all standards in `.github/instructions/global.instructions.md`
@@ -78,6 +101,23 @@ Before opening a PR:
 - Engage `test-validation-specialist` if tests were added or modified
 - Engage `security-specialist` if the change touches authentication, secrets, IaC, or public-facing endpoints
 
+### 4.1 User-Facing Verification Gate (Mandatory)
+
+If a change affects user-facing behavior, do not mark work complete until behavior is executed and verified:
+
+- **Frontend/UI**: Run the app path and verify interactions, console health, and responsive behavior.
+- **Backend/API**: Execute happy-path and malformed-input calls; verify status and response shape.
+- **CLI/Script**: Run representative commands including `--help` and at least one invalid input case.
+- **Config/Runtime**: Start the service (or equivalent dry run) and confirm updated configuration is applied.
+
+### 4.2 Configuration/Hook Verification Gate
+
+For settings, hook, or automation-policy changes:
+
+- Validate syntax/schema first (JSON/YAML/schema checks).
+- Verify runtime activation by triggering at least one relevant event path when feasible.
+- If runtime activation cannot be verified in-session, explicitly document what was validated, what is still unverified, and the exact manual verification step.
+
 ### 5. Pull Request
 
 **Title format:** `{type}({scope}): {short description}` — e.g., `feat(skills): add ab-test-analysis skill`
@@ -86,30 +126,35 @@ Before opening a PR:
 
 ```markdown
 ## Summary
+
 <What this PR does and why>
 
 ## Changes
+
 - <file or area>: <what changed>
 
 ## Testing
+
 <How the change was verified>
 
 ## Decisions made
+
 <Any design or implementation choices made autonomously — see below>
 
 ## Related
+
 Closes #<issue number>
 ```
 
 **Labels to apply:**
 
-| Condition | Label |
-|-----------|-------|
-| New agent or skill | `enhancement` |
-| Bug fix | `bug` |
-| Documentation only | `documentation` |
-| Needs human review before merge | `needs-review` |
-| Contains an architectural decision | `architecture` |
+| Condition                          | Label           |
+| ---------------------------------- | --------------- |
+| New agent or skill                 | `enhancement`   |
+| Bug fix                            | `bug`           |
+| Documentation only                 | `documentation` |
+| Needs human review before merge    | `needs-review`  |
+| Contains an architectural decision | `architecture`  |
 
 ## Decision Capture
 
@@ -120,6 +165,7 @@ When you make a design or implementation decision autonomously during issue work
 
 ```markdown
 # Decision: <short title>
+
 Date: <YYYY-MM-DD>
 Issue: #<number>
 Context: <what problem prompted this decision>

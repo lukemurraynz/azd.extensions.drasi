@@ -1,8 +1,9 @@
 ---
 name: creating-devcontainers
 description: >-
-  Create and review DevContainer configurations that follow organisational standards. USE FOR: setting up dev containers, configuring devcontainer.json, adding lifecycle hooks, reviewing existing DevContainers for compliance, improving container security.license: MIT
-compatibility: 'VS Code with Dev Containers extension (ms-vscode-remote.remote-containers)'
+  Create and review DevContainer configurations that follow organisational standards. USE FOR: setting up dev containers, configuring devcontainer.json, adding lifecycle hooks, reviewing existing DevContainers for compliance, improving container security.
+license: MIT
+compatibility: "VS Code with Dev Containers extension (ms-vscode-remote.remote-containers)"
 allowed-tools: Bash
 ---
 
@@ -14,23 +15,23 @@ This skill provides capabilities for creating and reviewing DevContainer configu
 
 ## Capabilities
 
-| Capability | Action | Description |
-|------------|--------|-------------|
-| Create | `actions/create.md` | Generate a standards-compliant DevContainer configuration |
-| Review | `actions/review.md` | Analyse an existing DevContainer for compliance and improvements |
+| Capability | Action              | Description                                                      |
+| ---------- | ------------------- | ---------------------------------------------------------------- |
+| Create     | `actions/create.md` | Generate a standards-compliant DevContainer configuration        |
+| Review     | `actions/review.md` | Analyse an existing DevContainer for compliance and improvements |
 
 ## Standards
 
 This skill bundles the following standards in `standards/`:
 
-| Standard | File | Description |
-|----------|------|-------------|
-| Core | `core.md` | Base image, lifecycle hooks, container configuration, file structure |
-| Extensions | `extensions.md` | VS Code extension requirements and guidelines |
-| Features | `features.md` | DevContainer features configuration and versioning |
-| Security | `security.md` | Security requirements and risk guidance |
-| Checklist | `checklist.md` | Consolidated compliance checklist |
-| Template | `template.json` | Base configuration template |
+| Standard   | File            | Description                                                          |
+| ---------- | --------------- | -------------------------------------------------------------------- |
+| Core       | `core.md`       | Base image, lifecycle hooks, container configuration, file structure |
+| Extensions | `extensions.md` | VS Code extension requirements and guidelines                        |
+| Features   | `features.md`   | DevContainer features configuration and versioning                   |
+| Security   | `security.md`   | Security requirements and risk guidance                              |
+| Checklist  | `checklist.md`  | Consolidated compliance checklist                                    |
+| Template   | `template.json` | Base configuration template                                          |
 
 ## External Standards
 

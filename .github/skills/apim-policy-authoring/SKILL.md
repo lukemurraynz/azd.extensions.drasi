@@ -1,7 +1,8 @@
 ---
 name: apim-policy-authoring
 description: >-
-  Creates production-ready Azure API Management policy XML for authentication (OAuth 2.0, JWT validation, subscription keys), rate limiting, CORS configuration, error handling, and API transformations. USE FOR: implementing API security, access control, or request/response processing logic within APIM policies.license: MIT
+  Creates production-ready Azure API Management policy XML for authentication (OAuth 2.0, JWT validation, subscription keys), rate limiting, CORS configuration, error handling, and API transformations. USE FOR: implementing API security, access control, or request/response processing logic within APIM policies.
+license: MIT
 metadata:
   author: Azure API Marketplace Team
   version: "1.0"
@@ -214,6 +215,6 @@ API Management sits between consumers and backends — it MUST follow the ADAC t
 
 ---
 
-**Skill Version**: 1.0  
-**Last Updated**: 29 January 2026  
+**Skill Version**: 1.0
+**Last Updated**: 29 January 2026
 **Primary Knowledge**: APIM_PLATFORM_BASELINE_POLICIES.md, [references/POLICY_TEMPLATES.md](references/POLICY_TEMPLATES.md)

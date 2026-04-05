@@ -4,8 +4,6 @@ This document defines how Copilot/Agents should operate across all projects, and
 
 ## Instruction Hierarchy and Scope
 
-f
-
 - **Audience**: Copilot/Agents (and humans who want to understand how they are configured).
 - **Purpose**: Describe _how_ Copilot/Agents should work with this repository and where to find the canonical engineering standards.
 
@@ -25,7 +23,7 @@ When interpreting instructions, always resolve conflicts by preferring the most 
 
 If two instruction files disagree, follow the one that is **more specific to the file or technology** you are working with.
 
-**Make sure in Memory you don't fallback, fix the actual root cause of the issue, in accordance with best practices, don't workaround or fallback to non-functioning code (an example, Heuristic over Generative AI capability**
+**When using Memory, prioritize root-cause fixes over fallback workarounds. Do not preserve non-functioning code paths merely as a fallback.**
 
 ## Using MCP Servers for Latest Information
 
@@ -131,6 +129,28 @@ When recommending an approach, always surface the trade-offs, not just the benef
 - Mark exactly one todo as "in-progress" at a time; update statuses as work progresses.
 - Avoid unnecessary questions—only ask when requirements are ambiguous or unsafe to infer.
 
+### Delegation Prompt Contract (Mandatory)
+
+When delegating work to a subagent, provide a complete prompt contract. Incomplete delegation prompts are a primary source of drift.
+
+Required sections (all required):
+
+1. **TASK**: One atomic objective
+2. **EXPECTED OUTCOME**: Concrete deliverable
+3. **REQUIRED SKILLS**: Explicit skill list (or `[]`)
+4. **REQUIRED TOOLS**: Must-use tools and constraints
+5. **MUST DO**: Hard requirements
+6. **MUST NOT DO**: Prohibited actions
+7. **CONTEXT**: Relevant files, patterns, references, and boundaries
+
+If any section is missing, stop and complete the prompt before delegation.
+
+Additional hard requirements:
+
+- **Prompts must be self-contained**: delegated workers cannot rely on hidden conversation context. Include all required files, symbols, errors, and constraints in the delegation prompt.
+- **No lazy delegation**: never write delegation prompts like "based on your findings, implement the fix". Synthesize findings first, then delegate a concrete spec (file paths, target behavior, verification expectations).
+- **No speculative status**: after delegating, report only what was launched. Do not predict outcomes before worker/tool results arrive.
+
 ## Real Integration Requirement (No Simulation Policy)
 
 Copilot/Agents must always implement **real integrations** rather than simulated behavior.
@@ -232,6 +252,16 @@ When a skill or strict instruction specifies a pattern (e.g., "Use tool X CLI on
 
 **Rule:** Skill requirements are not suggestions; enforce them during planning, code review, and CI/CD validation.
 
+#### Skill Routing Metadata Standard
+
+When authoring or updating skills, use routing metadata that improves activation precision across large skill catalogs:
+
+- Prefer positive routing signals such as `WHEN:` and `USE FOR:`.
+- For workflow skills, add `INVOKES:` and `FOR SINGLE OPERATIONS:` when applicable.
+- Keep anti-triggers (`DO NOT USE FOR:`) minimal and specific to avoid keyword contamination in multi-skill environments.
+- Keep frontmatter descriptions parse-safe: one YAML key per line (for example, do not concatenate `license:` into `description:` text).
+- Keep routing metadata concise and distinctive (quoted trigger phrases preferred for `WHEN:`).
+
 ### Azure Infrastructure Code Requirements
 
 See `.github/instructions/azure-infrastructure.instructions.md` for the full Azure IaC ruleset (API version verification, role definition IDs, resource limitations, ACR enforcement, deprecation/EOL detection). That file activates automatically when editing `.bicep` or `.tf` files.
@@ -298,6 +328,23 @@ Preserve and repair the existing implementation whenever possible.
 - When modifying runnable code, update or add tests as needed to cover the new behavior.
 - Where practical, run relevant tests after changes and surface failures (and likely causes) in the response.
 - Follow the testing guidance defined in `.github/instructions/global.instructions.md` (testing pyramid, fast deterministic tests, etc.).
+
+#### User-Facing Verification Gate (Mandatory)
+
+If a change affects user-facing behavior, do not mark work complete until behavior is executed and verified:
+
+- **Frontend/UI**: Run the app path and verify interactions, console health, and responsive behavior.
+- **Backend/API**: Execute happy-path and malformed-input calls; verify status and response shape.
+- **CLI/Script**: Run representative commands including `--help` and at least one invalid input case.
+- **Config/Runtime**: Start the service (or equivalent dry run) and confirm the updated configuration is actually applied.
+
+#### Configuration/Hook Verification Gate
+
+For configuration or automation-hook changes (settings, policy hooks, lifecycle hooks), do not stop at static validation:
+
+- Validate structure/syntax first (JSON/YAML/schema as applicable).
+- Prove the hook/config is actually loaded and executed by triggering at least one relevant event path when feasible.
+- If runtime proof is not feasible in-session, explicitly state what was validated, what remains unverified, and the exact operator step needed to verify activation.
 
 ### Faithful Outcome Reporting
 

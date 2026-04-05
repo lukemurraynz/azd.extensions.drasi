@@ -54,6 +54,23 @@ description: "Task list template for feature implementation"
   - `permissions: {}` (empty) at workflow top-level; grant only what each job
     actually needs at the job level
   - `persist-credentials: false` on every actions/checkout step
+
+  SPEC QUALITY GATES (MANDATORY for generated tasks):
+  - Constitution mapping: For each in-scope constitution MUST / NON-NEGOTIABLE
+    rule, generate at least one implementation task and one [TEST] task.
+  - Edge-case mapping: Every edge case in spec.md must map to explicit task IDs.
+  - Requirement coverage: Every FR and SC must map to at least one task ID.
+  - Command consistency: If the feature defines a CLI command set, include tasks
+    that verify shared flags and behavior parity across all commands, including
+    stubs (for example upgrade placeholders).
+  - Error taxonomy: If spec.md defines error codes, include tasks to define,
+    test, and surface those exact codes.
+  - Behavior semantics: Add explicit tests for default behavior versus optional
+    compatibility aliases (for example stream-by-default versus --follow alias).
+  - Version drift control: Add one task to centralize version floors into a
+    single source of truth, with references elsewhere instead of hardcoding.
+  - Summary integrity: Recalculate and update task-count totals in the summary
+    table after task generation.
   ============================================================================
 
   IMPORTANT: The tasks below are SAMPLE TASKS for illustration purposes only.
