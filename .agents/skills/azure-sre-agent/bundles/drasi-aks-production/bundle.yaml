@@ -1,0 +1,18 @@
+name: drasi-aks-production
+version: 1.0.0
+description: Drasi on AKS incident triage and runtime diagnostics capability pack.
+depends_on:
+  - base-core
+  - aks-production
+resources:
+  agents:
+    - ./agents/drasi-incident-triage.yaml
+    - ./agents/drasi-runtime-diagnostics.yaml
+    - ./agents/aks-platform-diagnostics.yaml
+  response_plans:
+    - ./response-plans/drasi-processing-lag.yaml
+    - ./response-plans/drasi-query-staleness.yaml
+    - ./response-plans/drasi-platform-fault.yaml
+  scheduled_tasks:
+    - ./scheduled-tasks/drasi-health-probe.yaml
+    - ./scheduled-tasks/drasi-post-mitigation-validation.yaml

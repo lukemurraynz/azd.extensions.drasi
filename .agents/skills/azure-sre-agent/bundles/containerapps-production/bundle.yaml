@@ -1,0 +1,14 @@
+name: containerapps-production
+version: 1.0.0
+description: Container Apps diagnostics and revision-health capability pack.
+depends_on:
+  - base-core
+resources:
+  agents:
+    - ./agents/containerapps-diagnostics.yaml
+    - ./agents/revision-health-analyzer.yaml
+  response_plans:
+    - ./response-plans/ca-http-5xx.yaml
+    - ./response-plans/ca-revision-regression.yaml
+  scheduled_tasks:
+    - ./scheduled-tasks/containerapps-revision-health.yaml

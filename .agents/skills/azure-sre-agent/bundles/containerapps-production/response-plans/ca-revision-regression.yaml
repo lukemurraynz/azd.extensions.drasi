@@ -1,0 +1,12 @@
+api_version: azuresre.ai/v2
+kind: IncidentFilter
+metadata:
+  name: ca-revision-regression
+spec:
+  incidentPlatform: AzMonitor
+  titleContains: "revision"
+  agentMode: Review
+  maxAutomatedInvestigationAttempts: 3
+  isEnabled: true
+  azMonitorFilterSettings:
+    targetResourceType: Microsoft.App/containerApps

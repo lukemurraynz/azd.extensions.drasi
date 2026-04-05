@@ -1,0 +1,16 @@
+name: azd-drasi
+namespace: drasi
+displayName: "Drasi for Azure Developer CLI"
+description: "Manage Drasi reactive data pipeline workloads with azd."
+version: "1.0.0"
+minAzdVersion: "1.10.0"
+type: extension
+capabilities:
+  - custom-commands
+  - lifecycle-events
+executablePath:
+  windows/amd64: bin/windows/amd64/azd-drasi.exe
+  linux/amd64: bin/linux/amd64/azd-drasi
+  linux/arm64: bin/linux/arm64/azd-drasi
+  darwin/amd64: bin/darwin/amd64/azd-drasi
+  darwin/arm64: bin/darwin/arm64/azd-drasi

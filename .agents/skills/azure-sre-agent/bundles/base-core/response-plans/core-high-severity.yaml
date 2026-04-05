@@ -1,0 +1,16 @@
+api_version: azuresre.ai/v2
+kind: IncidentFilter
+metadata:
+  name: core-high-severity
+spec:
+  incidentPlatform: AzMonitor
+  titleContains: ""
+  agentMode: Review
+  maxAutomatedInvestigationAttempts: 3
+  isEnabled: true
+  azMonitorFilterSettings:
+    targetResourceType: "*"
+
+# Operator note:
+# - Attach this filter to the target custom agent in the portal/API workflow.
+# - Scope filters by service/title once baseline behavior is validated.

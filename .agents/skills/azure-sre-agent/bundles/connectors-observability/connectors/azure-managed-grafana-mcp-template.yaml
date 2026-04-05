@@ -1,0 +1,12 @@
+api_version: azuresre.ai/v1
+kind: DataConnector
+spec:
+  name: azure-managed-grafana-mcp
+  type: Mcp
+  endpoint: https://<GRAFANA_ENDPOINT>/api/azure-mcp
+  auth:
+    type: Header
+    headerName: Authorization
+    headerValue: Bearer <GRAFANA_SERVICE_ACCOUNT_TOKEN_OR_ENTRA_TOKEN>
+
+# Prefer service account token with least-privilege role for persistent connectivity.

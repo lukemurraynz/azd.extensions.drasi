@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ContinuousQuery
+id: order-changes
+queryLanguage: Cypher
+sources:
+  - id: postgres-source
+query: |
+  MATCH (o:Order) RETURN o.id
+reactions:
+  - pubsub-orders

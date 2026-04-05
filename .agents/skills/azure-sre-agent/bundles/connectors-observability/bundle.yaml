@@ -1,0 +1,10 @@
+name: connectors-observability
+version: 1.0.0
+description: Connector templates for source, incident, and observability integrations.
+depends_on: []
+resources:
+  connectors:
+    - ./connectors/github-mcp-template.yaml
+    - ./connectors/pagerduty-mcp-template.yaml
+    - ./connectors/dynatrace-mcp-template.yaml
+    - ./connectors/azure-managed-grafana-mcp-template.yaml

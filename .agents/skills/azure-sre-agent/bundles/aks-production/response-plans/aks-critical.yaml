@@ -1,0 +1,12 @@
+api_version: azuresre.ai/v2
+kind: IncidentFilter
+metadata:
+  name: aks-critical
+spec:
+  incidentPlatform: AzMonitor
+  titleContains: "aks"
+  agentMode: Review
+  maxAutomatedInvestigationAttempts: 3
+  isEnabled: true
+  azMonitorFilterSettings:
+    targetResourceType: Microsoft.ContainerService/managedClusters

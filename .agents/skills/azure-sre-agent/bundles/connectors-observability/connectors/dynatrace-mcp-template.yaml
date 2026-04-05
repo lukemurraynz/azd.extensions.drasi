@@ -1,0 +1,12 @@
+api_version: azuresre.ai/v1
+kind: DataConnector
+spec:
+  name: dynatrace-mcp
+  type: Mcp
+  endpoint: https://<TENANT_NAME>.apps.dynatrace.com/platform-reserved/mcp-gateway/v0.1/servers/dynatrace-mcp/mcp
+  auth:
+    type: Header
+    headerName: Authorization
+    headerValue: Bearer <DYNATRACE_PLATFORM_TOKEN>
+
+# Ensure required Dynatrace MCP gateway scopes are granted.
