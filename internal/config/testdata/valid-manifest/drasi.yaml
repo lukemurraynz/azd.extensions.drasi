@@ -1,0 +1,12 @@
+apiVersion: v1
+includes:
+  - kind: sources
+    pattern: "sources/**/*.yaml"
+  - kind: queries
+    pattern: "queries/**/*.yaml"
+  - kind: reactions
+    pattern: "reactions/**/*.yaml"
+environments:
+  dev: "environments/dev.yaml"
+featureFlags:
+  enableBetaFeatures: false

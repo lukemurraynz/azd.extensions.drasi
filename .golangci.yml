@@ -1,0 +1,23 @@
+run:
+  timeout: 5m
+
+linters:
+  enable:
+    - errcheck
+    - govet
+    - staticcheck
+    - gosec
+    - gofmt
+    - exhaustive
+    - gocritic
+
+linters-settings:
+  gosec:
+    excludes:
+      - G304  # File path from variable — acceptable in CLI tools
+
+issues:
+  exclude-rules:
+    - path: "_test.go"
+      linters:
+        - gosec

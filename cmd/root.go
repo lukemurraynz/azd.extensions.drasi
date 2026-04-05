@@ -1,0 +1,29 @@
+package cmd
+
+import "github.com/spf13/cobra"
+
+// NewRootCommand builds the cobra command tree for azd drasi.
+func NewRootCommand() *cobra.Command {
+	rootCmd := &cobra.Command{
+		Use:           "azd drasi <command> [options]",
+		Short:         "Manage Drasi reactive data pipeline workloads",
+		SilenceUsage:  true,
+		SilenceErrors: true,
+	}
+
+	rootCmd.PersistentFlags().String("output", "table", "Output format: table or json")
+	rootCmd.PersistentFlags().Bool("debug", false, "Enable verbose debug logging")
+
+	rootCmd.AddCommand(newListenCommand())
+	rootCmd.AddCommand(newValidateCommand())
+	rootCmd.AddCommand(newInitCommand())
+	rootCmd.AddCommand(newProvisionCommand())
+	rootCmd.AddCommand(newDeployCommand())
+	rootCmd.AddCommand(newStatusCommand())
+	rootCmd.AddCommand(newLogsCommand())
+	rootCmd.AddCommand(newDiagnoseCommand())
+	rootCmd.AddCommand(newTeardownCommand())
+	rootCmd.AddCommand(newUpgradeCommand())
+
+	return rootCmd
+}
