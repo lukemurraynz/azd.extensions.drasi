@@ -1,0 +1,34 @@
+# docker-compose.yml — Local Drasi topology for development
+# Image coordinates are parameterised; override via environment variables:
+#   DRASI_IMAGE_REGISTRY  (default: ghcr.io)
+#   DRASI_VERSION         (default: 0.10.0)
+version: "3.8"
+
+x-drasi-image: &drasi-image
+  image: ${DRASI_IMAGE_REGISTRY:-ghcr.io}/drasi-project/drasi:${DRASI_VERSION:-0.10.0}
+
+services:
+  drasi-api:
+    <<: *drasi-image
+    container_name: drasi-api
+    ports:
+      - "8080:8080"
+    environment:
+      - DRASI_ENV=local
+    restart: unless-stopped
+
+  drasi-query-container:
+    <<: *drasi-image
+    container_name: drasi-query-container
+    environment:
+      - DRASI_ENV=local
+    depends_on:
+      - drasi-api
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: drasi-redis
+    ports:
+      - "6379:6379"
+    restart: unless-stopped

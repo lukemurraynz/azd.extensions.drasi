@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Source
+id: my-source
+sourceKind: PostgreSQL
+properties:
+  host:
+    value: localhost

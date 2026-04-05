@@ -1,0 +1,4 @@
+name: dev
+parameters:
+  region: eastus
+  undeclared_param: should-warn

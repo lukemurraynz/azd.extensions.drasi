@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: Source
+name: eventhub-source
+spec:
+  kind: EventHub
+  properties:
+    namespace: "<your-eventhub-namespace>"
+    eventHub: "<your-eventhub-name>"
+    consumerGroup: "$Default"
+    connectionString: "<your-connection-string>"

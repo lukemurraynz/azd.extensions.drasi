@@ -1,0 +1,22 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "DrasiManifest",
+  "type": "object",
+  "required": ["APIVersion"],
+  "properties": {
+    "APIVersion": { "type": "string" },
+    "Includes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["Kind", "Pattern"],
+        "properties": {
+          "Kind": { "type": "string" },
+          "Pattern": { "type": "string" }
+        }
+      }
+    },
+    "Environments": { "type": "object" },
+    "FeatureFlags": { "type": "object" }
+  }
+}

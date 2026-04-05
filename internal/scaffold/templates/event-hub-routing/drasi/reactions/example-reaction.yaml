@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Reaction
+name: example-reaction
+spec:
+  kind: Debug
+  queries:
+    - eventhub-query

@@ -1,0 +1,12 @@
+# example-source.yaml — Drasi Source definition
+# Replace the spec properties with your actual source configuration.
+apiVersion: v1
+kind: Source
+metadata:
+  name: example-source
+spec:
+  kind: CosmosGremlin
+  properties:
+    accountEndpoint: "https://<your-cosmos-account>.documents.azure.com:443/"
+    database: "<your-database>"
+    container: "<your-container>"

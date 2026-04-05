@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ContinuousQuery
+id: query-b
+queryLanguage: Cypher
+sources:
+  - id: source-x
+query: |
+  MATCH (n) RETURN n
+reactions:
+  - query-a

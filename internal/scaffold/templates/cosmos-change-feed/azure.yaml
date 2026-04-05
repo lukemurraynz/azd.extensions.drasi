@@ -1,0 +1,4 @@
+name: cosmos-change-feed
+metadata:
+  template: azd-drasi/cosmos-change-feed
+services: {}

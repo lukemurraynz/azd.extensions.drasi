@@ -1,0 +1,10 @@
+# subscription-reaction.yaml — Drasi Reaction definition for query subscription pattern
+apiVersion: v1
+kind: Reaction
+metadata:
+  name: subscription-reaction
+spec:
+  kind: SignalR
+  queries:
+    - subscription-query
+  properties: {}

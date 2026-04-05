@@ -2,8 +2,8 @@
 name: creating-azd-extensions
 description: >-
   Author, build, and publish Azure Developer CLI (azd) extensions in Go. USE FOR: creating new azd extensions, implementing lifecycle hooks, exposing custom CLI commands, building MCP server capabilities, writing extension.yaml manifests, cross-platform build scripts, distributing via registry or local sources.
-version: 1.2.0
-lastUpdated: 2026-04-05
+version: 1.3.0
+lastUpdated: 2026-04-06
 ---
 
 # Creating Azure Developer CLI Extensions
@@ -12,11 +12,19 @@ Build Go binaries that extend `azd` with custom commands, lifecycle hooks, and M
 
 > ⚠️ **Beta feature**: The azd extensions framework is in beta. APIs may change between azd releases. Verify your target azd version supports the capabilities you need: `azd version` (requires 1.10.0+).
 
+## What's New in v1.3.0 (2026-04-06)
+
+- ✅ **Environment state API correction** — correct method names are `GetValue`/`SetValue` (NOT `GetEnvironmentValue`/`SetEnvironmentValue`)
+- ✅ **`azdext.AzdClient` is a concrete struct** — define consumer-side interfaces in packages that need testability
+- ✅ **White-box injection pattern** — package-level `var runXxxFunc = defaultRunXxx` enables testing without live gRPC
+- ✅ **`t.Parallel()` restriction for mutating command tests** — tests that mutate package-level vars must NOT call `t.Parallel()`
+- ✅ **`//go:embed all:templates` requirement** — the `all:` prefix is mandatory to include dotfiles in embedded FS
+- ✅ **`commandError` pattern** — error code embedded in `.Error()` string; `writeCommandError` vs `notImplemented` distinction
+
 ## What's New in v1.2.0 (2026-04-05)
 
 - ✅ **Correct lifecycle API** — `azdext.NewEventManager` (replaces incorrect `NewExtensionHost`)
 - ✅ **`azdext.WithAccessToken(ctx)` requirement** — must be called before any gRPC service call
-- ✅ **Environment state API** — `GetEnvironmentValue`/`SetEnvironmentValue` gRPC patterns
 - ✅ **Available gRPC services** reference table
 - ✅ **`listen` subcommand** — required convention when `lifecycle-events` capability is declared
 
@@ -287,14 +295,14 @@ managed exclusively through the gRPC API (never via direct file I/O).
 
 ```go
 // Read a value (returns empty string if key is absent — not an error)
-resp, err := azdClient.Environment().GetEnvironmentValue(ctx, &azdext.GetEnvRequest{
+resp, err := azdClient.Environment().GetValue(ctx, &azdext.GetEnvRequest{
     EnvName: currentEnv, // from azdClient.Environment().GetCurrent(...)
     Key:     "DRASI_PROVISIONED",
 })
 val := resp.Value // "" when not set
 
 // Write a value
-_, err = azdClient.Environment().SetEnvironmentValue(ctx, &azdext.SetEnvRequest{
+_, err = azdClient.Environment().SetValue(ctx, &azdext.SetEnvRequest{
     EnvName: currentEnv,
     Key:     "DRASI_PROVISIONED",
     Value:   "true",
@@ -306,13 +314,13 @@ _, err = azdClient.Environment().SetEnvironmentValue(ctx, &azdext.SetEnvRequest{
 All services are accessed via `azdClient.<Service>().<Method>(ctx, &azdext.<Request>{})`. The
 `ctx` MUST be a context enriched by `azdext.WithAccessToken`.
 
-| Service         | Key Methods                                                        |
-| --------------- | ------------------------------------------------------------------ |
-| `Project()`     | `Get` — current project config (name, services, infra)             |
-| `Environment()` | `GetCurrent`, `List`, `GetEnvironmentValue`, `SetEnvironmentValue` |
-| `Deployment()`  | Deployment status and resource queries                             |
-| `Prompt()`      | Prompt the user for input during command execution                 |
-| `Workflow()`    | Trigger azd workflow steps programmatically                        |
+| Service         | Key Methods                                              |
+| --------------- | -------------------------------------------------------- |
+| `Project()`     | `Get` — current project config (name, services, infra)   |
+| `Environment()` | `GetCurrent`, `List`, `GetValue`, `SetValue`             |
+| `Deployment()`  | Deployment status and resource queries                   |
+| `Prompt()`      | Prompt the user for input during command execution       |
+| `Workflow()`    | Trigger azd workflow steps programmatically              |
 
 ## MCP Server Capability
 
@@ -521,6 +529,186 @@ import "github.com/Azure/azure-sdk-for-go/sdk/security/keyvault/azsecrets"
 
 ---
 
+## Advanced Patterns for Command-Heavy Extensions
+
+These patterns apply when building extensions with multiple commands that call gRPC services and need to be testable without a live azd host.
+
+### Consumer-Side Interface for `azdext.AzdClient`
+
+`azdext.AzdClient` is a **concrete struct**, not an interface. Packages that need to mock it for testing must define their own narrow interface:
+
+```go
+// internal/deployment/state.go
+
+// envStateClient is a consumer-side interface for the subset of AzdClient used here.
+// Define it in the consuming package, not in the azdext package.
+type envStateClient interface {
+    Environment() environmentServiceClient
+}
+
+type environmentServiceClient interface {
+    GetValue(ctx context.Context, req *azdext.GetEnvRequest) (*azdext.KeyValueResponse, error)
+    SetValue(ctx context.Context, req *azdext.SetEnvRequest) (*azdext.EmptyResponse, error)
+}
+```
+
+This follows the Go consumer-side interface pattern: define interfaces where they're used, not where they're implemented.
+
+### White-Box Injection Pattern (Package-Level Function Vars)
+
+Commands that call gRPC or external systems use package-level function variables for injection. This enables testing without spawning a live azd host or external process:
+
+```go
+// cmd/deploy.go
+
+// runDeployFunc is overridden in tests to avoid live gRPC calls.
+var runDeployFunc = defaultRunDeploy
+
+func newDeployCommand() *cobra.Command {
+    cmd := &cobra.Command{
+        Use:  "deploy",
+        RunE: func(cmd *cobra.Command, args []string) error {
+            envName, _ := cmd.Root().PersistentFlags().GetString("environment")
+            dryRun, _ := cmd.Flags().GetBool("dry-run")
+            return runDeployFunc(cmd, envName, dryRun)
+        },
+    }
+    cmd.Flags().Bool("dry-run", false, "Simulate deploy without applying changes")
+    return cmd
+}
+
+func defaultRunDeploy(cmd *cobra.Command, envName string, dryRun bool) error {
+    ctx := azdext.WithAccessToken(cmd.Context())
+    // real implementation
+    return nil
+}
+```
+
+### White-Box Test Files
+
+Tests that need to override package-level function vars must live in the **same package** (not `_test`). Use a separate `_internal_test.go` file to keep them clearly separated:
+
+```
+cmd/
+├── deploy.go                    # package cmd
+├── deploy_test.go               # package cmd_test  — black-box tests
+└── deploy_internal_test.go      # package cmd       — white-box tests (override runDeployFunc)
+```
+
+```go
+// cmd/deploy_internal_test.go
+package cmd // NOT package cmd_test
+
+import (
+    "testing"
+    "github.com/spf13/cobra"
+)
+
+func TestDeployDryRun(t *testing.T) {
+    // No t.Parallel() — this test mutates runDeployFunc
+    called := false
+    runDeployFunc = func(cmd *cobra.Command, envName string, dryRun bool) error {
+        called = true
+        return nil
+    }
+    t.Cleanup(func() { runDeployFunc = defaultRunDeploy })
+
+    // ... execute command and assert
+}
+```
+
+### `t.Parallel()` Restriction
+
+Tests that mutate **package-level variables** (injection vars, global state) MUST NOT call `t.Parallel()`. Parallel execution with shared mutable state causes race conditions.
+
+```go
+// WRONG — races on runDeployFunc
+func TestDeployMutation(t *testing.T) {
+    t.Parallel()           // FORBIDDEN when mutating package-level vars
+    runDeployFunc = ...
+}
+
+// CORRECT — sequential mutation tests
+func TestDeployMutation(t *testing.T) {
+    // no t.Parallel()
+    runDeployFunc = ...
+    t.Cleanup(func() { runDeployFunc = defaultRunDeploy })
+}
+```
+
+Standard pure-logic tests (no package-level mutation) should still call `t.Parallel()` as the first statement.
+
+### Reading Persistent Root Flags
+
+Root-level persistent flags (e.g., `--environment`, `--output`) are not on the subcommand itself. Read them via the root:
+
+```go
+// CORRECT — read from root
+envName, _ := cmd.Root().PersistentFlags().GetString("environment")
+output, _ := cmd.Root().PersistentFlags().GetString("output")
+
+// WRONG — will return zero value silently
+envName, _ := cmd.Flags().GetString("environment")
+```
+
+### `SilenceErrors: true` on Root Command
+
+Setting `SilenceErrors: true` on the root command prevents Cobra from printing errors to stderr automatically. Your command's `RunE` must print errors explicitly before returning them:
+
+```go
+// cmd/root.go
+rootCmd := &cobra.Command{
+    SilenceUsage:  true,
+    SilenceErrors: true, // Extension controls all error output to stderr
+}
+```
+
+```go
+// cmd/errors.go — write structured errors to stderr before returning
+func writeCommandError(cmd *cobra.Command, code string, message string) error {
+    ce := &commandError{code: code, message: fmt.Sprintf("%s: %s", code, message)}
+    fmt.Fprintln(os.Stderr, ce.Error())
+    return ce
+}
+```
+
+The `commandError.Error()` string embeds the error code, so callers can check with `strings.Contains(err.Error(), "ERR_NO_AUTH")`.
+
+### `commandError` vs `notImplemented`
+
+Two distinct error patterns serve different purposes:
+
+| Function | When to Use | Output |
+|----------|-------------|--------|
+| `writeCommandError(cmd, code, msg)` | Business/validation errors with a known error code | Writes to stderr + returns `commandError` |
+| `notImplemented(name string)` | Stub commands not yet implemented | Returns `fmt.Errorf(...)` wrapping `errNotYetImplemented` — does NOT write to stderr |
+
+```go
+// Use writeCommandError for real command errors
+if envName == "" {
+    return writeCommandError(cmd, output.ERR_NO_AUTH, "environment name is required")
+}
+
+// Use notImplemented for stubs
+func runTeardown(cmd *cobra.Command, args []string) error {
+    return notImplemented("teardown")
+}
+```
+
+### `//go:embed all:templates`
+
+When embedding a directory that may contain dotfiles (`.gitignore`, `.env.example`, etc.), the `all:` prefix is mandatory. Without it, Go's embed silently omits files and directories whose names begin with `.` or `_`:
+
+```go
+//go:embed all:templates   // CORRECT — includes dotfiles
+var templateFS embed.FS
+
+//go:embed templates       // WRONG — silently omits .gitignore, .env.example, etc.
+var templateFS embed.FS
+```
+
+---
+
 ## Anti-Patterns
 
 | Anti-Pattern                                    | Problem                                                 | Fix                                                     |
@@ -531,6 +719,12 @@ import "github.com/Azure/azure-sdk-for-go/sdk/security/keyvault/azsecrets"
 | Hardcoding a single OS path in `executablePath` | Only works on one platform                              | Provide `windows`, `linux`, and `darwin` entries        |
 | Calling `panic` on azd client errors            | Crashes the azd host process                            | Return errors; `azdext.Run` propagates them cleanly     |
 | Using `azd hooks` for complex multi-step logic  | Hook scripts lack structured context and error handling | Use a full extension with lifecycle-events instead      |
+| Using `GetEnvironmentValue`/`SetEnvironmentValue` | These method names do not exist in `azdext`           | Use `GetValue`/`SetValue` on `azdClient.Environment()`  |
+| Constructing `azdext.NewAzdClient()` at root command level | Access token context not yet populated        | Construct `AzdClient` inside each `RunE` function       |
+| Defining `azdext.AzdClient` interface in a shared package | Couples test infrastructure to SDK internals  | Define narrow consumer-side interfaces in each consuming package |
+| Calling `t.Parallel()` in tests that mutate package-level vars | Race condition on injection vars          | Omit `t.Parallel()` for any test that writes to a package-level var |
+| Using `cmd.Flags().GetString("environment")` for persistent flags | Returns zero value — flag is on root   | Use `cmd.Root().PersistentFlags().GetString("environment")` |
+| Embedding templates without `all:` prefix      | Silently omits dotfiles from embedded FS                | Use `//go:embed all:templates`                          |
 
 ## Scope Boundaries
 
@@ -550,7 +744,7 @@ This skill targets the azd extensions beta framework introduced in azd 1.10.0.
 - azd minimum version: **1.10.0**
 - SDK: `github.com/azure/azure-dev/cli/azd/pkg/azdext` (beta — verify compatibility with `azd version`)
 - Reference extensions: `microsoft.azd.demo`, `azure.ai.agents`
-- Last reviewed: **2026-03-28**
+- Last reviewed: **2026-04-06**
 
 ## References
 

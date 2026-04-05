@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: ContinuousQuery
+id: no-lang-query
+sources:
+  - id: some-source
+query: |
+  MATCH (n) RETURN n

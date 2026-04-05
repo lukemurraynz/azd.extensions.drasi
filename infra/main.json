@@ -1,0 +1,1336 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "_generator": {
+      "name": "bicep",
+      "version": "0.39.26.7824",
+      "templateHash": "4719139603832282095"
+    }
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Azure region for all resources in this deployment."
+      }
+    },
+    "environmentName": {
+      "type": "string",
+      "metadata": {
+        "description": "Environment name applied to resources and tags."
+      }
+    },
+    "aksClusterName": {
+      "type": "string",
+      "metadata": {
+        "description": "Name of the AKS cluster to create."
+      }
+    },
+    "drasiNamespace": {
+      "type": "string",
+      "defaultValue": "drasi-system",
+      "metadata": {
+        "description": "Namespace containing the Drasi Kubernetes workloads."
+      }
+    },
+    "keyVaultName": {
+      "type": "string",
+      "metadata": {
+        "description": "Base name used to derive the Key Vault name."
+      }
+    },
+    "uamiName": {
+      "type": "string",
+      "metadata": {
+        "description": "Name of the user-assigned managed identity."
+      }
+    },
+    "logAnalyticsWorkspaceName": {
+      "type": "string",
+      "metadata": {
+        "description": "Base name used to identify the Log Analytics deployment in this template."
+      }
+    },
+    "usePrivateAcr": {
+      "type": "bool",
+      "defaultValue": false,
+      "metadata": {
+        "description": "Set to true to deploy a private Azure Container Registry."
+      }
+    },
+    "acrName": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Base name used to derive the Azure Container Registry name when private ACR is enabled."
+      }
+    },
+    "enableCosmosDb": {
+      "type": "bool",
+      "defaultValue": false,
+      "metadata": {
+        "description": "Set to true to deploy the Cosmos DB Gremlin account."
+      }
+    },
+    "enableEventHub": {
+      "type": "bool",
+      "defaultValue": false,
+      "metadata": {
+        "description": "Set to true to deploy the Event Hubs namespace."
+      }
+    },
+    "enableServiceBus": {
+      "type": "bool",
+      "defaultValue": false,
+      "metadata": {
+        "description": "Set to true to deploy the Service Bus namespace."
+      }
+    },
+    "otlpEndpoint": {
+      "type": "string",
+      "defaultValue": "[format('http://otel-collector.{0}.svc.cluster.local:4318', parameters('drasiNamespace'))]",
+      "metadata": {
+        "description": "OTLP endpoint URL for Drasi runtime workload telemetry export."
+      }
+    },
+    "nodeCount": {
+      "type": "int",
+      "defaultValue": 3,
+      "minValue": 1,
+      "metadata": {
+        "description": "Number of nodes in the AKS system node pool."
+      }
+    },
+    "tags": {
+      "type": "object",
+      "defaultValue": {
+        "azd-env-name": "[parameters('environmentName')]"
+      },
+      "metadata": {
+        "description": "Base tags supplied by the caller."
+      }
+    }
+  },
+  "variables": {
+    "uniqueSuffix": "[uniqueString(resourceGroup().id)]",
+    "effectiveTags": "[union(parameters('tags'), createObject('displayName', format('Drasi {0}', parameters('environmentName')), 'locationIdentifier', format('az.public.{0}', parameters('location')), 'cloud', 'public', 'azd-env-name', parameters('environmentName')))]",
+    "resolvedKeyVaultName": "[take(format('{0}-{1}', take(toLower(parameters('keyVaultName')), 17), take(variables('uniqueSuffix'), 6)), 24)]",
+    "sanitizedAcrBase": "[toLower(replace(replace(parameters('acrName'), '-', ''), '_', ''))]",
+    "resolvedAcrName": "[take(format('{0}{1}', take(variables('sanitizedAcrBase'), 44), take(variables('uniqueSuffix'), 6)), 50)]",
+    "resolvedCosmosName": "[take(format('cosmos-{0}-{1}', parameters('environmentName'), take(variables('uniqueSuffix'), 6)), 44)]",
+    "resolvedEventHubNamespaceName": "[take(format('eh-{0}-{1}', parameters('environmentName'), take(variables('uniqueSuffix'), 6)), 50)]",
+    "resolvedServiceBusNamespaceName": "[take(format('sb-{0}-{1}', parameters('environmentName'), take(variables('uniqueSuffix'), 6)), 50)]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "[format('loganalytics-{0}', take(parameters('logAnalyticsWorkspaceName'), 32))]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "environmentName": {
+            "value": "[parameters('environmentName')]"
+          },
+          "tags": {
+            "value": "[variables('effectiveTags')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.39.26.7824",
+              "templateHash": "13049277579937718229"
+            }
+          },
+          "parameters": {
+            "location": {
+              "type": "string",
+              "metadata": {
+                "description": "Azure region for the monitoring resources."
+              }
+            },
+            "environmentName": {
+              "type": "string",
+              "metadata": {
+                "description": "Environment name used in resource naming."
+              }
+            },
+            "tags": {
+              "type": "object",
+              "metadata": {
+                "description": "Tags applied to monitoring resources."
+              }
+            }
+          },
+          "variables": {
+            "uniqueSuffix": "[uniqueString(resourceGroup().id)]",
+            "effectiveTags": "[union(parameters('tags'), createObject('azd-env-name', parameters('environmentName')))]",
+            "workspaceName": "[take(format('log-{0}-{1}', parameters('environmentName'), take(variables('uniqueSuffix'), 6)), 63)]",
+            "monitorWorkspaceName": "[take(format('amw-{0}-{1}', parameters('environmentName'), take(variables('uniqueSuffix'), 6)), 63)]",
+            "dataCollectionRuleName": "[take(format('dcr-{0}-{1}', parameters('environmentName'), take(variables('uniqueSuffix'), 6)), 64)]"
+          },
+          "resources": [
+            {
+              "type": "Microsoft.OperationalInsights/workspaces",
+              "apiVersion": "2023-09-01",
+              "name": "[variables('workspaceName')]",
+              "location": "[parameters('location')]",
+              "tags": "[variables('effectiveTags')]",
+              "properties": {
+                "retentionInDays": 30,
+                "sku": {
+                  "name": "PerGB2018"
+                }
+              }
+            },
+            {
+              "type": "Microsoft.Monitor/accounts",
+              "apiVersion": "2023-04-03",
+              "name": "[variables('monitorWorkspaceName')]",
+              "location": "[parameters('location')]",
+              "tags": "[variables('effectiveTags')]",
+              "properties": {}
+            },
+            {
+              "type": "Microsoft.Insights/dataCollectionRules",
+              "apiVersion": "2023-03-11",
+              "name": "[variables('dataCollectionRuleName')]",
+              "location": "[parameters('location')]",
+              "tags": "[variables('effectiveTags')]",
+              "kind": "Linux",
+              "properties": {
+                "dataSources": {
+                  "extensions": [
+                    {
+                      "name": "ContainerInsightsExtension",
+                      "extensionName": "ContainerInsights",
+                      "streams": [
+                        "Microsoft-ContainerLogV2"
+                      ],
+                      "extensionSettings": {
+                        "dataCollectionSettings": {
+                          "enableContainerLogV2": true,
+                          "interval": "1m",
+                          "namespaceFilteringMode": "Off"
+                        }
+                      }
+                    }
+                  ]
+                },
+                "destinations": {
+                  "logAnalytics": [
+                    {
+                      "name": "logAnalyticsDestination",
+                      "workspaceResourceId": "[resourceId('Microsoft.OperationalInsights/workspaces', variables('workspaceName'))]"
+                    }
+                  ]
+                },
+                "dataFlows": [
+                  {
+                    "streams": [
+                      "Microsoft-ContainerLogV2"
+                    ],
+                    "destinations": [
+                      "logAnalyticsDestination"
+                    ]
+                  }
+                ]
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.OperationalInsights/workspaces', variables('workspaceName'))]"
+              ]
+            }
+          ],
+          "outputs": {
+            "workspaceId": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.OperationalInsights/workspaces', variables('workspaceName'))]"
+            },
+            "workspaceCustomerId": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.OperationalInsights/workspaces', variables('workspaceName')), '2023-09-01').customerId]"
+            },
+            "dcrId": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.Insights/dataCollectionRules', variables('dataCollectionRuleName'))]"
+            },
+            "prometheusWorkspaceId": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.Monitor/accounts', variables('monitorWorkspaceName'))]"
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "[format('keyvault-{0}', parameters('environmentName'))]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "environmentName": {
+            "value": "[parameters('environmentName')]"
+          },
+          "keyVaultName": {
+            "value": "[variables('resolvedKeyVaultName')]"
+          },
+          "tags": {
+            "value": "[variables('effectiveTags')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.39.26.7824",
+              "templateHash": "6766642053667768623"
+            }
+          },
+          "parameters": {
+            "location": {
+              "type": "string",
+              "metadata": {
+                "description": "Azure region for the Key Vault."
+              }
+            },
+            "environmentName": {
+              "type": "string",
+              "metadata": {
+                "description": "Environment name used to stamp tags."
+              }
+            },
+            "keyVaultName": {
+              "type": "string",
+              "minLength": 3,
+              "maxLength": 24,
+              "metadata": {
+                "description": "Name of the Key Vault to create."
+              }
+            },
+            "tags": {
+              "type": "object",
+              "metadata": {
+                "description": "Tags applied to the Key Vault."
+              }
+            }
+          },
+          "variables": {
+            "effectiveTags": "[union(parameters('tags'), createObject('azd-env-name', parameters('environmentName')))]"
+          },
+          "resources": [
+            {
+              "type": "Microsoft.KeyVault/vaults",
+              "apiVersion": "2023-07-01",
+              "name": "[parameters('keyVaultName')]",
+              "location": "[parameters('location')]",
+              "tags": "[variables('effectiveTags')]",
+              "properties": {
+                "tenantId": "[subscription().tenantId]",
+                "enableRbacAuthorization": true,
+                "enablePurgeProtection": true,
+                "enabledForDeployment": false,
+                "enabledForDiskEncryption": false,
+                "enabledForTemplateDeployment": false,
+                "publicNetworkAccess": "Enabled",
+                "softDeleteRetentionInDays": 90,
+                "sku": {
+                  "family": "A",
+                  "name": "standard"
+                }
+              }
+            }
+          ],
+          "outputs": {
+            "keyVaultId": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.KeyVault/vaults', parameters('keyVaultName'))]"
+            },
+            "keyVaultUri": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.KeyVault/vaults', parameters('keyVaultName')), '2023-07-01').vaultUri]"
+            }
+          }
+        }
+      }
+    },
+    {
+      "condition": "[parameters('usePrivateAcr')]",
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "[format('acr-{0}', parameters('environmentName'))]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "environmentName": {
+            "value": "[parameters('environmentName')]"
+          },
+          "acrName": {
+            "value": "[variables('resolvedAcrName')]"
+          },
+          "tags": {
+            "value": "[variables('effectiveTags')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.39.26.7824",
+              "templateHash": "14796944885532141762"
+            }
+          },
+          "parameters": {
+            "location": {
+              "type": "string",
+              "metadata": {
+                "description": "Azure region for the Azure Container Registry."
+              }
+            },
+            "environmentName": {
+              "type": "string",
+              "metadata": {
+                "description": "Environment name used to stamp tags."
+              }
+            },
+            "acrName": {
+              "type": "string",
+              "metadata": {
+                "description": "Name of the Azure Container Registry to create."
+              }
+            },
+            "tags": {
+              "type": "object",
+              "metadata": {
+                "description": "Tags applied to the Azure Container Registry."
+              }
+            }
+          },
+          "variables": {
+            "effectiveTags": "[union(parameters('tags'), createObject('azd-env-name', parameters('environmentName')))]"
+          },
+          "resources": [
+            {
+              "type": "Microsoft.ContainerRegistry/registries",
+              "apiVersion": "2023-07-01",
+              "name": "[parameters('acrName')]",
+              "location": "[parameters('location')]",
+              "tags": "[variables('effectiveTags')]",
+              "sku": {
+                "name": "Premium"
+              },
+              "properties": {
+                "adminUserEnabled": false,
+                "publicNetworkAccess": "Enabled"
+              }
+            }
+          ],
+          "outputs": {
+            "acrId": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.ContainerRegistry/registries', parameters('acrName'))]"
+            },
+            "acrLoginServer": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.ContainerRegistry/registries', parameters('acrName')), '2023-07-01').loginServer]"
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "[format('uami-{0}', parameters('environmentName'))]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "environmentName": {
+            "value": "[parameters('environmentName')]"
+          },
+          "uamiName": {
+            "value": "[parameters('uamiName')]"
+          },
+          "keyVaultId": {
+            "value": "[reference(resourceId('Microsoft.Resources/deployments', format('keyvault-{0}', parameters('environmentName'))), '2025-04-01').outputs.keyVaultId.value]"
+          },
+          "logAnalyticsWorkspaceId": {
+            "value": "[reference(resourceId('Microsoft.Resources/deployments', format('loganalytics-{0}', take(parameters('logAnalyticsWorkspaceName'), 32))), '2025-04-01').outputs.workspaceId.value]"
+          },
+          "usePrivateAcr": {
+            "value": "[parameters('usePrivateAcr')]"
+          },
+          "acrId": "[if(parameters('usePrivateAcr'), createObject('value', reference(resourceId('Microsoft.Resources/deployments', format('acr-{0}', parameters('environmentName'))), '2025-04-01').outputs.acrId.value), createObject('value', ''))]",
+          "tags": {
+            "value": "[variables('effectiveTags')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.39.26.7824",
+              "templateHash": "14484120729849006703"
+            }
+          },
+          "parameters": {
+            "location": {
+              "type": "string",
+              "metadata": {
+                "description": "Azure region for the managed identity."
+              }
+            },
+            "environmentName": {
+              "type": "string",
+              "metadata": {
+                "description": "Environment name used to stamp tags."
+              }
+            },
+            "uamiName": {
+              "type": "string",
+              "metadata": {
+                "description": "Name of the user-assigned managed identity."
+              }
+            },
+            "keyVaultId": {
+              "type": "string",
+              "metadata": {
+                "description": "Resource ID of the Key Vault that the identity should read secrets from."
+              }
+            },
+            "logAnalyticsWorkspaceId": {
+              "type": "string",
+              "metadata": {
+                "description": "Resource ID of the Log Analytics workspace used for monitoring role assignment scope."
+              }
+            },
+            "usePrivateAcr": {
+              "type": "bool",
+              "defaultValue": false,
+              "metadata": {
+                "description": "Set to true to grant AcrPull on the private ACR resource."
+              }
+            },
+            "acrId": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "Resource ID of the Azure Container Registry when private ACR is enabled."
+              }
+            },
+            "tags": {
+              "type": "object",
+              "metadata": {
+                "description": "Tags applied to the managed identity."
+              }
+            }
+          },
+          "variables": {
+            "effectiveTags": "[union(parameters('tags'), createObject('azd-env-name', parameters('environmentName')))]",
+            "keyVaultSecretsUserRoleId": "4633458b-17de-408a-b874-0445c86b69e6",
+            "monitoringMetricsPublisherRoleId": "3913510d-42f4-4e42-8a64-420c390055eb",
+            "acrPullRoleId": "7f951dda-4ed3-4680-a7ca-43fe172d538d"
+          },
+          "resources": [
+            {
+              "type": "Microsoft.ManagedIdentity/userAssignedIdentities",
+              "apiVersion": "2023-01-31",
+              "name": "[parameters('uamiName')]",
+              "location": "[parameters('location')]",
+              "tags": "[variables('effectiveTags')]"
+            },
+            {
+              "type": "Microsoft.Authorization/roleAssignments",
+              "apiVersion": "2022-04-01",
+              "scope": "[format('Microsoft.KeyVault/vaults/{0}', last(split(parameters('keyVaultId'), '/')))]",
+              "name": "[guid(resourceId('Microsoft.KeyVault/vaults', last(split(parameters('keyVaultId'), '/'))), resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', parameters('uamiName')), variables('keyVaultSecretsUserRoleId'))]",
+              "properties": {
+                "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('keyVaultSecretsUserRoleId'))]",
+                "principalId": "[reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', parameters('uamiName')), '2023-01-31').principalId]",
+                "principalType": "ServicePrincipal"
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', parameters('uamiName'))]"
+              ]
+            },
+            {
+              "type": "Microsoft.Authorization/roleAssignments",
+              "apiVersion": "2022-04-01",
+              "scope": "[format('Microsoft.OperationalInsights/workspaces/{0}', last(split(parameters('logAnalyticsWorkspaceId'), '/')))]",
+              "name": "[guid(resourceId('Microsoft.OperationalInsights/workspaces', last(split(parameters('logAnalyticsWorkspaceId'), '/'))), resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', parameters('uamiName')), variables('monitoringMetricsPublisherRoleId'))]",
+              "properties": {
+                "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('monitoringMetricsPublisherRoleId'))]",
+                "principalId": "[reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', parameters('uamiName')), '2023-01-31').principalId]",
+                "principalType": "ServicePrincipal"
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', parameters('uamiName'))]"
+              ]
+            },
+            {
+              "condition": "[parameters('usePrivateAcr')]",
+              "type": "Microsoft.Authorization/roleAssignments",
+              "apiVersion": "2022-04-01",
+              "scope": "[format('Microsoft.ContainerRegistry/registries/{0}', last(split(parameters('acrId'), '/')))]",
+              "name": "[guid(resourceId('Microsoft.ContainerRegistry/registries', last(split(parameters('acrId'), '/'))), resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', parameters('uamiName')), variables('acrPullRoleId'))]",
+              "properties": {
+                "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('acrPullRoleId'))]",
+                "principalId": "[reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', parameters('uamiName')), '2023-01-31').principalId]",
+                "principalType": "ServicePrincipal"
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', parameters('uamiName'))]"
+              ]
+            }
+          ],
+          "outputs": {
+            "uamiId": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', parameters('uamiName'))]"
+            },
+            "uamiPrincipalId": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', parameters('uamiName')), '2023-01-31').principalId]"
+            },
+            "uamiClientId": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', parameters('uamiName')), '2023-01-31').clientId]"
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/deployments', format('acr-{0}', parameters('environmentName')))]",
+        "[resourceId('Microsoft.Resources/deployments', format('keyvault-{0}', parameters('environmentName')))]",
+        "[resourceId('Microsoft.Resources/deployments', format('loganalytics-{0}', take(parameters('logAnalyticsWorkspaceName'), 32)))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "[format('aks-{0}', parameters('environmentName'))]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "environmentName": {
+            "value": "[parameters('environmentName')]"
+          },
+          "aksClusterName": {
+            "value": "[parameters('aksClusterName')]"
+          },
+          "nodeCount": {
+            "value": "[parameters('nodeCount')]"
+          },
+          "logAnalyticsWorkspaceId": {
+            "value": "[reference(resourceId('Microsoft.Resources/deployments', format('loganalytics-{0}', take(parameters('logAnalyticsWorkspaceName'), 32))), '2025-04-01').outputs.workspaceId.value]"
+          },
+          "dcrId": {
+            "value": "[reference(resourceId('Microsoft.Resources/deployments', format('loganalytics-{0}', take(parameters('logAnalyticsWorkspaceName'), 32))), '2025-04-01').outputs.dcrId.value]"
+          },
+          "tags": {
+            "value": "[variables('effectiveTags')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.39.26.7824",
+              "templateHash": "16873633168242519185"
+            }
+          },
+          "parameters": {
+            "location": {
+              "type": "string",
+              "metadata": {
+                "description": "Azure region for the AKS cluster."
+              }
+            },
+            "environmentName": {
+              "type": "string",
+              "metadata": {
+                "description": "Environment name used in resource tags and derived names."
+              }
+            },
+            "aksClusterName": {
+              "type": "string",
+              "metadata": {
+                "description": "Name of the AKS cluster to create."
+              }
+            },
+            "nodeCount": {
+              "type": "int",
+              "defaultValue": 3,
+              "minValue": 1,
+              "metadata": {
+                "description": "Number of nodes in the system node pool."
+              }
+            },
+            "logAnalyticsWorkspaceId": {
+              "type": "string",
+              "metadata": {
+                "description": "Resource ID of the Log Analytics workspace used by the AKS monitoring add-on."
+              }
+            },
+            "dcrId": {
+              "type": "string",
+              "metadata": {
+                "description": "Resource ID of the data collection rule associated with the cluster."
+              }
+            },
+            "tags": {
+              "type": "object",
+              "metadata": {
+                "description": "Tags applied to the AKS cluster and extension resources."
+              }
+            }
+          },
+          "variables": {
+            "effectiveTags": "[union(parameters('tags'), createObject('azd-env-name', parameters('environmentName')))]",
+            "dnsPrefixBase": "[toLower(replace(parameters('aksClusterName'), '_', '-'))]",
+            "dnsPrefix": "[take(variables('dnsPrefixBase'), 54)]"
+          },
+          "resources": [
+            {
+              "type": "Microsoft.ContainerService/managedClusters",
+              "apiVersion": "2024-02-01",
+              "name": "[parameters('aksClusterName')]",
+              "location": "[parameters('location')]",
+              "tags": "[variables('effectiveTags')]",
+              "identity": {
+                "type": "SystemAssigned"
+              },
+              "properties": {
+                "kubernetesVersion": "1.28",
+                "dnsPrefix": "[variables('dnsPrefix')]",
+                "enableRBAC": true,
+                "oidcIssuerProfile": {
+                  "enabled": true
+                },
+                "securityProfile": {
+                  "workloadIdentity": {
+                    "enabled": true
+                  }
+                },
+                "agentPoolProfiles": [
+                  {
+                    "name": "systempool",
+                    "mode": "System",
+                    "count": "[parameters('nodeCount')]",
+                    "vmSize": "Standard_D4s_v5",
+                    "osType": "Linux",
+                    "type": "VirtualMachineScaleSets"
+                  }
+                ],
+                "addonProfiles": {
+                  "omsagent": {
+                    "enabled": true,
+                    "config": {
+                      "logAnalyticsWorkspaceResourceID": "[parameters('logAnalyticsWorkspaceId')]"
+                    }
+                  }
+                },
+                "networkProfile": {
+                  "networkPlugin": "azure"
+                }
+              }
+            },
+            {
+              "type": "Microsoft.Insights/dataCollectionRuleAssociations",
+              "apiVersion": "2022-06-01",
+              "scope": "[format('Microsoft.ContainerService/managedClusters/{0}', parameters('aksClusterName'))]",
+              "name": "containerLogV2Association",
+              "properties": {
+                "dataCollectionRuleId": "[parameters('dcrId')]",
+                "description": "Associates the AKS cluster with the ContainerLogV2 data collection rule."
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.ContainerService/managedClusters', parameters('aksClusterName'))]"
+              ]
+            }
+          ],
+          "outputs": {
+            "aksClusterId": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.ContainerService/managedClusters', parameters('aksClusterName'))]"
+            },
+            "aksOidcIssuerUrl": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.ContainerService/managedClusters', parameters('aksClusterName')), '2024-02-01').oidcIssuerProfile.issuerURL]"
+            },
+            "aksFqdn": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.ContainerService/managedClusters', parameters('aksClusterName')), '2024-02-01').fqdn]"
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/deployments', format('loganalytics-{0}', take(parameters('logAnalyticsWorkspaceName'), 32)))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "[format('fedcred-{0}', parameters('environmentName'))]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "uamiName": {
+            "value": "[parameters('uamiName')]"
+          },
+          "oidcIssuerUrl": {
+            "value": "[reference(resourceId('Microsoft.Resources/deployments', format('aks-{0}', parameters('environmentName'))), '2025-04-01').outputs.aksOidcIssuerUrl.value]"
+          },
+          "drasiNamespace": {
+            "value": "[parameters('drasiNamespace')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.39.26.7824",
+              "templateHash": "16201130099264894950"
+            }
+          },
+          "parameters": {
+            "uamiName": {
+              "type": "string",
+              "metadata": {
+                "description": "Name of the existing user-assigned managed identity."
+              }
+            },
+            "oidcIssuerUrl": {
+              "type": "string",
+              "metadata": {
+                "description": "OIDC issuer URL emitted by the AKS cluster."
+              }
+            },
+            "drasiNamespace": {
+              "type": "string",
+              "defaultValue": "drasi-system",
+              "metadata": {
+                "description": "Namespace containing the Drasi resource provider service account."
+              }
+            }
+          },
+          "resources": [
+            {
+              "type": "Microsoft.ManagedIdentity/userAssignedIdentities/federatedIdentityCredentials",
+              "apiVersion": "2023-01-31",
+              "name": "[format('{0}/{1}', parameters('uamiName'), 'drasi-fedcred')]",
+              "properties": {
+                "issuer": "[parameters('oidcIssuerUrl')]",
+                "subject": "[format('system:serviceaccount:{0}:drasi-resource-provider', parameters('drasiNamespace'))]",
+                "audiences": [
+                  "api://AzureADTokenExchange"
+                ]
+              }
+            }
+          ],
+          "outputs": {
+            "federatedCredentialId": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities/federatedIdentityCredentials', parameters('uamiName'), 'drasi-fedcred')]"
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/deployments', format('aks-{0}', parameters('environmentName')))]",
+        "[resourceId('Microsoft.Resources/deployments', format('uami-{0}', parameters('environmentName')))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "[format('workload-identity-{0}', parameters('environmentName'))]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "uamiClientId": {
+            "value": "[reference(resourceId('Microsoft.Resources/deployments', format('uami-{0}', parameters('environmentName'))), '2025-04-01').outputs.uamiClientId.value]"
+          },
+          "drasiNamespace": {
+            "value": "[parameters('drasiNamespace')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.39.26.7824",
+              "templateHash": "15359324881720323298"
+            }
+          },
+          "parameters": {
+            "uamiClientId": {
+              "type": "string",
+              "metadata": {
+                "description": "Client ID of the user-assigned managed identity bound to the Drasi workload."
+              }
+            },
+            "drasiNamespace": {
+              "type": "string",
+              "defaultValue": "drasi-system",
+              "metadata": {
+                "description": "Namespace containing the Drasi Kubernetes resources."
+              }
+            }
+          },
+          "resources": [],
+          "outputs": {
+            "serviceAccountAnnotation": {
+              "type": "string",
+              "value": "[format('azure.workload.identity/client-id: {0}', parameters('uamiClientId'))]"
+            },
+            "podLabel": {
+              "type": "string",
+              "value": "azure.workload.identity/use: \"true\""
+            },
+            "namespace": {
+              "type": "string",
+              "value": "[parameters('drasiNamespace')]"
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/deployments', format('uami-{0}', parameters('environmentName')))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "[format('runtime-observability-{0}', parameters('environmentName'))]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "otlpEndpoint": {
+            "value": "[parameters('otlpEndpoint')]"
+          },
+          "drasiNamespace": {
+            "value": "[parameters('drasiNamespace')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.39.26.7824",
+              "templateHash": "4387352313593327981"
+            }
+          },
+          "parameters": {
+            "otlpEndpoint": {
+              "type": "string",
+              "metadata": {
+                "description": "OTLP endpoint URL to which Drasi runtime workloads export OpenTelemetry traces and metrics."
+              }
+            },
+            "drasiNamespace": {
+              "type": "string",
+              "defaultValue": "drasi-system",
+              "metadata": {
+                "description": "Namespace containing the Drasi Kubernetes workloads."
+              }
+            }
+          },
+          "resources": [],
+          "outputs": {
+            "otlpExporterEndpoint": {
+              "type": "string",
+              "value": "[parameters('otlpEndpoint')]"
+            },
+            "drasiNamespace": {
+              "type": "string",
+              "value": "[parameters('drasiNamespace')]"
+            },
+            "livenessProbe": {
+              "type": "string",
+              "value": "httpGet: { path: /healthz/live, port: 8080 }, initialDelaySeconds: 15, periodSeconds: 20"
+            },
+            "readinessProbe": {
+              "type": "string",
+              "value": "httpGet: { path: /healthz/ready, port: 8080 }, initialDelaySeconds: 5, periodSeconds: 10"
+            },
+            "startupProbe": {
+              "type": "string",
+              "value": "httpGet: { path: /healthz/startup, port: 8080 }, failureThreshold: 30, periodSeconds: 10"
+            }
+          }
+        }
+      }
+    },
+    {
+      "condition": "[parameters('enableCosmosDb')]",
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "[format('cosmos-{0}', parameters('environmentName'))]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "environmentName": {
+            "value": "[parameters('environmentName')]"
+          },
+          "cosmosAccountName": {
+            "value": "[variables('resolvedCosmosName')]"
+          },
+          "tags": {
+            "value": "[variables('effectiveTags')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.39.26.7824",
+              "templateHash": "15630897467479146310"
+            }
+          },
+          "parameters": {
+            "location": {
+              "type": "string",
+              "metadata": {
+                "description": "Azure region for the Cosmos DB account."
+              }
+            },
+            "environmentName": {
+              "type": "string",
+              "metadata": {
+                "description": "Environment name used to stamp tags."
+              }
+            },
+            "cosmosAccountName": {
+              "type": "string",
+              "metadata": {
+                "description": "Name of the Cosmos DB account to create."
+              }
+            },
+            "tags": {
+              "type": "object",
+              "metadata": {
+                "description": "Tags applied to the Cosmos DB account."
+              }
+            }
+          },
+          "variables": {
+            "effectiveTags": "[union(parameters('tags'), createObject('azd-env-name', parameters('environmentName')))]"
+          },
+          "resources": [
+            {
+              "type": "Microsoft.DocumentDB/databaseAccounts",
+              "apiVersion": "2023-11-15",
+              "name": "[parameters('cosmosAccountName')]",
+              "location": "[parameters('location')]",
+              "tags": "[variables('effectiveTags')]",
+              "kind": "GlobalDocumentDB",
+              "properties": {
+                "capabilities": [
+                  {
+                    "name": "EnableGremlin"
+                  }
+                ],
+                "consistencyPolicy": {
+                  "defaultConsistencyLevel": "Session"
+                },
+                "databaseAccountOfferType": "Standard",
+                "locations": [
+                  {
+                    "locationName": "[parameters('location')]",
+                    "failoverPriority": 0
+                  }
+                ],
+                "publicNetworkAccess": "Enabled"
+              }
+            }
+          ],
+          "outputs": {
+            "cosmosId": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.DocumentDB/databaseAccounts', parameters('cosmosAccountName'))]"
+            },
+            "cosmosEndpoint": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.DocumentDB/databaseAccounts', parameters('cosmosAccountName')), '2023-11-15').documentEndpoint]"
+            }
+          }
+        }
+      }
+    },
+    {
+      "condition": "[parameters('enableEventHub')]",
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "[format('eventhub-{0}', parameters('environmentName'))]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "environmentName": {
+            "value": "[parameters('environmentName')]"
+          },
+          "eventHubNamespaceName": {
+            "value": "[variables('resolvedEventHubNamespaceName')]"
+          },
+          "tags": {
+            "value": "[variables('effectiveTags')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.39.26.7824",
+              "templateHash": "404313971999115437"
+            }
+          },
+          "parameters": {
+            "location": {
+              "type": "string",
+              "metadata": {
+                "description": "Azure region for the Event Hubs namespace."
+              }
+            },
+            "environmentName": {
+              "type": "string",
+              "metadata": {
+                "description": "Environment name used to stamp tags."
+              }
+            },
+            "eventHubNamespaceName": {
+              "type": "string",
+              "metadata": {
+                "description": "Name of the Event Hubs namespace to create."
+              }
+            },
+            "tags": {
+              "type": "object",
+              "metadata": {
+                "description": "Tags applied to the Event Hubs namespace."
+              }
+            }
+          },
+          "variables": {
+            "effectiveTags": "[union(parameters('tags'), createObject('azd-env-name', parameters('environmentName')))]"
+          },
+          "resources": [
+            {
+              "type": "Microsoft.EventHub/namespaces",
+              "apiVersion": "2024-01-01",
+              "name": "[parameters('eventHubNamespaceName')]",
+              "location": "[parameters('location')]",
+              "tags": "[variables('effectiveTags')]",
+              "sku": {
+                "name": "Standard",
+                "tier": "Standard"
+              },
+              "properties": {
+                "minimumTlsVersion": "1.2"
+              }
+            }
+          ],
+          "outputs": {
+            "eventHubNamespaceId": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.EventHub/namespaces', parameters('eventHubNamespaceName'))]"
+            },
+            "eventHubNamespaceFqdn": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.EventHub/namespaces', parameters('eventHubNamespaceName')), '2024-01-01').serviceBusEndpoint]"
+            }
+          }
+        }
+      }
+    },
+    {
+      "condition": "[parameters('enableServiceBus')]",
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "[format('servicebus-{0}', parameters('environmentName'))]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "environmentName": {
+            "value": "[parameters('environmentName')]"
+          },
+          "serviceBusNamespaceName": {
+            "value": "[variables('resolvedServiceBusNamespaceName')]"
+          },
+          "tags": {
+            "value": "[variables('effectiveTags')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.39.26.7824",
+              "templateHash": "2241405950399434085"
+            }
+          },
+          "parameters": {
+            "location": {
+              "type": "string",
+              "metadata": {
+                "description": "Azure region for the Service Bus namespace."
+              }
+            },
+            "environmentName": {
+              "type": "string",
+              "metadata": {
+                "description": "Environment name used to stamp tags."
+              }
+            },
+            "serviceBusNamespaceName": {
+              "type": "string",
+              "metadata": {
+                "description": "Name of the Service Bus namespace to create."
+              }
+            },
+            "tags": {
+              "type": "object",
+              "metadata": {
+                "description": "Tags applied to the Service Bus namespace."
+              }
+            }
+          },
+          "variables": {
+            "effectiveTags": "[union(parameters('tags'), createObject('azd-env-name', parameters('environmentName')))]"
+          },
+          "resources": [
+            {
+              "type": "Microsoft.ServiceBus/namespaces",
+              "apiVersion": "2024-01-01",
+              "name": "[parameters('serviceBusNamespaceName')]",
+              "location": "[parameters('location')]",
+              "tags": "[variables('effectiveTags')]",
+              "sku": {
+                "name": "Standard",
+                "tier": "Standard"
+              },
+              "properties": {
+                "minimumTlsVersion": "1.2"
+              }
+            }
+          ],
+          "outputs": {
+            "serviceBusNamespaceId": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.ServiceBus/namespaces', parameters('serviceBusNamespaceName'))]"
+            },
+            "serviceBusEndpoint": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.ServiceBus/namespaces', parameters('serviceBusNamespaceName')), '2024-01-01').serviceBusEndpoint]"
+            }
+          }
+        }
+      }
+    }
+  ],
+  "outputs": {
+    "aksClusterId": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Resources/deployments', format('aks-{0}', parameters('environmentName'))), '2025-04-01').outputs.aksClusterId.value]"
+    },
+    "aksOidcIssuerUrl": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Resources/deployments', format('aks-{0}', parameters('environmentName'))), '2025-04-01').outputs.aksOidcIssuerUrl.value]"
+    },
+    "keyVaultUri": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Resources/deployments', format('keyvault-{0}', parameters('environmentName'))), '2025-04-01').outputs.keyVaultUri.value]"
+    },
+    "uamiClientId": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Resources/deployments', format('uami-{0}', parameters('environmentName'))), '2025-04-01').outputs.uamiClientId.value]"
+    },
+    "logAnalyticsWorkspaceId": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Resources/deployments', format('loganalytics-{0}', take(parameters('logAnalyticsWorkspaceName'), 32))), '2025-04-01').outputs.workspaceId.value]"
+    }
+  }
+}
