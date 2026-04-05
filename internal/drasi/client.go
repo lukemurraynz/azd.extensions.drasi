@@ -90,3 +90,16 @@ func (c *Client) RunCommand(ctx context.Context, args ...string) error {
 	}
 	return nil
 }
+
+// RunCommandOutput executes a drasi CLI subcommand and returns stdout on success.
+// No automatic retry is performed (FR-046).
+func (c *Client) RunCommandOutput(ctx context.Context, args ...string) (string, error) {
+	stdout, stderr, exitCode, err := c.runner.Run(ctx, args...)
+	if err != nil {
+		return "", err
+	}
+	if exitCode != 0 {
+		return "", fmt.Errorf("%s: drasi %s: %s", output.ERR_DRASI_CLI_ERROR, strings.Join(args, " "), strings.TrimSpace(stderr))
+	}
+	return stdout, nil
+}

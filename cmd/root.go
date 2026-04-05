@@ -13,6 +13,7 @@ func NewRootCommand() *cobra.Command {
 
 	rootCmd.PersistentFlags().String("output", "table", "Output format: table or json")
 	rootCmd.PersistentFlags().Bool("debug", false, "Enable verbose debug logging")
+	rootCmd.PersistentFlags().StringP("environment", "e", "", "Name of the azd environment to use")
 
 	rootCmd.AddCommand(newListenCommand())
 	rootCmd.AddCommand(newValidateCommand())

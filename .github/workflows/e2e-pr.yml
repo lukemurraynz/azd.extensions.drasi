@@ -1,0 +1,150 @@
+name: E2E (PR)
+
+on:
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions: {}
+
+jobs:
+  e2e:
+    name: E2E — provision / deploy / validate / teardown
+    runs-on: ubuntu-latest
+    # Only run against PRs from the same repo to protect OIDC secrets
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    permissions:
+      id-token: write
+      contents: read
+    timeout-minutes: 20
+    env:
+      AZURE_ENV_NAME: e2e-pr-${{ github.run_id }}
+      AZURE_LOCATION: eastus
+
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@d60b41a563a30eb0b7a29fdef2a1c5b8571ce5ba # v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Build extension binary
+        run: go build -o azd-drasi ./
+
+      - name: Install azd
+        shell: bash
+        run: |
+          curl -fsSL https://aka.ms/install-azd.sh | bash
+          azd version
+
+      - name: Install Drasi CLI
+        shell: bash
+        run: |
+          curl -fsSL https://drasi.io/install.sh | bash
+          drasi version
+
+      - name: Azure login (OIDC)
+        uses: azure/login@6c251865b4e6290e7b78be643ea2d005bc51f69a # v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Scaffold test project
+        shell: bash
+        run: |
+          mkdir -p /tmp/e2e-project
+          cd /tmp/e2e-project
+          azd init --no-prompt --template ""
+          "${{ github.workspace }}/azd-drasi" drasi init --template blank
+
+      - name: Validate (pre-provision gate)
+        shell: bash
+        run: |
+          cd /tmp/e2e-project
+          "${{ github.workspace }}/azd-drasi" drasi validate
+
+      # T107: measure provision duration and assert < 15 minutes (900 seconds)
+      - name: Provision infrastructure
+        id: provision
+        shell: bash
+        run: |
+          cd /tmp/e2e-project
+          start=$(date +%s)
+          "${{ github.workspace }}/azd-drasi" drasi provision \
+            --environment "${AZURE_ENV_NAME}"
+          end=$(date +%s)
+          elapsed=$(( end - start ))
+          echo "provision_seconds=${elapsed}" >> "${GITHUB_OUTPUT}"
+          echo "Provision completed in ${elapsed}s"
+          if (( elapsed > 900 )); then
+            echo "::error::Provision took ${elapsed}s which exceeds the 15-minute SLA (900s)"
+            exit 1
+          fi
+
+      - name: Deploy Drasi components
+        id: deploy
+        shell: bash
+        run: |
+          cd /tmp/e2e-project
+          start=$(date +%s)
+          "${{ github.workspace }}/azd-drasi" drasi deploy \
+            --environment "${AZURE_ENV_NAME}"
+          end=$(date +%s)
+          elapsed=$(( end - start ))
+          echo "deploy_seconds=${elapsed}" >> "${GITHUB_OUTPUT}"
+          echo "Deploy completed in ${elapsed}s"
+
+      - name: Validate deployed components
+        shell: bash
+        run: |
+          cd /tmp/e2e-project
+          "${{ github.workspace }}/azd-drasi" drasi validate \
+            --environment "${AZURE_ENV_NAME}"
+
+      - name: Check component status
+        shell: bash
+        run: |
+          cd /tmp/e2e-project
+          "${{ github.workspace }}/azd-drasi" drasi status \
+            --environment "${AZURE_ENV_NAME}"
+
+      - name: Capture timing evidence
+        if: always()
+        shell: bash
+        run: |
+          cat > /tmp/e2e-timing.json <<EOF
+          {
+            "run_id": "${{ github.run_id }}",
+            "provision_seconds": ${{ steps.provision.outputs.provision_seconds || 0 }},
+            "deploy_seconds": ${{ steps.deploy.outputs.deploy_seconds || 0 }},
+            "provision_sla_seconds": 900,
+            "provision_passed": ${{ steps.provision.outputs.provision_seconds && steps.provision.outputs.provision_seconds <= 900 || 'false' }}
+          }
+          EOF
+          cat /tmp/e2e-timing.json
+
+      - name: Teardown components and infrastructure
+        if: always()
+        shell: bash
+        run: |
+          cd /tmp/e2e-project
+          "${{ github.workspace }}/azd-drasi" drasi teardown \
+            --environment "${AZURE_ENV_NAME}" \
+            --force \
+            --infrastructure \
+            || true
+
+      - name: Upload timing artifact
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6b4eb7e4b5ef41b7e1a0d2d2b1e8e # v4
+        with:
+          name: e2e-timing-${{ github.run_id }}
+          path: /tmp/e2e-timing.json

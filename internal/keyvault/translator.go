@@ -2,6 +2,7 @@ package keyvault
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/azure/azd.extensions.drasi/internal/config"
 )
@@ -29,5 +30,8 @@ func NewTranslator() *Translator {
 // - Plain string → TranslatedValue{StringValue: value.StringValue}
 // - SecretRef → resolves via Key Vault (not implemented yet)
 func (t *Translator) Translate(ctx context.Context, v config.Value) (*TranslatedValue, error) {
-	panic("not implemented")
+	if v.SecretRef == nil && v.EnvRef == nil {
+		return &TranslatedValue{StringValue: v.StringValue, IsSecretRef: false}, nil
+	}
+	return nil, fmt.Errorf("secret and env ref resolution not yet implemented")
 }

@@ -1,0 +1,157 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions: {}
+
+jobs:
+  ci-checks:
+    name: CI checks
+    uses: ./.github/workflows/ci.yml
+
+  build-binaries:
+    name: Build binaries
+    runs-on: ubuntu-latest
+    needs: ci-checks
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@d60b41a563a30eb0b7a29fdef2a1c5b8571ce5ba # v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Build all targets
+        shell: bash
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          chmod +x build.sh
+          ./build.sh "$VERSION"
+
+      - name: Package archives
+        shell: bash
+        run: |
+          cd bin
+
+          # windows/amd64
+          zip windows.zip windows/amd64/azd-drasi.exe
+
+          # linux/amd64
+          tar -czf linux-amd64.tar.gz -C linux/amd64 azd-drasi
+
+          # linux/arm64
+          tar -czf linux-arm64.tar.gz -C linux/arm64 azd-drasi
+
+          # darwin/amd64
+          tar -czf darwin-amd64.tar.gz -C darwin/amd64 azd-drasi
+
+          # darwin/arm64
+          tar -czf darwin-arm64.tar.gz -C darwin/arm64 azd-drasi
+
+      - name: Upload archives
+        uses: actions/upload-artifact@ea165f8d65b6b4eb7e4b5ef41b7e1a0d2d2b1e8e # v4
+        with:
+          name: release-archives
+          path: |
+            bin/windows.zip
+            bin/linux-amd64.tar.gz
+            bin/linux-arm64.tar.gz
+            bin/darwin-amd64.tar.gz
+            bin/darwin-arm64.tar.gz
+          if-no-files-found: error
+
+  create-release:
+    name: Create GitHub release
+    runs-on: ubuntu-latest
+    needs: build-binaries
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Download archives
+        uses: actions/download-artifact@fa0a91b85d4f404e444306234ee91820c5f2a88e # v4
+        with:
+          name: release-archives
+          path: dist/
+
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          gh release create "${GITHUB_REF_NAME}" \
+            --title "Drasi azd Extension ${GITHUB_REF_NAME}" \
+            --generate-notes \
+            dist/windows.zip \
+            dist/linux-amd64.tar.gz \
+            dist/linux-arm64.tar.gz \
+            dist/darwin-amd64.tar.gz \
+            dist/darwin-arm64.tar.gz
+
+  update-registry:
+    name: Update extension registry
+    runs-on: ubuntu-latest
+    needs: create-release
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Open registry PR
+        env:
+          GH_TOKEN: ${{ secrets.REGISTRY_PAT }}
+        shell: bash
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          REPO="azure/azd-extensions-registry"
+          BRANCH="update-drasi-${VERSION}"
+
+          gh repo clone "${REPO}" registry-clone
+          cd registry-clone
+
+          # Update the version field for the drasi extension entry
+          sed -i "s/\"version\": \".*\"/\"version\": \"${VERSION}\"/" registry.yaml 2>/dev/null || \
+          grep -q "drasi" registry.yaml && \
+          python3 - <<EOF
+          import re, sys
+          content = open("registry.yaml").read()
+          # Replace version under the drasi namespace block
+          updated = re.sub(
+              r'(namespace:\s+drasi\b.*?version:\s+")[^"]+(")',
+              r'\g<1>${VERSION}\g<2>',
+              content,
+              flags=re.DOTALL
+          )
+          open("registry.yaml", "w").write(updated)
+          EOF
+
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config user.name "github-actions[bot]"
+          git checkout -b "${BRANCH}"
+          git add registry.yaml
+          git commit -m "chore(registry): bump drasi extension to ${VERSION}"
+          git push origin "${BRANCH}"
+
+          gh pr create \
+            --repo "${REPO}" \
+            --head "${BRANCH}" \
+            --base main \
+            --title "chore: bump drasi extension to ${VERSION}" \
+            --body "Automated bump from release ${GITHUB_REF_NAME} in azure/azd.extensions.drasi."

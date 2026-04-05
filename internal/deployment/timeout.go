@@ -15,10 +15,10 @@ const (
 
 // WithPerComponentTimeout wraps ctx with a per-component deadline.
 func WithPerComponentTimeout(ctx context.Context) (context.Context, context.CancelFunc) {
-	panic("not implemented")
+	return context.WithTimeout(ctx, PerComponentTimeout)
 }
 
 // WithTotalDeployTimeout wraps ctx with the total deploy deadline.
 func WithTotalDeployTimeout(ctx context.Context) (context.Context, context.CancelFunc) {
-	panic("not implemented")
+	return context.WithTimeout(ctx, TotalDeployTimeout)
 }

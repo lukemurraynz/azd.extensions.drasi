@@ -1,0 +1,75 @@
+# Troubleshooting
+
+Run `azd drasi diagnose` first. It checks AKS connectivity, Drasi API health, Dapr runtime, Key Vault auth, and Log Analytics in a single pass and surfaces the most common failures with remediation hints.
+
+## Error code reference
+
+Every failure the extension emits includes a structured error code. The table below lists each code, when it occurs, the exit code, and what to do.
+
+| Code | Exit | When it occurs | Remediation |
+|------|------|----------------|-------------|
+| `ERR_NO_AUTH` | 2 | No valid Azure credential found when the command tried to call a gRPC service or Azure API | Run `azd auth login` and try again. In CI, ensure `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, and `AZURE_SUBSCRIPTION_ID` are set and the federated credential is configured. |
+| `ERR_DRASI_CLI_NOT_FOUND` | 2 | The `drasi` binary is not on `PATH` | Install the Drasi CLI (>= 0.10.0) from https://drasi.io/docs/getting-started and ensure it is on `PATH`. |
+| `ERR_DRASI_CLI_VERSION` | 2 | The installed `drasi` binary is older than the minimum required version (0.10.0) | Upgrade the Drasi CLI. |
+| `ERR_DRASI_CLI_ERROR` | 1 | The `drasi` subprocess exited with a non-zero code | Read the error message for the underlying cause. Run the same `drasi` command manually to see the full output. Check that your kubeconfig context points to the correct AKS cluster. |
+| `ERR_COMPONENT_TIMEOUT` | 1 | A component did not reach `Online` state within 5 minutes | Run `azd drasi diagnose` to check Dapr and the Drasi API. Check the component pod logs: `kubectl logs -n drasi-system -l drasi.io/component-id=<id>`. |
+| `ERR_TOTAL_TIMEOUT` | 1 | The entire deploy did not complete within 15 minutes | Reduce the number of components deployed at once, check cluster resource limits, or increase timeouts by splitting the deploy into separate runs. |
+| `ERR_VALIDATION_FAILED` | 1 | One or more entities failed offline validation | Read the validation output for the specific fields and fix them. Run `azd drasi validate` after each fix to confirm. |
+| `ERR_MISSING_REFERENCE` | 1 | A query references a source ID that does not exist in the project | Add the missing source entity or fix the `sources[].id` reference in the query file. |
+| `ERR_CIRCULAR_DEPENDENCY` | 1 | Two or more entities form a circular dependency | Review the `sources` and `reactions` fields on your queries for cycles. |
+| `ERR_MISSING_QUERY_LANGUAGE` | 1 | A `ContinuousQuery` entity is missing the `queryLanguage` field | Add `queryLanguage: Cypher` (or the appropriate language) to the query entity. |
+| `ERR_KV_AUTH_FAILED` | 2 | The managed identity does not have permission to read secrets from Key Vault | Assign the `Key Vault Secrets User` role to the provisioned UAMI on the Key Vault. Run `azd drasi provision` again to re-apply the role assignment, or assign it manually via the Azure portal. |
+| `ERR_AKS_CONTEXT_NOT_FOUND` | 2 | The kubeconfig context for the provisioned AKS cluster could not be found | Run `az aks get-credentials --resource-group <rg> --name <aks-name>` to refresh the kubeconfig, then retry. |
+| `ERR_FORCE_REQUIRED` | 2 | A destructive operation was attempted without `--force` | Re-run the command with `--force` to confirm the destructive action. |
+| `ERR_NO_MANIFEST` | 2 | `drasi/drasi.yaml` was not found in the current directory | Run the command from the project root that contains the `drasi/` directory, or run `azd drasi init` to scaffold one. |
+| `ERR_NOT_IMPLEMENTED` | 2 | The command or subcommand is not yet implemented in this version | Check the release notes for the current version. Open an issue if this command was expected to work. |
+| `ERR_DEPLOY_IN_PROGRESS` | 2 | A deploy is already running for this environment | Wait for the previous deploy to complete, or remove the in-progress lock from azd environment state manually. |
+| `ERR_DAPR_NOT_READY` | 2 | The Dapr runtime is not running in the AKS cluster | Run `azd drasi diagnose` and check the Dapr section. Reinstall or restart Dapr with `dapr init -k`. |
+
+## Common failure scenarios
+
+### `azd drasi provision` fails at the AKS step
+
+The most common causes are insufficient quota in the target region and a missing `Owner` or `Contributor` role on the subscription.
+
+Check the deployment error in the Azure portal under the resource group's deployment history, or run:
+
+```bash
+az deployment sub show --name <deployment-name> --query properties.error
+```
+
+### Components stuck in `Pending` after deploy
+
+If `azd drasi status` shows components in `Pending` for more than a few minutes:
+
+1. Run `azd drasi diagnose` to confirm Dapr and the Drasi API are healthy.
+2. Check pod logs in `drasi-system`: `kubectl get pods -n drasi-system` and `kubectl logs <pod-name> -n drasi-system`.
+3. Confirm that all `secretRef` values in your entity files resolve to real Key Vault secrets.
+
+### Key Vault secret reference fails silently
+
+If a component deploys successfully but behaves as if a secret is missing, check that the secret name and vault name in the `secretRef` match exactly what is in Key Vault (including case). Key Vault secret names are case-insensitive in storage but the extension passes the name verbatim to the Key Vault API.
+
+### `ERR_NO_AUTH` in CI
+
+In GitHub Actions, the extension uses OIDC to authenticate. Ensure:
+
+- `permissions: id-token: write` is set on the job.
+- `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, and `AZURE_SUBSCRIPTION_ID` secrets are set.
+- The federated credential on the app registration matches the repository and branch/environment.
+
+### `azd drasi teardown --force --infrastructure` hangs
+
+The teardown calls `az group delete` for the resource group. If the group contains resources with delete locks, Azure will block deletion until locks are removed. Check the resource group in the Azure portal for delete locks and remove them before retrying.
+
+## Diagnostic flow
+
+If the error code table does not resolve the issue, work through this sequence:
+
+1. Run `azd drasi validate` to rule out configuration errors.
+2. Run `azd drasi diagnose` to check cluster health and connectivity.
+3. Run `kubectl get pods -n drasi-system` and check that all Drasi pods are `Running`.
+4. Check Drasi pod logs for the specific component: `kubectl logs -n drasi-system -l drasi.io/component-id=<id>`.
+5. Check the azd environment state for stale values: `azd env get-values`.
+6. If infrastructure is suspected, re-run `azd drasi provision` (it is idempotent).
+7. If the issue persists, open an issue with the output of `azd drasi diagnose --output json`.

@@ -15,6 +15,21 @@ type envServiceClient interface {
 	SetValue(ctx context.Context, envName, key, value string) error
 }
 
+// EnvServiceClient is the exported equivalent of envServiceClient, used by
+// integration-test stubs that live in external packages.
+type EnvServiceClient interface {
+	GetValue(ctx context.Context, envName, key string) (string, error)
+	SetValue(ctx context.Context, envName, key, value string) error
+}
+
+// exportedEnvStateClient adapts an EnvServiceClient into the unexported envStateClient
+// interface so external test stubs can be passed to NewStateManager via NewStateManagerFromClient.
+type exportedEnvStateClient struct {
+	svc EnvServiceClient
+}
+
+func (e *exportedEnvStateClient) environment() envServiceClient { return e.svc }
+
 // StateManager reads and writes component hashes via the azd environment gRPC service.
 type StateManager struct {
 	client  envStateClient
@@ -24,6 +39,13 @@ type StateManager struct {
 // NewStateManager creates a StateManager.
 func NewStateManager(client envStateClient, envName string) *StateManager {
 	return &StateManager{client: client, envName: envName}
+}
+
+// NewStateManagerFromClient creates a StateManager from an exported EnvServiceClient.
+// This constructor exists for integration tests in external packages that need to
+// provide a stub without access to the unexported envStateClient interface.
+func NewStateManagerFromClient(svc EnvServiceClient, envName string) *StateManager {
+	return &StateManager{client: &exportedEnvStateClient{svc: svc}, envName: envName}
 }
 
 // ReadHash returns the stored hash for a component key, or "" if absent.

@@ -175,3 +175,85 @@ func TestClient_RunCommand_NoAutomaticRetry(t *testing.T) {
 		})
 	}
 }
+
+func TestClient_RunCommandOutput_ReturnsStdout(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		args       []string
+		stdout     string
+		wantOutput string
+	}{
+		{name: "returns stdout on success", args: []string{"list", "source", "--output", "json"}, stdout: `[{"id":"s1"}]`, wantOutput: `[{"id":"s1"}]`},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			runner := &mockRunner{responses: []runnerResponse{{stdout: tt.stdout}}}
+			client := newTestClient(runner)
+
+			out, err := client.RunCommandOutput(context.Background(), tt.args...)
+
+			require.NoError(t, err)
+			assert.Equal(t, tt.wantOutput, out)
+		})
+	}
+}
+
+func TestClient_RunCommandOutput_NonZeroExit_MapsToCliError(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		args     []string
+		stderr   string
+		exitCode int
+		want     string
+	}{
+		{name: "non-zero exit maps to CLI error", args: []string{"list", "source"}, stderr: "drasi command failed", exitCode: 1, want: output.ERR_DRASI_CLI_ERROR},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			runner := &mockRunner{responses: []runnerResponse{{stderr: tt.stderr, exitCode: tt.exitCode}}}
+			client := newTestClient(runner)
+
+			_, err := client.RunCommandOutput(context.Background(), tt.args...)
+
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), tt.want)
+		})
+	}
+}
+
+func TestClient_RunCommandOutput_NoAutomaticRetry(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		args     []string
+		stderr   string
+		exitCode int
+	}{
+		{name: "non-zero exit is attempted once", args: []string{"list", "source"}, stderr: "boom", exitCode: 2},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			runner := &mockRunner{responses: []runnerResponse{{stderr: tt.stderr, exitCode: tt.exitCode}}}
+			client := newTestClient(runner)
+
+			_, err := client.RunCommandOutput(context.Background(), tt.args...)
+
+			require.Error(t, err)
+			assert.Equal(t, 1, runner.callCount)
+		})
+	}
+}
