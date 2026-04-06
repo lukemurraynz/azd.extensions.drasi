@@ -133,7 +133,7 @@ resource natPublicIp 'Microsoft.Network/publicIPAddresses@2024-05-01' = {
 // ---------------------------------------------------------------------------
 // 7. NAT Gateway (Standard, zone 1, 10-minute idle timeout)
 // ---------------------------------------------------------------------------
-resource natGateway 'Microsoft.Network/natGateways@2024-05-01' = {
+resource natGateway 'Microsoft.Network/natGateways@2024-10-01' = {
   name: natGatewayName
   location: location
   tags: tags
