@@ -28,7 +28,7 @@ var effectiveTags = union(tags, {
 var dnsPrefixBase = toLower(replace(aksClusterName, '_', '-'))
 var dnsPrefix = take(dnsPrefixBase, 54)
 
-resource aksCluster 'Microsoft.ContainerService/managedClusters@2024-02-01' = {
+resource aksCluster 'Microsoft.ContainerService/managedClusters@2024-07-01' = {
   name: aksClusterName
   location: location
   tags: effectiveTags
