@@ -522,7 +522,7 @@ metadata:
 spec:
   podSelector:
     matchLabels:
-      app.kubernetes.io/component: resource-provider
+      drasi/infra: resource-provider
   policyTypes:
   - Egress
   egress:
@@ -547,14 +547,14 @@ spec:
   - to:
     - podSelector:
         matchLabels:
-          app.kubernetes.io/name: drasi-redis
+          app: drasi-redis
     ports:
     - protocol: TCP
       port: 6379  # Redis
   - to:
     - podSelector:
         matchLabels:
-          app.kubernetes.io/name: drasi-mongo
+          app: drasi-mongo
     ports:
     - protocol: TCP
       port: 27017  # MongoDB
@@ -569,7 +569,7 @@ metadata:
 spec:
   podSelector:
     matchLabels:
-      app.kubernetes.io/component: source-provider
+      drasi/type: source
   policyTypes:
   - Egress
   egress:
