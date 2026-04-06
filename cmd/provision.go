@@ -393,7 +393,7 @@ func applyDrasiNetworkPolicies(ctx context.Context, aksContext string) error {
 //   - drasi-allow-dapr-sidecar: allow Dapr HTTP (3500), gRPC (3501), Placement (50001), actor/view/publish ports
 //   - drasi-allow-k8s-api: allow resource-provider pod to access Kubernetes API (6443)
 //   - drasi-allow-datastores: allow pod access to Redis (6379) and MongoDB (27017)
-//   - drasi-allow-external-sources: template for external data source connectivity (operators configure specific rules)
+//   - drasi-allow-common-data-egress: allow common external data source ports (PostgreSQL, MySQL, SQL Server, Kafka, Event Hubs)
 const drasiNetworkPoliciesYAML = `
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -562,20 +562,26 @@ spec:
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: drasi-allow-external-sources
+  name: drasi-allow-common-data-egress
   namespace: drasi-system
   annotations:
-    description: Template for external data source connectivity. Operators must configure egress rules for specific external services (databases, event streams, APIs)
+    description: Baseline external data egress for common source/reaction endpoints; operators can further restrict by CIDR/namespace.
 spec:
-  podSelector:
-    matchLabels:
-      drasi/type: source
+  podSelector: {}
   policyTypes:
   - Egress
   egress:
-  # NOTE: Operators should add egress rules here for specific data sources:
-  # - CIDR blocks for corporate networks or VNets
-  # - Specific pod selectors for in-cluster external services
-  # Example (Cosmos DB): CIDR egress on port 443 to Azure datacenter
-  # Example (Kafka): pod selector on port 9092 to Kafka cluster namespace
+  - ports:
+    - protocol: TCP
+      port: 5432  # PostgreSQL
+    - protocol: TCP
+      port: 3306  # MySQL
+    - protocol: TCP
+      port: 1433  # SQL Server
+    - protocol: TCP
+      port: 9092  # Kafka
+    - protocol: TCP
+      port: 5671  # Azure Event Hubs AMQP over TLS
+    - protocol: TCP
+      port: 8081  # Cosmos DB Gremlin endpoint (common)
 `

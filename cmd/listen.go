@@ -2,45 +2,19 @@ package cmd
 
 import (
 	"context"
-	"fmt"
-	"log"
 	"log/slog"
-	"os"
 
 	"github.com/azure/azure-dev/cli/azd/pkg/azdext"
 	"github.com/spf13/cobra"
 )
 
 func newListenCommand() *cobra.Command {
-	return &cobra.Command{
-		Use:   "listen",
-		Short: "Subscribe to azd lifecycle events (invoked by azd host)",
-		RunE:  runListen,
-	}
-}
-
-func runListen(cmd *cobra.Command, _ []string) error {
-	ctx := azdext.WithAccessToken(cmd.Context())
-
-	azdClient, err := azdext.NewAzdClient()
-	if err != nil {
-		return fmt.Errorf("creating azd client: %w", err)
-	}
-	defer azdClient.Close()
-
-	eventManager := azdext.NewEventManager("azd-drasi", azdClient, log.New(os.Stderr, "", 0))
-	defer func() {
-		_ = eventManager.Close()
-	}()
-
-	if err := eventManager.AddProjectEventHandler(ctx, "postprovision", handlePostProvision); err != nil {
-		return fmt.Errorf("subscribing to postprovision: %w", err)
-	}
-	if err := eventManager.AddProjectEventHandler(ctx, "predeploy", handlePreDeploy); err != nil {
-		return fmt.Errorf("subscribing to predeploy: %w", err)
-	}
-
-	return eventManager.Receive(ctx)
+	return azdext.NewListenCommand(func(host *azdext.ExtensionHost) {
+		host.
+			WithProjectEventHandler("postprovision", handlePostProvision).
+			WithProjectEventHandler("predeploy", handlePreDeploy).
+			WithProjectEventHandler("predown", handlePreDown)
+	})
 }
 
 func handlePostProvision(ctx context.Context, args *azdext.ProjectEventArgs) error {
@@ -58,5 +32,34 @@ func handlePreDeploy(ctx context.Context, args *azdext.ProjectEventArgs) error {
 		projectName = args.Project.Name
 	}
 	slog.InfoContext(ctx, "drasi: pre-deploy hook fired", slog.String("project", projectName))
+	return nil
+}
+
+// handlePreDown runs before `azd down` tears down the Azure infrastructure.
+//
+// NOTE: This handler uninstalls the Drasi runtime from the AKS cluster before
+// the AKS resource itself is deleted. Without this step, `azd down --purge`
+// would delete the AKS cluster while Drasi namespaces and their PersistentVolumes
+// still exist, which can leave Azure Disk resources orphaned (detached disks that
+// continue to accrue costs). Running `drasi uninstall` first ensures a clean
+// teardown of Drasi-managed Kubernetes resources before AKS is removed.
+func handlePreDown(ctx context.Context, args *azdext.ProjectEventArgs) error {
+	projectName := ""
+	if args != nil && args.Project != nil {
+		projectName = args.Project.Name
+	}
+	slog.InfoContext(ctx, "drasi: pre-down hook fired — uninstalling Drasi runtime", slog.String("project", projectName))
+
+	// `drasi uninstall` removes the drasi-system namespace and all Drasi-managed
+	// Kubernetes resources. Errors are logged to stderr but do not block azd down —
+	// the infrastructure teardown should proceed even if Drasi uninstall fails
+	// (e.g. cluster is already unreachable).
+	if err := runDrasiCommand(ctx, "uninstall", "--yes"); err != nil {
+		slog.WarnContext(ctx, "drasi uninstall failed during predown — proceeding with infrastructure teardown",
+			slog.String("project", projectName),
+			slog.Any("error", err),
+		)
+	}
+
 	return nil
 }

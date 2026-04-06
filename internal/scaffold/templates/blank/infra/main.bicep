@@ -24,3 +24,8 @@ module drasiInfra 'modules/drasi-infra.bicep' = {
 }
 
 output drasiResourceGroupName string = resourceGroup().name
+output aksClusterName string = drasiInfra.outputs.aksClusterName
+output keyVaultUri string = drasiInfra.outputs.keyVaultUri
+output logAnalyticsWorkspaceId string = drasiInfra.outputs.logAnalyticsWorkspaceId
+output oidcIssuerUrl string = drasiInfra.outputs.oidcIssuerUrl
+output kubeletClientId string = drasiInfra.outputs.kubeletClientId

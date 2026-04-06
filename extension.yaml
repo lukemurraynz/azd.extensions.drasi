@@ -10,6 +10,7 @@ language: go
 capabilities:
   - custom-commands
   - lifecycle-events
+  - metadata
 examples:
   - name: init
     description: Scaffold a new Drasi project from the cosmos-change-feed template.
@@ -29,3 +30,18 @@ examples:
   - name: diagnose
     description: Run five-point health diagnostics against a live cluster.
     usage: azd drasi diagnose
+  - name: deploy
+    description: Deploy Drasi sources, queries, and reactions in dependency order.
+    usage: azd drasi deploy
+  - name: status
+    description: Show component health and deployment state.
+    usage: azd drasi status
+  - name: logs
+    description: Stream logs for deployed Drasi components.
+    usage: azd drasi logs --kind query --component order-changes --follow
+  - name: teardown
+    description: Remove deployed Drasi components from the current environment.
+    usage: azd drasi teardown --force
+  - name: upgrade
+    description: Upgrade the Drasi runtime on an existing cluster.
+    usage: azd drasi upgrade --force

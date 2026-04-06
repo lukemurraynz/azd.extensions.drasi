@@ -2,6 +2,11 @@ package cmd
 
 import "github.com/spf13/cobra"
 
+const (
+	extensionID           = "azure.drasi"
+	metadataSchemaVersion = "1.0"
+)
+
 // NewRootCommand builds the cobra command tree for azd drasi.
 func NewRootCommand() *cobra.Command {
 	rootCmd := &cobra.Command{
@@ -16,6 +21,7 @@ func NewRootCommand() *cobra.Command {
 	rootCmd.PersistentFlags().StringP("environment", "e", "", "Name of the azd environment to use")
 
 	rootCmd.AddCommand(newListenCommand())
+	rootCmd.AddCommand(newMetadataCommand())
 	rootCmd.AddCommand(newValidateCommand())
 	rootCmd.AddCommand(newInitCommand())
 	rootCmd.AddCommand(newProvisionCommand())

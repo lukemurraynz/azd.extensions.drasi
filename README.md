@@ -65,9 +65,12 @@ See the [full quick start guide](specs/001-azd-drasi-extension/quickstart.md) fo
 | `azd drasi diagnose` | Run five health checks against a live cluster (uses active kube context or `--environment` root flag) |
 | `azd drasi teardown --force` | Remove components or full infrastructure |
 | `azd drasi upgrade --force` | Upgrade the Drasi runtime on an existing cluster |
-| `azd drasi listen` | Listen for Drasi reaction events |
 
 Run `azd drasi <command> --help` for flags and examples on any command.
+
+The extension also contains hidden host-invoked commands (`listen` for lifecycle events and
+`metadata` for azd command discovery). These are internal integration points and are not part of
+the user-facing command surface.
 
 ## Configuration
 

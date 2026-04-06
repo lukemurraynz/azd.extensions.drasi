@@ -271,6 +271,10 @@ module aks 'br/public:avm/res/container-service/managed-cluster:0.13.0' = {
       }
     }
 
+    // Storage profile — enable Azure Disk CSI driver so StatefulSets (redis, mongo)
+    // can provision PersistentVolumeClaims using the 'default' StorageClass.
+    enableStorageProfileDiskCSIDriver: true
+
     // System node pool: AKS skill requirements
     //   - Minimum 3 nodes
     //   - Standard_D4s_v5 or larger

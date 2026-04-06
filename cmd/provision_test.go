@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/azure/azd.extensions.drasi/cmd"
+	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -18,48 +19,41 @@ import (
 // Success-path and injection tests live in provision_internal_test.go (package cmd)
 // because they override the package-level runProvisionFunc variable.
 
-// TestProvisionCommand_EnvironmentFlag_Accepted verifies that --environment is registered
-// on the provision command so callers do not get a cobra "unknown flag" parse error.
-func TestProvisionCommand_EnvironmentFlag_Accepted(t *testing.T) {
-	// NOTE: Not parallel — black-box tests run in the same process as white-box tests
-	// that mutate the package-level runProvisionFunc; parallelism causes races.
+func getProvisionCommand(t *testing.T) (*cobra.Command, *cobra.Command) {
+	t.Helper()
 	root := cmd.NewRootCommand()
-	root.SetOut(&bytes.Buffer{})
-	root.SetErr(&bytes.Buffer{})
-	root.SetArgs([]string{"provision", "--environment", "dev"})
-	err := root.Execute()
+	for _, c := range root.Commands() {
+		if c.Name() == "provision" {
+			return root, c
+		}
+	}
+	t.Fatalf("provision command not found on root")
+	return nil, nil
+}
 
-	// The command will fail (no live Azure) but must not fail with "unknown flag".
-	require.Error(t, err)
-	assert.NotContains(t, err.Error(), "unknown flag", "--environment must be a registered flag on provision")
+// TestProvisionCommand_EnvironmentFlag_Accepted verifies that --environment is registered
+// on the provision command.
+func TestProvisionCommand_EnvironmentFlag_Accepted(t *testing.T) {
+	_, provision := getProvisionCommand(t)
+	assert.NotNil(t, provision.Flags().Lookup("environment"), "--environment must be a registered flag on provision")
 }
 
 // TestProvisionCommand_OutputJSONFlag_Accepted verifies that --output json is accepted
-// by the provision command without a flag-parse error.
+// by the root command and inherited by provision.
 func TestProvisionCommand_OutputJSONFlag_Accepted(t *testing.T) {
-	// NOTE: Not parallel — see TestProvisionCommand_EnvironmentFlag_Accepted for rationale.
-	root := cmd.NewRootCommand()
-	root.SetOut(&bytes.Buffer{})
-	root.SetErr(&bytes.Buffer{})
-	root.SetArgs([]string{"provision", "--output", "json"})
-	err := root.Execute()
-
-	// Will fail (no live Azure) but the flag must parse cleanly.
-	require.Error(t, err)
-	assert.NotContains(t, err.Error(), "unknown flag", "--output must be accepted by provision")
+	root, _ := getProvisionCommand(t)
+	assert.NotNil(t, root.PersistentFlags().Lookup("output"), "--output must be a root persistent flag accepted by provision")
 }
 
-// TestProvisionCommand_NoAuth_ExitsTwo verifies that when Azure credentials are
-// missing the command returns an error with ERR_NO_AUTH.
+// TestProvisionCommand_NoAuth_ExitsTwo verifies the provision command fails fast
+// with ERR_NO_AUTH when AZD_SERVER is not configured.
 func TestProvisionCommand_NoAuth_ExitsTwo(t *testing.T) {
-	// NOTE: Not parallel — see TestProvisionCommand_EnvironmentFlag_Accepted for rationale.
 	root := cmd.NewRootCommand()
 	root.SetOut(&bytes.Buffer{})
 	root.SetErr(&bytes.Buffer{})
 	root.SetArgs([]string{"provision"})
-	err := root.Execute()
 
+	err := root.Execute()
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "ERR_NO_AUTH",
-		"error must be ERR_NO_AUTH when Azure credentials are absent")
+	assert.Contains(t, err.Error(), "ERR_NO_AUTH", "provision must return ERR_NO_AUTH without AZD_SERVER")
 }
