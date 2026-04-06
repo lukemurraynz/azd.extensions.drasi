@@ -1,7 +1,12 @@
-# drasi.yaml — Drasi project manifest
-# All sections intentionally empty so `azd drasi validate` exits 0 on a fresh scaffold.
+# drasi.yaml - Drasi project manifest
 apiVersion: v1
 kind: DrasiProject
-includes: []
+includes:
+  - kind: sources
+    pattern: "sources/*.yaml"
+  - kind: queries
+    pattern: "queries/*.yaml"
+  - kind: reactions
+    pattern: "reactions/*.yaml"
 environments: {}
 featureFlags: {}

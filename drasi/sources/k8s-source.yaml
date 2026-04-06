@@ -1,0 +1,15 @@
+# k8s-source.yaml - Drasi Source using Kubernetes API (watches this cluster)
+# Requires a k8s-context Secret in the drasi-system namespace containing
+# a kubeconfig file. Create it with:
+#   az aks get-credentials --resource-group <rg> --name <cluster> --file - \
+#     | kubectl create secret generic k8s-context --from-file=context=/dev/stdin -n drasi-system
+apiVersion: v1
+kind: Source
+name: k8s-source
+spec:
+  kind: Kubernetes
+  properties:
+    kubeConfig:
+      kind: Secret
+      name: k8s-context
+      key: context

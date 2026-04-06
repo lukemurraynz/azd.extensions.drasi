@@ -35,9 +35,9 @@ func (m *mockDrasiRunner) RunCommand(ctx context.Context, args ...string) error 
 }
 
 type engineTestHarness struct {
-	mockState  *mockEnvClient
-	mockDrasi  *mockDrasiRunner
-	engine     *Engine
+	mockState *mockEnvClient
+	mockDrasi *mockDrasiRunner
+	engine    *Engine
 }
 
 func newEngineHarness() *engineTestHarness {
@@ -137,7 +137,7 @@ func TestEngine_Deploy_DeleteThenApply_WhenHashChanged(t *testing.T) {
 	t.Parallel()
 
 	h := newEngineHarness()
-	h.mockState.store["DRASI_HASH_SOURCE_alerts-source"] = "old-hash"
+	h.mockState.store["DRASI_HASH_SOURCE_alerts_source"] = "old-hash"
 
 	manifest := &config.ResolvedManifest{
 		Sources: []config.Source{{ID: "alerts-source"}},
@@ -266,7 +266,7 @@ func TestEngine_Teardown_ClearsStateOnSuccess(t *testing.T) {
 	t.Parallel()
 
 	h := newEngineHarness()
-	h.mockState.store["DRASI_HASH_SOURCE_my-source"] = "some-hash"
+	h.mockState.store["DRASI_HASH_SOURCE_my_source"] = "some-hash"
 
 	manifest := &config.ResolvedManifest{
 		Sources: []config.Source{{ID: "my-source"}},
@@ -275,5 +275,5 @@ func TestEngine_Teardown_ClearsStateOnSuccess(t *testing.T) {
 	require.NoError(t, err)
 
 	// State should be cleared
-	assert.Equal(t, "", h.mockState.store["DRASI_HASH_SOURCE_my-source"])
+	assert.Equal(t, "", h.mockState.store["DRASI_HASH_SOURCE_my_source"])
 }

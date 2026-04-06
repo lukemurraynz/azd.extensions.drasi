@@ -7,4 +7,7 @@ spec:
     namespace: "<your-eventhub-namespace>"
     eventHub: "<your-eventhub-name>"
     consumerGroup: "$Default"
-    connectionString: "<your-connection-string>"
+    connectionString:
+      secretRef:
+        vaultName: "<your-keyvault-name>"
+        secretName: "eventhub-connection-string"

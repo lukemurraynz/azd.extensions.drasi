@@ -2,15 +2,24 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "ContinuousQuery",
   "type": "object",
-  "required": ["APIVersion", "Kind", "ID", "Query"],
+  "required": ["APIVersion", "Kind", "ID", "Spec"],
   "properties": {
     "APIVersion": { "type": "string" },
     "Kind": { "type": "string", "const": "ContinuousQuery" },
     "ID": { "type": "string" },
     "QueryLanguage": { "type": "string" },
     "Sources": { "type": "array" },
-    "Query": { "type": "string" },
     "Reactions": { "type": "array", "items": { "type": "string" } },
-    "AutoStart": { "type": "boolean" }
+    "AutoStart": { "type": "boolean" },
+    "Spec": {
+      "type": "object",
+      "required": ["Query"],
+      "properties": {
+        "Mode": { "type": "string" },
+        "Sources": { "type": "object" },
+        "Query": { "type": "string" },
+        "Reactions": { "type": "array", "items": { "type": "string" } }
+      }
+    }
   }
 }

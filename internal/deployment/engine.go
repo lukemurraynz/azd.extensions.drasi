@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"gopkg.in/yaml.v3"
 
@@ -141,35 +142,66 @@ func (e *Engine) applyComponent(ctx context.Context, action ComponentAction, man
 	return e.drasiClient.RunCommand(ctx, "apply", "-f", tmpFile.Name())
 }
 
-// marshalComponent serialises a single component from the manifest to YAML bytes.
+// marshalComponent reads the original YAML file for the component from disk.
+// We intentionally avoid re-marshalling the internal Go struct because yaml.Marshal
+// serialises Value fields as nested objects (e.g. {value: "true"}) instead of the
+// plain scalars that the drasi CLI expects (e.g. "true"). Reading the source file
+// directly passes the original YAML unmodified to `drasi apply`, which is the only
+// correct wire format for drasi 0.10.0.
+//
+// Fallback: if ManifestDir is empty (e.g. in unit tests that construct manifests
+// directly without a loader), we fall back to yaml.Marshal of the in-memory struct.
+// This fallback is only exercised by tests; production deployments always have
+// ManifestDir populated by ResolveManifest.
 func marshalComponent(action ComponentAction, manifest *config.ResolvedManifest) ([]byte, error) {
+	var relPath string
+	var structVal any
 	switch action.Kind {
 	case "source":
 		for _, s := range manifest.Sources {
 			if s.ID == action.ID {
-				return yaml.Marshal(s)
+				relPath = s.FilePath
+				structVal = s
 			}
 		}
 	case "continuousquery":
 		for _, q := range manifest.Queries {
 			if q.ID == action.ID {
-				return yaml.Marshal(q)
+				relPath = q.FilePath
+				structVal = q
 			}
 		}
 	case "middleware":
 		for _, m := range manifest.Middlewares {
 			if m.ID == action.ID {
-				return yaml.Marshal(m)
+				relPath = m.FilePath
+				structVal = m
 			}
 		}
 	case "reaction":
 		for _, r := range manifest.Reactions {
 			if r.ID == action.ID {
-				return yaml.Marshal(r)
+				relPath = r.FilePath
+				structVal = r
 			}
 		}
 	}
-	return nil, fmt.Errorf("component %s/%s not found in manifest", action.Kind, action.ID)
+	if structVal == nil {
+		return nil, fmt.Errorf("component %s/%s not found in manifest", action.Kind, action.ID)
+	}
+
+	// Prefer reading the original file from disk to preserve exact YAML structure.
+	if manifest.ManifestDir != "" && relPath != "" {
+		absPath := filepath.Join(manifest.ManifestDir, filepath.FromSlash(relPath))
+		data, err := os.ReadFile(absPath)
+		if err != nil {
+			return nil, fmt.Errorf("reading source file for %s/%s: %w", action.Kind, action.ID, err)
+		}
+		return data, nil
+	}
+
+	// Fallback for unit tests that build ResolvedManifest directly without a loader.
+	return yaml.Marshal(structVal)
 }
 
 // manifestToHashes converts a ResolvedManifest to a flat slice of ComponentHash values.

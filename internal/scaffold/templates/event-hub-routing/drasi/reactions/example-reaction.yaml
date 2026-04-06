@@ -4,4 +4,4 @@ name: example-reaction
 spec:
   kind: Debug
   queries:
-    - eventhub-query
+    eventhub-query: ""

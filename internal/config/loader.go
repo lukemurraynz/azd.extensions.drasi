@@ -95,6 +95,11 @@ func loadQuery(path, rel string) (ContinuousQuery, error) {
 	if err := node.Decode(&query); err != nil {
 		return ContinuousQuery{}, fmt.Errorf("decoding query %s: %w", path, err)
 	}
+	// Populate legacy flat fields from Spec for use by validation and deployment engine.
+	for _, sub := range query.Spec.Sources.Subscriptions {
+		query.Sources = append(query.Sources, SourceRef{ID: sub.ID})
+	}
+	query.Reactions = query.Spec.Reactions
 	query.FilePath = filepath.ToSlash(rel)
 	query.Line = node.Line
 	return query, nil

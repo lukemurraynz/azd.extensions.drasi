@@ -1,12 +1,8 @@
-# dapr-reaction.yaml — Drasi Reaction that publishes query results via Dapr pub/sub
+# dapr-reaction.yaml - Drasi Reaction that publishes query results via Dapr pub/sub
 apiVersion: v1
 kind: Reaction
-metadata:
-  name: dapr-reaction
+name: dapr-reaction
 spec:
   kind: Dapr
   queries:
-    - cosmos-query
-  properties:
-    pubsubName: drasi-pubsub
-    topic: drasi-results
+    cosmos-query: ""

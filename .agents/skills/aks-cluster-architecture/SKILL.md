@@ -396,6 +396,38 @@ For revenue-critical active-active, use Azure Traffic Manager or Front Door (not
 | Fleet Manager preview features | DNS LB and L4 LB have no production SLA | Use Azure Traffic Manager for revenue-critical multi-region |
 | Spot evictions | 30-second notice; no guarantee of graceful shutdown | Use PDBs; never run stateful or critical services on spot pools |
 | System pool mixed workloads | User pods on system pool cause evictions under resource pressure | Taint system pool with CriticalAddonsOnly; run user workloads on separate pools |
+| Drasi K8s source exec auth | `az aks get-credentials` kubeconfig uses exec-based auth; Drasi proxy containers don't include `az` CLI or `kubelogin` | Create a Kubernetes ServiceAccount with long-lived token; build static kubeconfig with token auth (see `drasi-queries` skill 4.3a) |
+| Drasi Dapr actor deactivation | Repeated Drasi source pod crashes deactivate Dapr resource-provider actors; `drasi apply` returns 500 | Full `drasi uninstall --yes && drasi init` to reset the control plane |
+| Drasi `inCluster` config | Kubernetes source `inCluster` property is silently ignored by the Rust proxy; empty `kubeConfig` string causes `CurrentContextNotSet` panic | Always provide `kubeConfig` as a Secret reference containing a real kubeconfig |
+
+---
+
+## Drasi on AKS considerations
+
+When running Drasi for Kubernetes on an AKS cluster, these additional requirements apply.
+
+### Kubernetes source authentication
+
+The Drasi Kubernetes source proxy is a Rust binary that reads the `kubeConfig` environment variable. It does not support exec-based authentication (the type produced by `az aks get-credentials`), because the proxy container does not include `az` CLI, `kubelogin`, or any other external auth tools.
+
+**Required approach:** Create a Kubernetes ServiceAccount with a long-lived token and build a static kubeconfig that uses bearer token authentication. Store the kubeconfig in a Kubernetes Secret and reference it from the source YAML.
+
+See the `drasi-queries` skill (section 4.3a) for the complete step-by-step procedure.
+
+### OIDC and Workload Identity
+
+Drasi's control plane components (resource provider, query host, etc.) run with Dapr sidecars and may need access to Azure resources. Enable OIDC issuer and Workload Identity on the AKS cluster during provisioning. The Drasi `init` command expects these to be available.
+
+### Recovery from Dapr actor deactivation
+
+If Drasi source pods enter CrashLoopBackOff and the Dapr resource-provider actors deactivate, the only reliable recovery is a full Drasi reinstall:
+
+```bash
+drasi uninstall --yes
+drasi init
+```
+
+This clears all registered sources, queries, and reactions. Re-apply them after reinitializing.
 
 ---
 
@@ -433,6 +465,7 @@ For revenue-critical active-active, use Azure Traffic Manager or Front Door (not
 
 ## Related skills
 
+- **drasi-queries** — Drasi Sources, ContinuousQueries, Reactions pipeline; includes Kubernetes source auth setup
 - **cost-optimization** — Azure-wide cost analysis, reserved instances, rightsizing framework
 - **private-networking** — VNet integration, NSGs, Private Link, network isolation patterns
 - **observability-monitoring** — Managed Prometheus, KQL queries, alerting, health checks

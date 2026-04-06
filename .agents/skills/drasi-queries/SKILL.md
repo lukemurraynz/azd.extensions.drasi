@@ -84,6 +84,9 @@ Choose **Drasi for Kubernetes** unless you have a specific need for standalone o
 | Reaction auth     | Token mismatch between Reaction and backend                             | Set `X-Reaction-Token` header to match backend expectation                       |
 | Resource deletion | Deleting sources before dependent queries/reactions                     | Always delete in order: reactions → queries → sources                            |
 | CLI/REST drift    | CLI or REST API changes not reflected in skill                          | [VERIFY] Check Drasi docs for breaking changes before each update                |
+| K8s source `inCluster` | `inCluster` property is ignored by Rust proxy; empty `kubeConfig` panics | Use `kubeConfig` with Secret reference containing SA token kubeconfig (see 4.3a) |
+| K8s source exec auth | `az aks get-credentials` kubeconfig uses exec auth; proxy has no az CLI | Create ServiceAccount + long-lived token + static kubeconfig (see 4.3a)          |
+| Dapr actor deactivation | Repeated source pod crashes can deactivate Dapr actors; apply returns 500 | Full `drasi uninstall --yes && drasi init` to recover                            |
 | Security/auth     | No authentication/authorization in REST API by default                  | [VERIFY] Add security controls if required; confirm with Drasi docs              |
 
 **These patterns are NOT supported in Drasi and will cause queries to deploy with no error, then appear Inactive/TerminalError:**
@@ -449,14 +452,103 @@ Patterns to avoid in this baseline:
 | **Cosmos DB**  | K8s         | Azure Cosmos DB change feed                           | Connection string, database, container                   |
 | **Dataverse**  | K8s         | Microsoft Dataverse change tracking                   | Environment URL, entities                                |
 | **Event Hub**  | K8s         | Azure Event Hub consumer                              | Connection string, consumer group                        |
-| **Kubernetes** | K8s         | K8s resource watch (Pods, Deployments, etc.)          | Kubeconfig, resource types                               |
+| **Kubernetes** | K8s         | K8s resource watch (Pods, Deployments, etc.)          | `kubeConfig` (Secret ref, required; `inCluster` is ignored) |
 | **Relational** | K8s         | MySQL / SQL Server CDC                                | Connection string, tables                                |
 | **HTTP**       | Server      | Webhook receiver with Handlebars mapping, HMAC auth   | Endpoint config, mapping template                        |
 | **gRPC**       | Server      | gRPC streaming source                                 | Service address, proto definition                        |
 | **Mock**       | Server      | Synthetic test data (counter, sensorReading, generic) | Generator type, interval                                 |
 | **SDK**        | K8s         | Custom source via Source SDK                          | Implementation-dependent                                 |
 
-### 4.3a Source Example (PostgreSQL)
+### 4.3a Source Example (Kubernetes)
+
+The Kubernetes source watches K8s resources (Pods, Deployments, etc.) for changes.
+
+**The `kubeConfig` property is required** and must reference a Kubernetes Secret containing a valid kubeconfig file. The `inCluster` property is **completely ignored** by the Rust source proxy code (verified in `drasi-platform` commit `4ab245d`).
+
+```yaml
+apiVersion: v1
+kind: Source
+name: k8s-source
+spec:
+  kind: Kubernetes
+  properties:
+    kubeConfig:
+      kind: Secret
+      name: k8s-context
+      key: context
+```
+
+**Creating the kubeConfig Secret (AKS):**
+
+The kubeconfig stored in the Secret must use **static token authentication**, not exec-based auth. The Drasi proxy container does not include `az` CLI or `kubelogin`, so exec-based kubeconfigs from `az aks get-credentials` will fail with `AuthExecStart(Os { code: 2, kind: NotFound })`.
+
+Use a Kubernetes ServiceAccount with a long-lived token:
+
+```bash
+# 1. Create ServiceAccount
+kubectl create serviceaccount drasi-source-reader -n drasi-system
+
+# 2. Grant read access (ClusterRole 'view' for read-only cluster-wide access)
+kubectl create clusterrolebinding drasi-source-reader-binding \
+  --clusterrole=view \
+  --serviceaccount=drasi-system:drasi-source-reader
+
+# 3. Create a long-lived token Secret
+cat <<EOF | kubectl apply -f -
+apiVersion: v1
+kind: Secret
+metadata:
+  name: drasi-source-reader-token
+  namespace: drasi-system
+  annotations:
+    kubernetes.io/service-account.name: drasi-source-reader
+type: kubernetes.io/service-account-token
+EOF
+
+# 4. Wait for token population, then extract values
+sleep 5
+TOKEN=$(kubectl get secret drasi-source-reader-token -n drasi-system -o jsonpath='{.data.token}' | base64 -d)
+CA=$(kubectl get secret drasi-source-reader-token -n drasi-system -o jsonpath='{.data.ca\.crt}')
+SERVER=$(kubectl config view --minify -o jsonpath='{.clusters[0].cluster.server}')
+
+# 5. Build static kubeconfig and create the Secret
+cat <<EOF > /tmp/drasi-kubeconfig.yaml
+apiVersion: v1
+kind: Config
+current-context: drasi-source
+clusters:
+- name: drasi-aks
+  cluster:
+    certificate-authority-data: $CA
+    server: $SERVER
+contexts:
+- name: drasi-source
+  context:
+    cluster: drasi-aks
+    user: drasi-source-reader
+    namespace: default
+users:
+- name: drasi-source-reader
+  user:
+    token: $TOKEN
+EOF
+
+kubectl create secret generic k8s-context \
+  --from-file=context=/tmp/drasi-kubeconfig.yaml \
+  -n drasi-system
+rm /tmp/drasi-kubeconfig.yaml
+```
+
+| Pitfall | Detail | Fix |
+|---|---|---|
+| `inCluster: "true"` | Ignored by Rust proxy; `kubeConfig` env var is always read | Use `kubeConfig` with a Secret reference |
+| Empty `kubeConfig: ""` | Rust `env::var("kubeConfig")` returns `Ok("")`, attempts YAML parse, panics with `CurrentContextNotSet` | Always provide a real kubeconfig via Secret |
+| Exec-based kubeconfig | `az aks get-credentials` produces exec-based auth requiring `az` CLI in the container | Use ServiceAccount token-based kubeconfig (see above) |
+| Dapr actor deactivation | After source pod crashes repeatedly, Dapr actors may deactivate; `drasi apply` returns `500 Internal Server Error` | Run `drasi uninstall --yes && drasi init` to reset the Drasi control plane |
+
+> **Reference:** Drasi Kubernetes source proxy code at [`sources/kubernetes/kubernetes-proxy/src/main.rs`](https://github.com/drasi-project/drasi-platform/blob/4ab245d/sources/kubernetes/kubernetes-proxy/src/main.rs#L24-L34), and [official docs](https://drasi.io/drasi-kubernetes/how-to-guides/configure-sources/configure-kubernetes-source/).
+
+### 4.3b Source Example (PostgreSQL)
 
 ```yaml
 apiVersion: v1
@@ -987,6 +1079,7 @@ Quick checks:
 
 - [ ] Secrets referenced via `kind: Secret`
 - [ ] `tables` property lists all tracked tables (PostgreSQL)
+- [ ] `kubeConfig` uses Secret reference with SA token kubeconfig, not exec-based auth (Kubernetes; see 4.3a)
 - [ ] Labels documented for query authors
 - [ ] Source type exists in the Source Catalog (4.3); verify runtime compatibility (K8s vs Server)
 
@@ -1030,6 +1123,8 @@ Quick checks:
 - Temporal/index configuration is evolving (verify current docs before relying on temporal functions; see issue #377)
 - Custom providers must guard against injection
 - Folder apply may fail on some platforms: prefer file path (`drasi apply -f <file>.yaml`)
+- Kubernetes source `inCluster` property is ignored by the Rust proxy; always use `kubeConfig` Secret reference with a static token kubeconfig (see 4.3a)
+- Repeated source pod crashes can deactivate Dapr actors, requiring full Drasi uninstall/reinstall to recover
 
 ---
 
@@ -1089,6 +1184,8 @@ Quick checks:
 | Multi-resource YAML          | Bundled YAML with `---` separators causes silent failures                                              | Use one resource per file (see Section 3)                             |
 | Delete-before-update         | `drasi apply` does not support in-place updates for queries and reactions                              | Always `drasi delete` then `drasi apply` when changing resources      |
 | Source connection validation | Drasi doesn't validate source connection strings at apply time                                         | Test source connectivity separately before applying dependent queries |
+| K8s source auth              | `inCluster` ignored; exec-based kubeconfig fails (no az CLI in proxy pod)                              | Use ServiceAccount token kubeconfig in a Secret (see 4.3a)           |
+| Dapr actor recovery          | Repeated pod crashes deactivate Dapr actors; `drasi apply` returns 500                                 | Full `drasi uninstall --yes && drasi init` to recover                |
 | Reaction auth rotation       | One-step token swaps can break callbacks mid-deploy                                                    | Use dual-token overlap rotation (Section 4.9)                         |
 | Reaction logging             | Full payload/header logging can leak secrets or PII                                                    | Redact sensitive fields and never log raw auth headers                |
 

@@ -1,8 +1,10 @@
 apiVersion: v1
 kind: ContinuousQuery
-id: bad-query
-queryLanguage: Cypher
-sources:
-  - id: non-existent-source
-query: |
-  MATCH (n) RETURN n
+name: bad-query
+spec:
+  mode: query
+  sources:
+    subscriptions:
+      - id: non-existent-source
+  query: |
+    MATCH (n) RETURN n

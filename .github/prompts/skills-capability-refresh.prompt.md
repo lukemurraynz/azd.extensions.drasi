@@ -104,7 +104,8 @@ For each batch:
    - If a symbol cannot be verified in source code or a code example in official docs, wrap it in a `[VERIFY]` block. Do not present it as confirmed.
    - When propagating new symbols across multiple skill files, verify once and reuse the verified name. Do not re-derive names from memory for each file.
    - Record findings: `{ file, symbol, source_verified: true|false, source_url, notes }`.
-10. **Reference link validation**: Extract all `http(s)://` URLs from the skill unit's files. For each URL:
+10. Search upstream SDKs to make sure there is alignment.
+11. **Reference link validation**: Extract all `http(s)://` URLs from the skill unit's files. For each URL:
 
 - Fetch the URL using the `web` tool (or `browser` for pages requiring JavaScript rendering).
 - Classify the result: `alive` (HTTP 200, content matches expectation), `redirected` (3xx to a different page — record the destination), `broken` (4xx/5xx, connection failure, or timeout), or `soft-404` (HTTP 200 but content is a generic "page not found" / "content moved" / "404" page).

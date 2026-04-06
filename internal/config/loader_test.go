@@ -8,6 +8,7 @@ import (
 	"github.com/azure/azd.extensions.drasi/internal/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gopkg.in/yaml.v3"
 )
 
 func TestLoader_ValidManifest(t *testing.T) {
@@ -49,6 +50,37 @@ func TestLoader_FilepathAndLinePopulated(t *testing.T) {
 	require.Len(t, sources, 1)
 	assert.NotEmpty(t, sources[0].FilePath)
 	assert.Greater(t, sources[0].Line, 0)
+}
+
+// TestValue_UnmarshalYAML verifies that config.Value accepts both the plain scalar
+// format ("true") and the legacy {value: "..."} struct format used in older YAML files.
+// This is critical: drasi apply requires plain scalars on the wire, but the Go loader
+// must still parse files that were generated with the {value: ...} wrapper.
+func TestValue_UnmarshalYAML_PlainScalar(t *testing.T) {
+	t.Parallel()
+	input := `inCluster: "true"`
+	var m map[string]config.Value
+	require.NoError(t, yaml.Unmarshal([]byte(input), &m))
+	assert.Equal(t, "true", m["inCluster"].StringValue)
+	assert.Nil(t, m["inCluster"].SecretRef)
+}
+
+func TestValue_UnmarshalYAML_StructForm(t *testing.T) {
+	t.Parallel()
+	input := "inCluster:\n  value: \"true\"\n"
+	var m map[string]config.Value
+	require.NoError(t, yaml.Unmarshal([]byte(input), &m))
+	assert.Equal(t, "true", m["inCluster"].StringValue)
+}
+
+func TestValue_UnmarshalYAML_SecretRef(t *testing.T) {
+	t.Parallel()
+	input := "endpoint:\n  secretRef:\n    vaultName: my-vault\n    secretName: my-secret\n"
+	var m map[string]config.Value
+	require.NoError(t, yaml.Unmarshal([]byte(input), &m))
+	require.NotNil(t, m["endpoint"].SecretRef)
+	assert.Equal(t, "my-vault", m["endpoint"].SecretRef.VaultName)
+	assert.Equal(t, "my-secret", m["endpoint"].SecretRef.SecretName)
 }
 
 func writeFile(path, content string) error {

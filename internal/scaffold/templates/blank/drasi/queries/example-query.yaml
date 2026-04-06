@@ -1,13 +1,12 @@
-# example-query.yaml — Drasi ContinuousQuery definition
+# example-query.yaml - Drasi ContinuousQuery definition
 apiVersion: v1
 kind: ContinuousQuery
-metadata:
-  name: example-query
+name: example-query
 spec:
   mode: query
   sources:
     subscriptions:
       - id: example-source
-  query: >
+  query: |
     MATCH (n)
-    RETURN n.id AS id, n.label AS label
+    RETURN n.name AS name

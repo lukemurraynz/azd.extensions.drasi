@@ -3,6 +3,8 @@ package config
 import (
 	"fmt"
 	"strings"
+
+	"gopkg.in/yaml.v3"
 )
 
 type DrasiManifest struct {
@@ -17,30 +19,82 @@ type IncludeSpec struct {
 	Pattern string `yaml:"pattern"`
 }
 
+// SourceSpec holds the spec block of a Source resource (drasi CLI 0.10.0 name+spec format).
+type SourceSpec struct {
+	Kind       string           `yaml:"kind"`
+	Properties map[string]Value `yaml:"properties,omitempty"`
+}
+
+// QuerySourceSubscription is a source reference inside a query spec's sources block.
+type QuerySourceSubscription struct {
+	ID    string      `yaml:"id"`
+	Nodes []QueryNode `yaml:"nodes,omitempty"`
+}
+
+// QueryNode filters which node labels are pulled from a source.
+type QueryNode struct {
+	SourceLabel string `yaml:"sourceLabel"`
+}
+
+// QuerySourcesSpec holds the subscriptions block inside a query spec.
+type QuerySourcesSpec struct {
+	Subscriptions []QuerySourceSubscription `yaml:"subscriptions" json:",omitempty"`
+}
+
+// QuerySpec holds the spec block of a ContinuousQuery resource.
+// Reactions is an extension field used by the azd extension's dependency-graph validation.
+type QuerySpec struct {
+	Mode      string           `yaml:"mode"                json:",omitempty"`
+	Sources   QuerySourcesSpec `yaml:"sources"             json:",omitempty"`
+	Query     string           `yaml:"query"`
+	Reactions []string         `yaml:"reactions,omitempty" json:",omitempty"`
+}
+
+// ReactionSpec holds the spec block of a Reaction resource.
+type ReactionSpec struct {
+	Kind    string            `yaml:"kind"`
+	Queries map[string]string `yaml:"queries,omitempty"`
+}
+
+// MiddlewareSpec holds the spec block of a Middleware resource.
+type MiddlewareSpec struct {
+	Kind   string           `yaml:"kind"`
+	Config map[string]Value `yaml:"config,omitempty"`
+}
+
+// Source represents a Drasi Source resource.
+// ID maps to "name:" in YAML (drasi CLI 0.10.0 name+spec format).
+// SourceKind and Properties are legacy fields kept for backward compatibility; use Spec.Kind and Spec.Properties instead.
 type Source struct {
 	APIVersion string           `yaml:"apiVersion"`
 	Kind       string           `yaml:"kind"`
-	ID         string           `yaml:"id"`
-	SourceKind string           `yaml:"sourceKind"`
-	Properties map[string]Value `yaml:"properties"`
+	ID         string           `yaml:"name"`
+	SourceKind string           `yaml:"-"`
+	Properties map[string]Value `yaml:"-"`
+	Spec       SourceSpec       `yaml:"spec"`
 	FilePath   string           `yaml:"-"`
 	Line       int              `yaml:"-"`
 }
 
+// ContinuousQuery represents a Drasi ContinuousQuery resource.
+// ID maps to "name:" in YAML (drasi CLI 0.10.0 name+spec format).
+// Sources and Reactions are populated in loader.go from Spec after YAML decoding.
+// QueryLanguage is a legacy field kept so unit tests that construct structs directly still compile.
 type ContinuousQuery struct {
 	APIVersion    string      `yaml:"apiVersion"`
 	Kind          string      `yaml:"kind"`
-	ID            string      `yaml:"id"`
-	QueryLanguage string      `yaml:"queryLanguage"`
-	Sources       []SourceRef `yaml:"sources"`
-	Query         string      `yaml:"query"`
-	Joins         []JoinSpec  `yaml:"joins,omitempty"`
-	Reactions     []string    `yaml:"reactions,omitempty"`
-	AutoStart     bool        `yaml:"autoStart,omitempty"`
+	ID            string      `yaml:"name"`
+	QueryLanguage string      `yaml:"-"`
+	Sources       []SourceRef `yaml:"-"`
+	Joins         []JoinSpec  `yaml:"-"`
+	Reactions     []string    `yaml:"-"`
+	AutoStart     bool        `yaml:"-"`
+	Spec          QuerySpec   `yaml:"spec"`
 	FilePath      string      `yaml:"-"`
 	Line          int         `yaml:"-"`
 }
 
+// SourceRef is the legacy flat source reference; still used by validation and tests.
 type SourceRef struct {
 	ID string `yaml:"id"`
 }
@@ -55,22 +109,30 @@ type JoinKey struct {
 	Field string `yaml:"field"`
 }
 
+// Reaction represents a Drasi Reaction resource.
+// ID maps to "name:" in YAML (drasi CLI 0.10.0 name+spec format).
+// ReactionKind and Config are legacy fields kept for backward compatibility; use Spec.Kind and Spec.Queries instead.
 type Reaction struct {
 	APIVersion   string           `yaml:"apiVersion"`
 	Kind         string           `yaml:"kind"`
-	ID           string           `yaml:"id"`
-	ReactionKind string           `yaml:"reactionKind"`
-	Config       map[string]Value `yaml:"config,omitempty"`
+	ID           string           `yaml:"name"`
+	ReactionKind string           `yaml:"-"`
+	Config       map[string]Value `yaml:"-"`
+	Spec         ReactionSpec     `yaml:"spec"`
 	FilePath     string           `yaml:"-"`
 	Line         int              `yaml:"-"`
 }
 
+// Middleware represents a Drasi Middleware resource.
+// ID maps to "name:" in YAML (drasi CLI 0.10.0 name+spec format).
+// MiddlewareKind and Config are legacy fields kept for backward compatibility; use Spec.Kind and Spec.Config instead.
 type Middleware struct {
 	APIVersion     string           `yaml:"apiVersion"`
 	Kind           string           `yaml:"kind"`
-	ID             string           `yaml:"id"`
-	MiddlewareKind string           `yaml:"middlewareKind"`
-	Config         map[string]Value `yaml:"config,omitempty"`
+	ID             string           `yaml:"name"`
+	MiddlewareKind string           `yaml:"-"`
+	Config         map[string]Value `yaml:"-"`
+	Spec           MiddlewareSpec   `yaml:"spec"`
 	FilePath       string           `yaml:"-"`
 	Line           int              `yaml:"-"`
 }
@@ -85,6 +147,34 @@ type Value struct {
 	StringValue string     `yaml:"value,omitempty"`
 	SecretRef   *SecretRef `yaml:"secretRef,omitempty"`
 	EnvRef      *EnvRef    `yaml:"envRef,omitempty"`
+}
+
+// UnmarshalYAML accepts both plain scalar strings and the {value: "..."} struct form.
+// Drasi YAML files may use either format:
+//   - Plain scalar:      inCluster: "true"      → Value{StringValue: "true"}
+//   - Struct form:       inCluster: {value: "true"} → Value{StringValue: "true"}
+//   - SecretRef:         endpoint: {secretRef: {...}} → Value{SecretRef: &SecretRef{...}}
+func (v *Value) UnmarshalYAML(node *yaml.Node) error {
+	// Plain string scalar: inCluster: "true"
+	if node.Kind == yaml.ScalarNode {
+		v.StringValue = node.Value
+		return nil
+	}
+	// Mapping node: {value: "...", secretRef: {...}, envRef: {...}}
+	// Decode into a shadow struct to avoid infinite recursion.
+	type valueShadow struct {
+		StringValue string     `yaml:"value,omitempty"`
+		SecretRef   *SecretRef `yaml:"secretRef,omitempty"`
+		EnvRef      *EnvRef    `yaml:"envRef,omitempty"`
+	}
+	var shadow valueShadow
+	if err := node.Decode(&shadow); err != nil {
+		return err
+	}
+	v.StringValue = shadow.StringValue
+	v.SecretRef = shadow.SecretRef
+	v.EnvRef = shadow.EnvRef
+	return nil
 }
 
 type SecretRef struct {
@@ -103,6 +193,9 @@ type ResolvedManifest struct {
 	Middlewares  []Middleware
 	Environment  Environment
 	FeatureFlags map[string]bool
+	// ManifestDir is the absolute directory of the drasi.yaml file.
+	// Used by the deploy engine to locate original YAML files for each component.
+	ManifestDir string
 }
 
 // ComponentHash stores the content hash of a deployed component.
@@ -113,7 +206,10 @@ type ComponentHash struct {
 }
 
 // StateKey returns the azd environment key for storing this component's hash.
-// Format: DRASI_HASH_<KIND>_<ID> (KIND uppercased, ID verbatim).
+// Format: DRASI_HASH_<KIND>_<ID> (KIND uppercased, ID sanitized for .env).
+// Hyphens in ID are replaced with underscores because .env variable names
+// only support letters, digits, and underscores.
 func (h ComponentHash) StateKey() string {
-	return fmt.Sprintf("DRASI_HASH_%s_%s", strings.ToUpper(h.Kind), h.ID)
+	sanitized := strings.ReplaceAll(h.ID, "-", "_")
+	return fmt.Sprintf("DRASI_HASH_%s_%s", strings.ToUpper(h.Kind), sanitized)
 }

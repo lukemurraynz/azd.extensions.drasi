@@ -52,12 +52,16 @@ For architecture and orchestration pattern selection (Sequential vs Concurrent v
 30. `MUST`: For hosted agent runs, implement cancellation support (`CancelRunAsync` / equivalent) and surface cancellation status through API contracts; do not leave orphaned runs.
 31. `MUST`: When bootstrapping hosted agents at deploy time, implement idempotent provisioning (get-or-create pattern) instead of exception-driven duplicate detection. Cache agent IDs after successful creation.
 32. `SHOULD`: For long-running agent-hosted services, implement in-process session/thread cache with TTL, max-cardinality eviction, and telemetry for cache hit/miss ratios.
+33. `SHOULD`: Use DevUI (preview, browser-based local debugger) during development to visualize agent execution traces, message flows, and tool calls before deploying. Reference: [DevUI docs](https://learn.microsoft.com/en-us/agent-framework/devui/).
+34. `SHOULD`: For multi-provider setups, verify service connector compatibility per provider (Foundry, Azure OpenAI, OpenAI, Anthropic, Bedrock, Gemini, Ollama). Preview provider packages (`Microsoft.Agents.AI.Anthropic`, `Microsoft.Agents.AI.Bedrock`, `Microsoft.Agents.AI.Gemini`) may have different API surfaces than GA packages.
 
 ## Currency and verification gates
 
 - Last reviewed: **2026-04-03**
 - Latest upstream releases at review time: .NET `dotnet-1.0.0` (2026-04-02), Python `python-1.0.0` (2026-04-02)
 - Core packages are GA. Sub-packages (A2A, AG-UI, Anthropic, orchestrations) remain preview.
+- Preview provider packages: `Microsoft.Agents.AI.Anthropic`, `Microsoft.Agents.AI.Bedrock`, `Microsoft.Agents.AI.Gemini`.
+- DevUI, Agent Harness, AG-UI/CopilotKit/ChatKit, GitHub Copilot SDK, and Claude Code SDK are preview features.
 - `Azure.AI.Projects` upgraded to 2.0.0 GA in .NET 1.0.0 — verify `AIProjectClient` imports if upgrading from beta.
 - Before implementing, verify:
   - Provider package compatibility across `.NET` and `Python`

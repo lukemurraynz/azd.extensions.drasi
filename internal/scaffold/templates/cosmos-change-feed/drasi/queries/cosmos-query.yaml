@@ -1,13 +1,12 @@
-# cosmos-query.yaml — Drasi ContinuousQuery using Cypher over the Cosmos DB source
+# cosmos-query.yaml - ContinuousQuery over Cosmos DB source using Cypher
 apiVersion: v1
 kind: ContinuousQuery
-metadata:
-  name: cosmos-query
+name: cosmos-query
 spec:
   mode: query
   sources:
     subscriptions:
       - id: cosmos-source
-  query: >
+  query: |
     MATCH (n)
     RETURN n.id AS id, n.label AS label

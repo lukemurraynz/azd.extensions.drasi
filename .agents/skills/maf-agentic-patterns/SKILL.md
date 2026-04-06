@@ -15,7 +15,7 @@ For AI integration implementation details (prompting, confidenceSource propagati
 ## When To Use
 
 - Choosing orchestration mode (Sequential, Concurrent, Handoff, Group Chat, Magentic)
-- Choosing hosting model (in-process agent runtime vs Foundry hosted persistent agents)
+- Choosing hosting model (in-process agent runtime vs Foundry hosted persistent agents vs Agent Harness)
 - Deciding protocol boundary (AG-UI vs MCP vs A2A)
 - Designing multi-agent run state, approval flow, and handoff behavior
 - Reviewing implementations for known MAF pitfalls
@@ -55,6 +55,8 @@ For AI integration implementation details (prompting, confidenceSource propagati
 31. `SHOULD`: For configuration-driven agent behavior, evaluate declarative workflow YAML definitions before building custom code orchestrations. Use declarative workflows for repetitive action sequences that benefit from low-code modification.
 32. `MUST`: When bootstrapping hosted agents, implement idempotent get-or-create provisioning; do not rely on exception handling for duplicate detection (learned from NimbusIQ: exception-driven idempotency is fragile across SDK versions).
 33. `SHOULD`: Implement in-process session/thread caches with bounded cardinality and TTL eviction for long-running services that reuse hosted agent threads (avoids memory growth observed in NimbusIQ production-style workloads).
+34. `MUST`: When using Agent Harness (shell/filesystem tools), run harness-capable agents in isolated environments (containers, sandboxes) and require explicit approval gates before command execution. Do not grant broad host access.
+35. `SHOULD`: Use DevUI (preview, browser-based local debugger) during development to visualize agent execution, message flows, tool calls, and orchestration decisions before deploying to production.
 
 ## Currency and verification gates
 

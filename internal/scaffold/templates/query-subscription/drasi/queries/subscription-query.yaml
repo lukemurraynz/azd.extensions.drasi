@@ -1,13 +1,12 @@
-# subscription-query.yaml — Drasi ContinuousQuery definition for subscription pattern
+# subscription-query.yaml - ContinuousQuery for the subscription pattern
 apiVersion: v1
 kind: ContinuousQuery
-metadata:
-  name: subscription-query
+name: subscription-query
 spec:
   mode: query
   sources:
     subscriptions:
       - id: example-source
-  query: >
+  query: |
     MATCH (n)
-    RETURN n.id AS id, n.label AS label
+    RETURN n.name AS name

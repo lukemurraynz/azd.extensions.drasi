@@ -26,6 +26,7 @@ func ResolveManifest(
 		Reactions:    append([]Reaction(nil), reactions...),
 		Middlewares:  append([]Middleware(nil), middlewares...),
 		FeatureFlags: manifest.FeatureFlags,
+		ManifestDir:  dir,
 	}
 
 	warnings := make([]string, 0)

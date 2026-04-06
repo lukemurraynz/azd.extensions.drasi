@@ -1,10 +1,9 @@
-# example-reaction.yaml — Drasi Reaction definition
+# example-reaction.yaml - Drasi Reaction definition
+# Debug reaction logs query result changes to stdout - no external infrastructure required.
 apiVersion: v1
 kind: Reaction
-metadata:
-  name: example-reaction
+name: example-reaction
 spec:
   kind: Debug
   queries:
-    - example-query
-  properties: {}
+    example-query: ""

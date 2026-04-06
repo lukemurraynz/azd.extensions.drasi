@@ -6,9 +6,8 @@ spec:
   sources:
     subscriptions:
       - id: eventhub-source
-  query: >
+  query: |
     MATCH (e:Event)
     RETURN e.id AS id,
            e.body AS body,
            e.enqueuedTime AS enqueuedTime
-  queryLanguage: Cypher

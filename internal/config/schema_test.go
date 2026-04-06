@@ -44,9 +44,11 @@ func TestSchemaValidator_ValidQuery(t *testing.T) {
 		Kind:          "ContinuousQuery",
 		ID:            "my-query",
 		QueryLanguage: "Cypher",
-		Query:         "MATCH (n) RETURN n",
-		FilePath:      "queries/my-query.yaml",
-		Line:          1,
+		Spec: config.QuerySpec{
+			Query: "MATCH (n) RETURN n",
+		},
+		FilePath: "queries/my-query.yaml",
+		Line:     1,
 	}
 	result := &validation.ValidationResult{}
 	validation.ValidateQuerySchema(q, result)

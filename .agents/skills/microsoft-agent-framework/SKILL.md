@@ -14,6 +14,11 @@ description: >-
 > in [csharp.instructions.md — Agent Systems Extension](../../instructions/csharp.instructions.md).
 > This skill covers **implementation patterns**; the instructions cover **architectural guardrails**.
 
+> **Cross-reference:** Operational lifecycle for Foundry agents (deploy, invoke, observe,
+> trace, troubleshoot) is covered by the [microsoft-foundry skill](../../../microsoft-foundry/SKILL.md)
+> (user-level skill). This skill covers **SDK patterns and code**; the Foundry skill covers
+> **platform operations**.
+
 ---
 
 ## Quick Reference
@@ -25,10 +30,14 @@ description: >-
 | Function Tools    | Strongly-typed .NET/Python functions exposed to agents                  |
 | Agent Composition | Agent-as-function-tool pattern for hierarchical orchestration           |
 | Agent Skills      | Portable instruction packages with progressive disclosure loading       |
+| Service Connectors | First-party connectors for Foundry, Azure OpenAI, OpenAI, Anthropic, Bedrock, Gemini, Ollama |
+| Middleware Hooks  | Intercept, transform, extend agent behavior at every execution stage    |
 | Compaction        | Token-budget management via truncation, summarization, and pipelines    |
 | Memory Providers  | Pluggable chat history (Cosmos DB) and cross-conversation memory        |
 | MCP Integration   | Model Context Protocol for external tool servers                        |
 | A2A Protocol      | Agent-to-Agent communication across services and languages              |
+| Declarative Agents | YAML-defined agents with instructions, tools, memory, and orchestration topology |
+| Migration Assistants | Code analysis and step-by-step migration from Semantic Kernel and AutoGen |
 | Hosting           | ASP.NET, Azure Functions, Container Apps, Azure AI Foundry              |
 | Observability     | OpenTelemetry traces, conversation metrics, model usage tracking        |
 
@@ -36,8 +45,11 @@ description: >-
 
 ## Currency and verification gates
 
-- Last reviewed: **2026-04-03**
+- Last reviewed: **2026-04-07**
 - Latest upstream releases at review time: .NET `dotnet-1.0.0` (2026-04-02), Python `python-1.0.0` (2026-04-02)
+- `Microsoft.Agents.AI.Workflows` remains `1.0.0-rc1`, not full GA.
+- Preview provider packages include `Microsoft.Agents.AI.Anthropic`, `Microsoft.Agents.AI.Bedrock`, and `Microsoft.Agents.AI.Gemini`.
+- Agent Harness, DevUI, AG-UI, GitHub Copilot SDK, and Claude Code SDK are preview features.
 - **1.0.0 GA breaking changes (.NET)**:
   - `Azure.AI.Projects` upgraded to 2.0.0 GA — verify import paths if upgrading from beta
   - `OpenAIAssistantClientExtensions` class removed
@@ -92,6 +104,12 @@ description: >-
 - [Official docs](https://learn.microsoft.com/en-us/agent-framework/)
 - [Awesome Microsoft Agent Framework](https://github.com/webmaxru/awesome-microsoft-agent-framework)
 - [GitHub repository](https://github.com/microsoft/agent-framework)
+- [Migration from Semantic Kernel](https://learn.microsoft.com/en-us/agent-framework/migration-guide/from-semantic-kernel)
+- [Migration from AutoGen](https://learn.microsoft.com/en-us/agent-framework/migration-guide/from-autogen)
+- [DevUI](https://learn.microsoft.com/en-us/agent-framework/devui/)
+- [NuGet (.NET)](https://www.nuget.org/packages/Microsoft.Agents.AI/)
+- [PyPI (Python)](https://pypi.org/project/agent-framework/)
+- [Discord Community](https://aka.ms/foundry/discord)
 - [AgentEval](https://agenteval.dev/) — Evaluation and red team framework for AI agents
 
 ### MCP Tooling
@@ -118,14 +136,90 @@ Microsoft Agent Framework has two primary building blocks:
 
 ### Agent Types
 
-| Type              | Provider         | Use Case                                            |
-| ----------------- | ---------------- | --------------------------------------------------- |
-| `ChatClientAgent` | Any IChatClient  | Wraps any `IChatClient` implementation              |
-| Foundry Agent     | Azure AI Foundry | Cloud-hosted agents with managed tool execution     |
-| Azure OpenAI      | Azure OpenAI     | Azure-hosted GPT models with enterprise controls    |
-| OpenAI            | OpenAI           | Direct OpenAI API access                            |
-| Anthropic         | Anthropic        | Claude models via Anthropic API                     |
-| A2A Proxy         | Any A2A server   | Proxy to a remote agent via Agent-to-Agent protocol |
+| Type                      | Provider         | Use Case                                            |
+| ------------------------- | ---------------- | --------------------------------------------------- |
+| `ChatClientAgent`         | Any IChatClient  | Wraps any `IChatClient` implementation              |
+| Foundry Responses Agent   | Azure AI Foundry | You own the agent definition; simple, flexible setup via `AIProjectClient.AsAIAgent()` |
+| Foundry Agent (versioned) | Azure AI Foundry | Server-managed; agent definitions are created and versioned on Foundry, retrieved by name |
+| Foundry Hosted Agent      | Azure AI Foundry | Containerized agent code deployed to Foundry Agent Service (managed runtime, scaling, observability) |
+| Azure OpenAI              | Azure OpenAI     | Azure-hosted GPT models with enterprise controls    |
+| OpenAI                    | OpenAI           | Direct OpenAI API access                            |
+| Anthropic                 | Anthropic        | Claude models via Anthropic API                     |
+| A2A Proxy                 | Any A2A server   | Proxy to a remote agent via Agent-to-Agent protocol |
+
+> **Foundry agent type selection:** Use Responses Agent for quick prototyping where you control the agent definition in code.
+> Use Foundry Agent (versioned) when agent definitions should be server-managed, versioned, and retrievable by name.
+> Use Foundry Hosted Agent when you need managed container hosting with built-in scaling, observability, and enterprise controls.
+> See [microsoft-foundry skill](../microsoft-foundry/SKILL.md) for operational lifecycle (deploy, invoke, observe, trace, troubleshoot).
+
+### Service Connectors
+
+Agent Framework ships with first-party connectors for multiple model providers.
+
+| Provider          | Package (.NET)                         | Status  |
+| ----------------- | -------------------------------------- | ------- |
+| Microsoft Foundry | `Microsoft.Agents.AI.Foundry`          | Stable  |
+| Azure OpenAI      | `Microsoft.Agents.AI.OpenAI`           | Stable  |
+| OpenAI            | `Microsoft.Agents.AI.OpenAI`           | Stable  |
+| Anthropic Claude  | `Microsoft.Agents.AI.Anthropic`        | Preview |
+| Amazon Bedrock    | `Microsoft.Agents.AI.Bedrock`          | Preview |
+| Google Gemini     | `Microsoft.Agents.AI.Gemini`           | Preview |
+| Ollama            | Via `Microsoft.Extensions.AI` + Ollama | Preview |
+
+Python equivalents install via `pip install agent-framework` (core) plus provider-specific extras.
+
+Reference: [Service connectors docs](https://learn.microsoft.com/en-us/agent-framework/agents/)
+
+### Foundry Hosting Adapter Packages
+
+When deploying Agent Framework agents as Foundry Hosted Agents (containerized, managed runtime),
+use the hosting adapter packages to wrap your agent code for the Foundry Agent Service.
+
+| Package (.NET)                             | Purpose                                     |
+| ------------------------------------------ | ------------------------------------------- |
+| `Azure.AI.AgentServer.Core`               | Core hosting adapter runtime                |
+| `Azure.AI.AgentServer.AgentFramework`     | Agent Framework integration for hosted agents |
+
+| Package (Python)                           | Purpose                                     |
+| ------------------------------------------ | ------------------------------------------- |
+| `azure-ai-agentserver-core`               | Core hosting adapter runtime                |
+| `azure-ai-agentserver-agentframework`     | Agent Framework integration for hosted agents |
+| `azure-ai-agentserver-langgraph`          | LangGraph integration for hosted agents     |
+
+These packages are separate from the Agent Framework SDK packages. They bridge your agent
+code to Foundry's managed hosting environment. See the
+[microsoft-foundry skill](../microsoft-foundry/SKILL.md) for the full deploy workflow
+(`azd ai agent init` → `azd provision` → `azd deploy`).
+
+Reference: [Hosted agents docs](https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/hosted-agents)
+
+### Middleware Hooks
+
+The middleware pipeline intercepts agent execution at every stage. This includes content safety filters,
+logging, compliance policies, and custom logic, without modifying agent prompts.
+
+```csharp
+// Example: Add a logging middleware to an agent
+var agent = chatClient
+    .AsBuilder()
+    .Use(async (messages, options, next, ct) =>
+    {
+        logger.LogInformation("Agent invoked with {Count} messages", messages.Count);
+        var response = await next(messages, options, ct);
+        logger.LogInformation("Agent responded with {Tokens} tokens", response.Usage?.TotalTokenCount);
+        return response;
+    })
+    .BuildAIAgent(new ChatClientAgentOptions
+    {
+        Name = "LoggedAgent",
+        ChatOptions = new() { Instructions = "You are a helpful assistant." }
+    });
+```
+
+Middleware supports both non-streaming and streaming handlers. When streaming UX is required,
+provide both handlers to avoid degraded output.
+
+Reference: [Middleware docs](https://learn.microsoft.com/en-us/agent-framework/agents/middleware/)
 
 ---
 
@@ -175,6 +269,54 @@ var agent = client
     .GetChatClient("gpt-4.1-mini")
     .AsAIAgent(instructions: "You are a helpful assistant.");
 ```
+
+### .NET — Foundry Agent (Simplified)
+
+```csharp
+using Microsoft.Agents.AI;
+using Microsoft.Agents.AI.Foundry;
+using Azure.Identity;
+
+var agent = new AIProjectClient(endpoint: "https://your-project.services.ai.azure.com")
+    .GetResponsesClient("gpt-4.1-mini")
+    .AsAIAgent(
+        name: "Assistant",
+        instructions: "You are a helpful assistant.");
+
+Console.WriteLine(await agent.RunAsync("What is the capital of New Zealand?"));
+```
+
+> **Note:** `AIProjectClient` from `Microsoft.Agents.AI.Foundry` provides the simplest path
+> to creating agents backed by Foundry-hosted models. For production, pass a
+> `ManagedIdentityCredential` to the client constructor.
+
+### .NET — Foundry Agent (Versioned, Server-Managed)
+
+Use this pattern when agent definitions are managed on Foundry and retrieved by name.
+Agents are versioned server-side, enabling updates without redeploying your application.
+
+```csharp
+using Microsoft.Agents.AI;
+using Microsoft.Agents.AI.Foundry;
+using Azure.Identity;
+
+var aiProjectClient = new AIProjectClient(
+    new Uri("https://your-project.services.ai.azure.com"),
+    new ManagedIdentityCredential());
+
+// Retrieve a server-managed agent by name
+ProjectsAgentRecord agentRecord = await aiProjectClient
+    .AgentAdministrationClient.GetAgentAsync("SupportAgent");
+
+// Wrap as an AIAgent for use with Agent Framework
+FoundryAgent agent = aiProjectClient.AsAIAgent(agentRecord);
+
+Console.WriteLine(await agent.RunAsync("How do I reset my password?"));
+```
+
+> **When to use versioned agents:** Use this pattern when agent instructions, tools, and
+> configuration should be managed centrally on Foundry (updated via portal or API) rather
+> than baked into your application code. This enables non-developer updates to agent behavior.
 
 ### Python — Azure OpenAI Agent
 
@@ -662,10 +804,40 @@ Reference: [Agent Skills docs](https://learn.microsoft.com/agent-framework/agent
 
 ---
 
+## Declarative Agents and Workflows
+
+Define agents and orchestration topology in version-controlled YAML files, then load and
+run them with a single API call. Suitable for repetitive flows that change frequently
+without code deploys.
+
+```yaml
+# agent.yaml
+name: SupportAgent
+instructions: You are a customer support agent.
+model: gpt-4.1-mini
+tools:
+  - name: search_docs
+    type: mcp
+    server_url: https://learn.microsoft.com/api/mcp
+memory:
+  provider: foundry
+```
+
+```csharp
+// Load and run a declarative agent
+var agent = await AgentFactory.CreateFromYamlAsync("agent.yaml", chatClient);
+Console.WriteLine(await agent.RunAsync("How do I reset my password?"));
+```
+
+Reference: [Declarative agents docs](https://learn.microsoft.com/en-us/agent-framework/agents/declarative)
+
+---
+
 ## Chat History and Memory Providers
 
 The framework provides pluggable `AIContextProvider` implementations for persistent
-conversation history and cross-conversation memory.
+conversation history and cross-conversation memory. Agent Memory can be backed by
+Foundry Agent Service, Mem0, Redis, Neo4j, or custom stores.
 
 ### Chat History Providers
 
@@ -684,13 +856,18 @@ Extract and recall memories across conversations (semantic memory):
 | Provider                    | Status  | Use case                                                           |
 | --------------------------- | ------- | ------------------------------------------------------------------ |
 | `ChatHistoryMemoryProvider` | Preview | Extracts memories from messages; retrieves relevant ones per query |
+| Mem0 Provider               | Preview | Cross-conversation memory via Mem0                                 |
+| Redis Provider              | Preview | Redis-backed memory and retrieval                                  |
+| Foundry Memory              | Preview | Managed memory via Microsoft Foundry Agent Service                 |
 
 ### RAG AI Context Providers
 
-| Provider                | Status  | Use case                                   |
-| ----------------------- | ------- | ------------------------------------------ |
-| Neo4j GraphRAG Provider | Preview | Graph-based retrieval augmented generation |
-| Text Search Provider    | Preview | Vector/keyword search over document stores |
+| Provider                | Status  | Use case                                           |
+| ----------------------- | ------- | -------------------------------------------------- |
+| Neo4j GraphRAG Provider | Preview | Graph-based retrieval augmented generation          |
+| Text Search Provider    | Preview | Vector/keyword search over document stores          |
+
+Mem0, Redis, and Foundry Memory providers listed above also support RAG retrieval patterns.
 
 Context providers are registered via `AIContextProviders` on `ChatClientAgentOptions`
 or via `UseAIContextProviders` on `ChatClientBuilder`.
@@ -948,6 +1125,132 @@ var orchestrator = chatClient
 
 ---
 
+## Migration from Semantic Kernel and AutoGen
+
+For teams coming from Semantic Kernel or AutoGen, migration assistants analyze existing
+code and generate step-by-step migration plans.
+
+| Source Framework | Guide |
+| ---------------- | ----- |
+| Semantic Kernel  | [Migration guide](https://learn.microsoft.com/en-us/agent-framework/migration-guide/from-semantic-kernel) |
+| AutoGen          | [Migration guide](https://learn.microsoft.com/en-us/agent-framework/migration-guide/from-autogen) |
+
+Key migration notes.
+
+- Agent Framework unifies Semantic Kernel's enterprise foundations with AutoGen's orchestrations
+- Core `IChatClient` abstraction from `Microsoft.Extensions.AI` is the shared integration point
+- Existing Semantic Kernel plugins can be adapted as Agent Framework function tools
+- AutoGen multi-agent patterns map to Agent Framework orchestrations (Sequential, Concurrent, Handoff, Group Chat)
+
+## Preview Features (v1.0 Release)
+
+These features shipped with v1.0 but remain in preview. APIs may evolve based on feedback.
+
+### DevUI
+
+Browser-based local debugger for visualizing agent execution, message flows, tool calls,
+and orchestration decisions in real time. Install and launch alongside your agent application
+during development.
+
+Reference: [DevUI docs](https://learn.microsoft.com/en-us/agent-framework/devui/)
+
+### AG-UI / CopilotKit / ChatKit
+
+Stream agent output to frontend surfaces with adapters for CopilotKit and ChatKit,
+including tool execution status and human-in-the-loop flows.
+
+Reference: [AG-UI docs](https://learn.microsoft.com/en-us/agent-framework/integrations/ag-ui/)
+
+### GitHub Copilot SDK and Claude Code SDK
+
+Use GitHub Copilot or Claude Code as an agent harness directly from Agent Framework
+orchestration code. These SDKs handle autonomous agent loops (planning, tool execution,
+file edits, session management) and Agent Framework wraps them, composing coding-capable
+agents alongside other agents in multi-agent workflows.
+
+Reference: [GitHub Copilot provider docs](https://learn.microsoft.com/en-us/agent-framework/agents/providers/github-copilot)
+
+### Agent Harness
+
+Customizable local runtime giving agents access to shell, filesystem, and messaging loop.
+Supports both local execution (with approval gates) and hosted execution in managed
+container environments.
+
+**Local shell with approvals (.NET)**
+
+```csharp
+using System.ComponentModel;
+using System.Diagnostics;
+
+[Description("Execute a shell command locally.")]
+static string RunBash([Description("Bash command")] string command)
+{
+    using var process = Process.Start(new ProcessStartInfo
+    {
+        FileName = "/bin/bash",
+        ArgumentList = { "-lc", command },
+        RedirectStandardOutput = true,
+        RedirectStandardError = true,
+        UseShellExecute = false,
+    });
+    process!.WaitForExit(30_000);
+    return $"stdout:\n{process.StandardOutput.ReadToEnd()}\nstderr:\n{process.StandardError.ReadToEnd()}\nexit_code:{process.ExitCode}";
+}
+
+var agent = chatClient.AsAIAgent(
+    name: "ShellAgent",
+    instructions: "Use tools when needed. Avoid destructive commands.",
+    tools: [new ApprovalRequiredAIFunction(AIFunctionFactory.Create(RunBash))]);
+```
+
+> **Security:** Run shell-capable agents in isolated environments. Keep explicit approval
+> gates before command execution.
+
+Reference: [Agent Harness docs](https://devblogs.microsoft.com/agent-framework/agent-harness-in-agent-framework/)
+
+### Foundry Hosted Agent Integration
+
+Run Agent Framework agents as managed services on Microsoft Foundry or as Azure Durable
+Functions with automatic checkpointing and HTTP endpoint generation.
+
+**Built-in server-side tools** (run on Foundry, not in your code):
+
+| Tool              | Description                                       |
+| ----------------- | ------------------------------------------------- |
+| File Search       | Retrieval over uploaded files and vector stores    |
+| Code Interpreter  | Sandboxed code execution with file I/O            |
+| Web Search (Bing) | Grounded web search via Bing                      |
+| Memory            | Managed cross-conversation memory                 |
+| MCP Servers       | Remote MCP tools hosted and connected server-side |
+
+These tools are declared via `MCPToolDefinition`, `FileSearchToolDefinition`, or
+`CodeInterpreterToolDefinition` on the agent definition. They execute server-side
+on the Foundry runtime, not in your application process.
+
+**Hosted agent lifecycle:** create, start, update, stop, delete. Deployable via
+`azd ai agent init` followed by `azd provision` and `azd deploy`.
+
+**Replica sizing:** Hosted agents support CPU/memory replica size configuration.
+Autoscaling is managed by the Foundry runtime.
+
+**Observability:** End-to-end tracing and metrics via Application Insights integration.
+Log streaming available through the REST API.
+
+**Identity/Security:** Entra identity with RBAC. Content filters applied at the model level.
+
+> **Caveat:** Hosted agents (preview) do NOT support private networking. Prompt agents
+> and workflow agents do. Plan network topology accordingly.
+
+> **Operational lifecycle:** For deploy, invoke, observe, trace, and troubleshoot workflows,
+> see the [microsoft-foundry skill](../../../microsoft-foundry/SKILL.md) (user-level skill).
+> This skill covers SDK patterns and code; the Foundry skill covers platform operations.
+
+Reference: [Foundry hosted agents](https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/hosted-agents) |
+[Foundry integration docs](https://learn.microsoft.com/en-us/agent-framework/integrations/azure-functions) |
+[Sample repo](https://github.com/Azure-Samples/foundry-hosted-agents-dotnet-demo)
+
+---
+
 ## Common Pitfalls
 
 > **Warning — Token budget exhaustion:** Agents with many tools or long system prompts
@@ -979,6 +1282,10 @@ var orchestrator = chatClient
 > **Warning — Missing fallback policy:** Repeated `429`/`5xx` responses without a
 > fallback plan can cascade into user-visible outages. Implement bounded retries plus
 > approved fallback deployments and degraded-mode responses.
+
+> **Warning — Hosted agent private networking:** Foundry hosted agents (preview) do not
+> support private networking. If your architecture requires VNet isolation, use prompt
+> agents or workflow agents instead, or self-host via Container Apps / Azure Functions.
 
 ## Currency and Verification
 

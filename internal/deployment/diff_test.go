@@ -13,7 +13,7 @@ func TestDiff_UnchangedHash_NoOp(t *testing.T) {
 
 	tests := []struct {
 		name          string
-		newHashes      []config.ComponentHash
+		newHashes     []config.ComponentHash
 		existingState map[string]string
 		want          ComponentAction
 	}{
@@ -47,7 +47,7 @@ func TestDiff_ChangedHash_DeleteThenApply(t *testing.T) {
 
 	tests := []struct {
 		name          string
-		newHashes      []config.ComponentHash
+		newHashes     []config.ComponentHash
 		existingState map[string]string
 		want          ComponentAction
 	}{
@@ -59,7 +59,7 @@ func TestDiff_ChangedHash_DeleteThenApply(t *testing.T) {
 				Hash: "new-hash",
 			}},
 			existingState: map[string]string{
-				"DRASI_HASH_CONTINUOUSQUERY_severity-escalation": "old-hash",
+				"DRASI_HASH_CONTINUOUSQUERY_severity_escalation": "old-hash",
 			},
 			want: ComponentAction{Kind: "continuousquery", ID: "severity-escalation", Hash: "new-hash", Action: ActionDeleteThenApply},
 		},
@@ -81,7 +81,7 @@ func TestDiff_MissingInState_Create(t *testing.T) {
 
 	tests := []struct {
 		name          string
-		newHashes      []config.ComponentHash
+		newHashes     []config.ComponentHash
 		existingState map[string]string
 		want          ComponentAction
 	}{
@@ -119,7 +119,7 @@ func TestDiff_StateKeyFormat(t *testing.T) {
 		{
 			name: "continuous query state key format",
 			hash: config.ComponentHash{Kind: "continuousquery", ID: "my-id", Hash: "abc123"},
-			want: "DRASI_HASH_CONTINUOUSQUERY_my-id",
+			want: "DRASI_HASH_CONTINUOUSQUERY_my_id",
 		},
 	}
 

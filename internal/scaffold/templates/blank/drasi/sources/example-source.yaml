@@ -1,12 +1,10 @@
-# example-source.yaml — Drasi Source definition
-# Replace the spec properties with your actual source configuration.
+# example-source.yaml - Drasi Source definition
+# Replace kind and properties with your actual source configuration.
+# Supported kind values: CosmosGremlin, Kubernetes, PostgreSQL, MySQL, MSSQL, EventHub
 apiVersion: v1
 kind: Source
-metadata:
-  name: example-source
+name: example-source
 spec:
-  kind: CosmosGremlin
+  kind: Kubernetes
   properties:
-    accountEndpoint: "https://<your-cosmos-account>.documents.azure.com:443/"
-    database: "<your-database>"
-    container: "<your-container>"
+    inCluster: "true"

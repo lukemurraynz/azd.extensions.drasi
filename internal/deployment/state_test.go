@@ -85,7 +85,7 @@ func TestStateManager_RoundTrip_PreservesHash(t *testing.T) {
 		stateKey string
 		hash     string
 	}{
-		{name: "round trip preserves exact hash", stateKey: "DRASI_HASH_REACTION_alerts-http", hash: "sha256:deadbeef"},
+		{name: "round trip preserves exact hash", stateKey: "DRASI_HASH_REACTION_alerts_http", hash: "sha256:deadbeef"},
 	}
 
 	for _, tt := range tests {

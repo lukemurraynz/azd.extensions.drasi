@@ -1,0 +1,14 @@
+# k8s-pods-query.yaml - ContinuousQuery watching Pod resources in the drasi-system namespace
+apiVersion: v1
+kind: ContinuousQuery
+name: k8s-pods-query
+spec:
+  mode: query
+  sources:
+    subscriptions:
+      - id: k8s-source
+        nodes:
+          - sourceLabel: Pod
+  query: |
+    MATCH (p:Pod {namespace: 'drasi-system'})
+    RETURN p.name AS name, p.namespace AS namespace, p.phase AS phase

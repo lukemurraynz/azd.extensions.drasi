@@ -125,6 +125,27 @@ var workflow = new WorkflowBuilder()
     .Build();
 ```
 
+### Option E: Foundry Quick Start (simplest path)
+
+Use `AIProjectClient` from `Microsoft.Agents.AI.Foundry` for the fastest getting-started experience.
+
+```csharp
+using Microsoft.Agents.AI;
+using Microsoft.Agents.AI.Foundry;
+using Azure.Identity;
+
+var agent = new AIProjectClient(endpoint: "https://your-project.services.ai.azure.com")
+    .GetResponsesClient("gpt-4.1-mini")
+    .AsAIAgent(
+        name: "Assistant",
+        instructions: "You are a helpful assistant.");
+
+Console.WriteLine(await agent.RunAsync("What is the capital of New Zealand?"));
+```
+
+For production, pass a `ManagedIdentityCredential` to the `AIProjectClient` constructor.
+When you need hosted MCP tools, persistent threads, or server-side tool execution, graduate to Option D.
+
 ### Option D: Foundry-Hosted Agent with MCP Tools (preferred for remote tool servers)
 
 Use `MCPToolDefinition` when you want Foundry to manage the MCP server connection server-side.
@@ -179,6 +200,35 @@ await client.Administration.DeleteAgentAsync(agent.Id);
 ```
 
 See the full pattern and key-point explanations in [SKILL.md — Hosted MCP Tools](../SKILL.md).
+
+### Option F: Foundry Agent (versioned, server-managed definition)
+
+Use this when agent definitions are managed and versioned on the Foundry server (created via
+portal, API, or CI/CD). Your code retrieves the definition by name rather than defining it locally.
+
+```csharp
+using Microsoft.Agents.AI;
+using Microsoft.Agents.AI.Foundry;
+using Azure.Identity;
+
+var projectClient = new AIProjectClient(
+    endpoint: "https://your-project.services.ai.azure.com",
+    credential: new ManagedIdentityCredential());
+
+// Retrieve the server-managed agent definition by name.
+var adminClient = projectClient.AgentAdministrationClient;
+var agentRecord = await adminClient.GetAgentAsync("my-versioned-agent");
+
+// Wrap it as an AIAgent — instructions, tools, and model are all server-defined.
+AIAgent agent = projectClient.AsAIAgent(agentRecord);
+
+Console.WriteLine(await agent.RunAsync("What is the capital of New Zealand?"));
+```
+
+Use this pattern when:
+- Agent definitions are updated independently of code deployments
+- Multiple environments share the same code but point to different agent versions
+- Agent configuration is managed by a platform team or through the Foundry portal
 
 ---
 

@@ -1,9 +1,10 @@
 apiVersion: v1
 kind: Source
-id: postgres-source
-sourceKind: PostgreSQL
-properties:
-  host:
-    value: localhost
-  port:
-    value: "5432"
+name: postgres-source
+spec:
+  kind: PostgreSQL
+  properties:
+    host:
+      value: localhost
+    port:
+      value: "5432"

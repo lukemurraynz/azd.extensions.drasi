@@ -1,7 +1,7 @@
 apiVersion: v1
 kind: Reaction
-id: pubsub-orders
-reactionKind: Dapr
-config:
-  topic:
-    value: orders
+name: pubsub-orders
+spec:
+  kind: Dapr
+  queries:
+    order-changes: ""
