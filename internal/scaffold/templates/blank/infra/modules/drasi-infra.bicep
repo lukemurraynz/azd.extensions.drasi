@@ -115,7 +115,7 @@ resource kvSecretsUserAssignment 'Microsoft.Authorization/roleAssignments@2022-0
 // API version verified: az provider show --namespace Microsoft.Network
 // BCP034 fix: zones must be string[] for publicIPAddresses (ARM requirement).
 // ---------------------------------------------------------------------------
-resource natPublicIp 'Microsoft.Network/publicIPAddresses@2024-05-01' = {
+resource natPublicIp 'Microsoft.Network/publicIPAddresses@2024-10-01' = {
   name: publicIpName
   location: location
   tags: tags
