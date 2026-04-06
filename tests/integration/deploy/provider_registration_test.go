@@ -4,13 +4,22 @@ package deploy_test
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"testing"
 
 	"github.com/azure/azd.extensions.drasi/internal/config"
 	"github.com/azure/azd.extensions.drasi/internal/deployment"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gopkg.in/yaml.v3"
 )
+
+type noOpDrasiRunner struct{}
+
+func (n *noOpDrasiRunner) CheckVersion(_ context.Context) error { return nil }
+
+func (n *noOpDrasiRunner) RunCommand(_ context.Context, _ ...string) error { return nil }
 
 // TestDeployEngine_Deploy_RegistersAllComponents verifies FR-042: all component kinds
 // (source, continuousquery, middleware, reaction) in a manifest produce read operations
@@ -39,7 +48,7 @@ func TestDeployEngine_Deploy_RegistersAllComponents(t *testing.T) {
 
 	sc := newStubEnvSvc(nil)
 	state := deployment.NewStateManagerFromClient(sc, "test-env")
-	engine := deployment.NewEngine(state)
+	engine := deployment.NewEngine(state, &noOpDrasiRunner{})
 
 	err := engine.Deploy(t.Context(), manifest, deployment.DeployOptions{DryRun: true})
 	require.NoError(t, err, "Deploy must not return an error when processing a valid manifest")
@@ -69,17 +78,17 @@ func TestDeployEngine_Deploy_IdempotentOnMatchingHash(t *testing.T) {
 
 	const componentID = "src-stable"
 
-	// manifestToHashes uses the component ID as the placeholder hash, so seed state
-	// with the same value to produce a NoOp diff.
-	h := config.ComponentHash{Kind: "source", ID: componentID, Hash: componentID}
-	sc := newStubEnvSvc(map[string]string{h.StateKey(): componentID})
+	h := config.ComponentHash{Kind: "source", ID: componentID}
 
 	manifest := &config.ResolvedManifest{
 		Sources: []config.Source{{ID: componentID, Kind: "source"}},
 	}
 
+	stableHash := hashForComponent(t, manifest.Sources[0])
+	sc := newStubEnvSvc(map[string]string{h.StateKey(): stableHash})
+
 	state := deployment.NewStateManagerFromClient(sc, "test-env")
-	engine := deployment.NewEngine(state)
+	engine := deployment.NewEngine(state, &noOpDrasiRunner{})
 
 	err := engine.Deploy(t.Context(), manifest, deployment.DeployOptions{DryRun: true})
 	require.NoError(t, err, "Deploy must succeed on an unchanged manifest")
@@ -88,6 +97,10 @@ func TestDeployEngine_Deploy_IdempotentOnMatchingHash(t *testing.T) {
 	// should have been issued.
 	assert.False(t, sc.wasWritten(h.StateKey()),
 		"state manager must not write a hash for an unchanged component (NoOp idempotency)")
+
+	// Validate the setup really targets a NoOp: if this value drifts the test stops proving
+	// idempotency semantics and should fail loudly.
+	assert.Equal(t, stableHash, sc.state[h.StateKey()])
 }
 
 // TestDeployEngine_Deploy_DetectsChangedComponent verifies that when an existing
@@ -99,7 +112,7 @@ func TestDeployEngine_Deploy_DetectsChangedComponent(t *testing.T) {
 	const componentID = "src-changed"
 	const oldHash = "old-hash-value"
 
-	h := config.ComponentHash{Kind: "source", ID: componentID, Hash: componentID}
+	h := config.ComponentHash{Kind: "source", ID: componentID}
 	// Seed with a different hash so diff produces DeleteThenApply.
 	sc := newStubEnvSvc(map[string]string{h.StateKey(): oldHash})
 
@@ -108,7 +121,7 @@ func TestDeployEngine_Deploy_DetectsChangedComponent(t *testing.T) {
 	}
 
 	state := deployment.NewStateManagerFromClient(sc, "test-env")
-	engine := deployment.NewEngine(state)
+	engine := deployment.NewEngine(state, &noOpDrasiRunner{})
 
 	err := engine.Deploy(t.Context(), manifest, deployment.DeployOptions{DryRun: true})
 	require.NoError(t, err)
@@ -153,3 +166,11 @@ func (s *stubEnvSvc) SetValue(_ context.Context, _ string, key, value string) er
 
 func (s *stubEnvSvc) wasRead(key string) bool    { return s.reads[key] }
 func (s *stubEnvSvc) wasWritten(key string) bool { return s.writes[key] }
+
+func hashForComponent(t *testing.T, v any) string {
+	t.Helper()
+	raw, err := yaml.Marshal(v)
+	require.NoError(t, err)
+	digest := sha256.Sum256(raw)
+	return hex.EncodeToString(digest[:])
+}

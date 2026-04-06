@@ -7,7 +7,8 @@ package statuslatency_test
 // SC-008: "azd drasi status" must reflect component state transitions within 30 seconds.
 //
 // These tests measure the wall-clock latency of the status command execution path.
-// Because "status" is currently a stub (returns ERR_NOT_IMPLEMENTED), the tests verify:
+// In dependency-absent CI environments, "status" typically fails fast with
+// ERR_DRASI_CLI_NOT_FOUND. The tests verify:
 //   - The command path responds within the 30-second SLA budget.
 //   - Timing evidence is published to a file artifact for CI collection.
 //
@@ -74,11 +75,10 @@ func TestStatusCommand_RespondsWithinSLA(t *testing.T) {
 
 	assert.True(t, withinSLA,
 		"status command must respond within %s SLA; took %s", maxStatusLatency, elapsed)
-	// Current stub is expected to return an error — that's acceptable.
-	// When status is fully implemented this check should be replaced with assert.NoError.
+	// In this integration harness we do not require a live Drasi runtime.
 	if err != nil {
-		assert.Contains(t, err.Error(), "ERR_NOT_IMPLEMENTED",
-			"status stub must return ERR_NOT_IMPLEMENTED; got: %s", err)
+		assert.Contains(t, err.Error(), "ERR_DRASI_CLI_NOT_FOUND",
+			"status must fail fast with missing drasi CLI in this harness; got: %s", err)
 	}
 }
 

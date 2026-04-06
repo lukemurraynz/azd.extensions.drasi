@@ -10,8 +10,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestLogsCommand_NotImplemented verifies the current stub returns ERR_NOT_IMPLEMENTED.
-func TestLogsCommand_NotImplemented(t *testing.T) {
+// TestLogsCommand_ValidationRequiresComponentAndKind verifies required logs selectors.
+func TestLogsCommand_ValidationRequiresComponentAndKind(t *testing.T) {
 	t.Parallel()
 	root := cmd.NewRootCommand()
 	root.SetOut(&bytes.Buffer{})
@@ -21,7 +21,7 @@ func TestLogsCommand_NotImplemented(t *testing.T) {
 	err := root.Execute()
 
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), output.ERR_NOT_IMPLEMENTED)
+	assert.Contains(t, err.Error(), output.ERR_VALIDATION_FAILED)
 }
 
 // TestLogsCommand_Help verifies the command registers and shows usage.
@@ -42,22 +42,6 @@ func TestLogsCommand_Help(t *testing.T) {
 	assert.Empty(t, stderr.String())
 }
 
-// TestLogsCommand_EnvironmentFlagAccepted verifies --environment does not cause a flag parse error.
-func TestLogsCommand_EnvironmentFlagAccepted(t *testing.T) {
-	t.Parallel()
-	root := cmd.NewRootCommand()
-	root.SetOut(&bytes.Buffer{})
-	root.SetErr(&bytes.Buffer{})
-	root.SetArgs([]string{"logs", "--environment", "dev"})
-
-	err := root.Execute()
-
-	require.Error(t, err)
-	assert.NotContains(t, err.Error(), "unknown flag",
-		"--environment must be accepted on logs command")
-	assert.Contains(t, err.Error(), output.ERR_NOT_IMPLEMENTED)
-}
-
 // TestLogsCommand_ComponentFlagAccepted verifies --component does not cause a flag parse error.
 func TestLogsCommand_ComponentFlagAccepted(t *testing.T) {
 	t.Parallel()
@@ -71,7 +55,7 @@ func TestLogsCommand_ComponentFlagAccepted(t *testing.T) {
 	require.Error(t, err)
 	assert.NotContains(t, err.Error(), "unknown flag",
 		"--component must be a registered flag on logs command")
-	assert.Contains(t, err.Error(), output.ERR_NOT_IMPLEMENTED)
+	assert.Contains(t, err.Error(), output.ERR_VALIDATION_FAILED)
 }
 
 // TestLogsCommand_KindFlagAccepted verifies --kind does not cause a flag parse error.
@@ -87,7 +71,7 @@ func TestLogsCommand_KindFlagAccepted(t *testing.T) {
 	require.Error(t, err)
 	assert.NotContains(t, err.Error(), "unknown flag",
 		"--kind must be a registered flag on logs command")
-	assert.Contains(t, err.Error(), output.ERR_NOT_IMPLEMENTED)
+	assert.Contains(t, err.Error(), output.ERR_VALIDATION_FAILED)
 }
 
 // TestLogsCommand_TailFlagAccepted verifies --tail does not cause a flag parse error.
@@ -103,7 +87,7 @@ func TestLogsCommand_TailFlagAccepted(t *testing.T) {
 	require.Error(t, err)
 	assert.NotContains(t, err.Error(), "unknown flag",
 		"--tail must be a registered flag on logs command")
-	assert.Contains(t, err.Error(), output.ERR_NOT_IMPLEMENTED)
+	assert.Contains(t, err.Error(), output.ERR_VALIDATION_FAILED)
 }
 
 // TestLogsCommand_FollowFlagAccepted verifies --follow compatibility alias does not cause a flag parse error.
@@ -119,7 +103,7 @@ func TestLogsCommand_FollowFlagAccepted(t *testing.T) {
 	require.Error(t, err)
 	assert.NotContains(t, err.Error(), "unknown flag",
 		"--follow must be a registered flag on logs command")
-	assert.Contains(t, err.Error(), output.ERR_NOT_IMPLEMENTED)
+	assert.Contains(t, err.Error(), output.ERR_VALIDATION_FAILED)
 }
 
 // TestLogsCommand_OutputJSONFlagAccepted verifies --output json does not cause a flag parse error.
@@ -134,5 +118,27 @@ func TestLogsCommand_OutputJSONFlagAccepted(t *testing.T) {
 
 	require.Error(t, err)
 	assert.NotContains(t, err.Error(), "unknown flag")
-	assert.Contains(t, err.Error(), output.ERR_NOT_IMPLEMENTED)
+	assert.Contains(t, err.Error(), output.ERR_VALIDATION_FAILED)
+}
+
+func TestLogsCommand_RootEnvironmentFlagAccepted(t *testing.T) {
+	t.Parallel()
+	root := cmd.NewRootCommand()
+	root.SetOut(&bytes.Buffer{})
+	root.SetErr(&bytes.Buffer{})
+	root.SetArgs([]string{"--environment", "dev", "logs", "--component", "x", "--kind", "source"})
+
+	err := root.Execute()
+
+	require.Error(t, err)
+	assert.NotContains(t, err.Error(), "unknown flag")
+	assert.True(t,
+		bytes.Contains([]byte(err.Error()), []byte(output.ERR_NO_AUTH)) ||
+			bytes.Contains([]byte(err.Error()), []byte(output.ERR_AKS_CONTEXT_NOT_FOUND)) ||
+			bytes.Contains([]byte(err.Error()), []byte(output.ERR_DRASI_CLI_NOT_FOUND)) ||
+			bytes.Contains([]byte(err.Error()), []byte(output.ERR_VALIDATION_FAILED)) ||
+			bytes.Contains([]byte(err.Error()), []byte(output.ERR_DRASI_CLI_VERSION)) ||
+			bytes.Contains([]byte(err.Error()), []byte(output.ERR_DRASI_CLI_ERROR)),
+		"logs must fail with known auth/context/cli code; got: %s", err.Error(),
+	)
 }

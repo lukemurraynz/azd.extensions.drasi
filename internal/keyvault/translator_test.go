@@ -2,84 +2,78 @@ package keyvault
 
 import (
 	"context"
+	"errors"
+	"os"
 	"testing"
 
 	"github.com/azure/azd.extensions.drasi/internal/config"
+	"github.com/azure/azd.extensions.drasi/internal/output"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
+type fakeSecretClient struct {
+	value string
+	err   error
+}
+
+func (f *fakeSecretClient) GetSecret(_ context.Context, _, _ string) (string, error) {
+	if f.err != nil {
+		return "", f.err
+	}
+	return f.value, nil
+}
+
 func TestTranslator_PlainString_PassesThrough(t *testing.T) {
 	t.Parallel()
 
-	tests := []struct {
-		name  string
-		value config.Value
-		want  *TranslatedValue
-	}{
-		{
-			name:  "plain string passes through",
-			value: config.Value{StringValue: "hello"},
-			want:  &TranslatedValue{StringValue: "hello", IsSecretRef: false},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			translator := NewTranslator()
-			got, err := translator.Translate(context.Background(), tt.value)
-			require.NoError(t, err)
-			assert.Equal(t, tt.want, got)
-		})
-	}
+	translator := NewTranslator()
+	got, err := translator.Translate(context.Background(), config.Value{StringValue: "hello"})
+	require.NoError(t, err)
+	assert.Equal(t, &TranslatedValue{StringValue: "hello", IsSecretRef: false}, got)
 }
 
-func TestTranslator_SecretRef_ReturnsError_NotYetImplemented(t *testing.T) {
+func TestTranslator_SecretRef_ResolvesFromClient(t *testing.T) {
 	t.Parallel()
 
-	tests := []struct {
-		name  string
-		value config.Value
-	}{
-		{
-			name: "secret ref requires implementation",
-			value: config.Value{SecretRef: &config.SecretRef{
-				VaultName:  "kv-dev",
-				SecretName: "reaction-token",
-			}},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			translator := NewTranslator()
-			_, _ = translator.Translate(context.Background(), tt.value)
-		})
-	}
+	translator := NewTranslatorWithSecretClient(&fakeSecretClient{value: "secret-value"})
+	got, err := translator.Translate(context.Background(), config.Value{SecretRef: &config.SecretRef{
+		VaultName:  "kv-dev",
+		SecretName: "reaction-token",
+	}})
+	require.NoError(t, err)
+	assert.Equal(t, &TranslatedValue{StringValue: "secret-value", IsSecretRef: true}, got)
 }
 
-func TestTranslator_EnvRef_PassesThrough(t *testing.T) {
+func TestTranslator_SecretRef_PropagatesClientError(t *testing.T) {
 	t.Parallel()
 
-	tests := []struct {
-		name  string
-		value config.Value
-	}{
-		{
-			name: "env ref not yet implemented",
-			value: config.Value{EnvRef: &config.EnvRef{
-				Name: "DRASI_NAMESPACE",
-			}},
-		},
-	}
+	translator := NewTranslatorWithSecretClient(&fakeSecretClient{err: errors.New(output.ERR_KV_AUTH_FAILED + ": denied")})
+	_, err := translator.Translate(context.Background(), config.Value{SecretRef: &config.SecretRef{
+		VaultName:  "kv-dev",
+		SecretName: "reaction-token",
+	}})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), output.ERR_KV_AUTH_FAILED)
+}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			translator := NewTranslator()
-			_, _ = translator.Translate(context.Background(), tt.value)
-		})
-	}
+func TestTranslator_EnvRef_ResolvesFromEnvironment(t *testing.T) {
+	t.Setenv("DRASI_NAMESPACE", "drasi-system")
+
+	translator := NewTranslator()
+	got, err := translator.Translate(context.Background(), config.Value{EnvRef: &config.EnvRef{Name: "DRASI_NAMESPACE"}})
+	require.NoError(t, err)
+	assert.Equal(t, &TranslatedValue{StringValue: "drasi-system", IsSecretRef: false}, got)
+}
+
+func TestTranslator_EnvRef_MissingVariable_ReturnsValidationError(t *testing.T) {
+	t.Parallel()
+
+	const missing = "DRASI_ENV_MISSING_FOR_TEST"
+	_ = os.Unsetenv(missing)
+
+	translator := NewTranslator()
+	_, err := translator.Translate(context.Background(), config.Value{EnvRef: &config.EnvRef{Name: missing}})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), output.ERR_VALIDATION_FAILED)
 }

@@ -13,7 +13,8 @@ Drasi requires coordinating several Azure resources (AKS, Key Vault, managed ide
 - Provision AKS with OIDC and Workload Identity, Key Vault, Log Analytics, and the Drasi runtime in a single command
 - Deploy components in dependency order with per-component health checks
 - Real-time status, streaming logs, and five-point health diagnostics
-- Teardown individual components or full infrastructure
+- Teardown individual components or full infrastructure (force-gated)
+- Runtime upgrade command for existing clusters (force-gated)
 - Key Vault secret reference translation (no secrets stored in configuration files)
 - Environment overlays for staging and production parameter overrides
 
@@ -59,11 +60,11 @@ See the [full quick start guide](specs/001-azd-drasi-extension/quickstart.md) fo
 | `azd drasi validate` | Validate configuration offline |
 | `azd drasi provision` | Provision Azure infrastructure and Drasi runtime |
 | `azd drasi deploy` | Deploy Drasi sources, queries, and reactions |
-| `azd drasi status` | Show component health and state |
-| `azd drasi logs` | Stream or tail logs from Drasi pods |
-| `azd drasi diagnose` | Run five health checks against a live cluster |
-| `azd drasi teardown` | Remove components or full infrastructure |
-| `azd drasi upgrade` | Upgrade the Drasi runtime on an existing cluster |
+| `azd drasi status` | Show component health and state (uses active kube context or `--environment` root flag) |
+| `azd drasi logs` | Watch continuous query output via `drasi watch` (uses active kube context or `--environment` root flag) |
+| `azd drasi diagnose` | Run five health checks against a live cluster (uses active kube context or `--environment` root flag) |
+| `azd drasi teardown --force` | Remove components or full infrastructure |
+| `azd drasi upgrade --force` | Upgrade the Drasi runtime on an existing cluster |
 | `azd drasi listen` | Listen for Drasi reaction events |
 
 Run `azd drasi <command> --help` for flags and examples on any command.
@@ -74,6 +75,7 @@ The extension reads `drasi/drasi.yaml` in your project root. Key concepts:
 
 - **Secret references**: use `kind: secret` with `vaultName` and `secretName` to pull values from Key Vault at deploy time. No secrets in source control.
 - **Environment overlays**: place parameter overrides in `drasi/environments/<name>.yaml` and pass `--environment <name>` to `azd drasi deploy`.
+- **Environment context routing**: for `status`, `logs`, and `diagnose`, pass root `--environment <name>` to resolve `AZURE_AKS_CONTEXT` from azd env state and run against that cluster context.
 - **Feature flags**: controlled in the `featureFlags` section of `drasi.yaml`.
 
 See the [configuration reference](docs/configuration-reference.md) for the full YAML schema.

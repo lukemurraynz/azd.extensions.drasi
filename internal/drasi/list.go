@@ -15,7 +15,21 @@ type ComponentSummary struct {
 
 // ListComponents lists all components of the given kind.
 func (c *Client) ListComponents(ctx context.Context, kind string) ([]ComponentSummary, error) {
-	stdout, _, _, err := c.runner.Run(ctx, "list", kind)
+	return c.listComponents(ctx, kind, "")
+}
+
+// ListComponentsInContext lists all components of the given kind against a specific kube context.
+func (c *Client) ListComponentsInContext(ctx context.Context, kind, kubeContext string) ([]ComponentSummary, error) {
+	return c.listComponents(ctx, kind, kubeContext)
+}
+
+func (c *Client) listComponents(ctx context.Context, kind, kubeContext string) ([]ComponentSummary, error) {
+	args := []string{"list", kind}
+	if strings.TrimSpace(kubeContext) != "" {
+		args = append([]string{"--context", kubeContext}, args...)
+	}
+
+	stdout, _, _, err := c.runner.Run(ctx, args...)
 	if err != nil {
 		return nil, err
 	}

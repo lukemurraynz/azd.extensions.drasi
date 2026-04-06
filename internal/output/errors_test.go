@@ -24,13 +24,12 @@ func TestErrorConstantsAreNonEmpty(t *testing.T) {
 		ERR_AKS_CONTEXT_NOT_FOUND,
 		ERR_FORCE_REQUIRED,
 		ERR_NO_MANIFEST,
-		ERR_NOT_IMPLEMENTED,
 		ERR_DEPLOY_IN_PROGRESS,
 		ERR_DAPR_NOT_READY,
 	}
 
-	if len(allCodes) != 17 {
-		t.Fatalf("expected 17 error codes, got %d", len(allCodes))
+	if len(allCodes) != 16 {
+		t.Fatalf("expected 16 error codes, got %d", len(allCodes))
 	}
 
 	for _, code := range allCodes {
@@ -94,7 +93,6 @@ func TestExitCodesCoverAllErrorConstants(t *testing.T) {
 		ERR_AKS_CONTEXT_NOT_FOUND,
 		ERR_FORCE_REQUIRED,
 		ERR_NO_MANIFEST,
-		ERR_NOT_IMPLEMENTED,
 		ERR_DEPLOY_IN_PROGRESS,
 		ERR_DAPR_NOT_READY,
 	}

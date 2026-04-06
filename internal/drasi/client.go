@@ -64,7 +64,7 @@ func (c *Client) CheckVersion(ctx context.Context) error {
 		return fmt.Errorf("%s: %w", output.ERR_DRASI_CLI_NOT_FOUND, err)
 	}
 
-	raw := strings.TrimSpace(stdout)
+	raw := parseSemverFromVersionOutput(stdout)
 	got, parseErr := semver.NewVersion(raw)
 	if parseErr != nil {
 		return fmt.Errorf("%s: cannot parse version %q: %w", output.ERR_DRASI_CLI_VERSION, raw, parseErr)
@@ -76,6 +76,32 @@ func (c *Client) CheckVersion(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+func parseSemverFromVersionOutput(stdout string) string {
+	raw := strings.TrimSpace(stdout)
+	if raw == "" {
+		return raw
+	}
+
+	line := raw
+	if lines := strings.Split(raw, "\n"); len(lines) > 0 {
+		line = strings.TrimSpace(lines[0])
+	}
+
+	if idx := strings.IndexByte(line, ':'); idx >= 0 {
+		line = strings.TrimSpace(line[idx+1:])
+	}
+
+	if strings.HasPrefix(line, "v") || strings.HasPrefix(line, "V") {
+		line = strings.TrimSpace(line[1:])
+	}
+	line = strings.TrimSpace(line)
+	if line == "" {
+		return strings.TrimSpace(stdout)
+	}
+
+	return line
 }
 
 // RunCommand executes a drasi CLI subcommand and returns an error on non-zero exit.

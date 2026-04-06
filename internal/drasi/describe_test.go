@@ -75,3 +75,17 @@ func TestDescribeComponent_NotFound_TypedError(t *testing.T) {
 		})
 	}
 }
+
+func TestDescribeComponentInContext_PassesContextFlag(t *testing.T) {
+	t.Parallel()
+
+	runner := &mockRunner{responses: []runnerResponse{{stdout: "ID: alerts\nKind: query\nStatus: Online\n"}}}
+	client := newTestClient(runner)
+
+	got, err := client.DescribeComponentInContext(context.Background(), "query", "alerts", "aks-dev")
+
+	require.NoError(t, err)
+	require.NotNil(t, got)
+	require.NotEmpty(t, runner.args)
+	assert.Equal(t, []string{"--context", "aks-dev", "describe", "query", "alerts"}, runner.args[0])
+}

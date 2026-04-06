@@ -8,7 +8,7 @@ package parity_test
 //   - All documented commands are registered and reachable.
 //   - --help exits with code 0 and outputs a usage block.
 //   - Absent-dependency commands fail with a known error code
-//     (ERR_NO_AUTH, ERR_NOT_IMPLEMENTED, ERR_NO_MANIFEST, etc.).
+//     (ERR_NO_AUTH, ERR_FORCE_REQUIRED, ERR_NO_MANIFEST, etc.).
 //   - JSON output schema is consistent for commands that support --output json.
 //
 // These tests do NOT require a live Azure connection, AKS cluster, or Drasi runtime.
@@ -184,21 +184,19 @@ func TestCommandMatrix_ProvisionFailsFast(t *testing.T) {
 		"provision must fail with ERR_NO_AUTH or ERR_DRASI_CLI_NOT_FOUND; got: %s", msg)
 }
 
-// TestCommandMatrix_StubCommandsReturnNotImplemented verifies that commands whose
-// full implementation is pending return ERR_NOT_IMPLEMENTED rather than panicking
-// or exiting silently.
-func TestCommandMatrix_StubCommandsReturnNotImplemented(t *testing.T) {
+// TestCommandMatrix_CommandsFailWithKnownCodes verifies command error surfaces are stable.
+func TestCommandMatrix_CommandsFailWithKnownCodes(t *testing.T) {
 	t.Parallel()
 
-	stubs := []commandCase{
-		{name: "status", args: []string{"status"}, wantErrCode: "ERR_NOT_IMPLEMENTED"},
-		{name: "logs", args: []string{"logs"}, wantErrCode: "ERR_NOT_IMPLEMENTED"},
-		{name: "diagnose", args: []string{"diagnose"}, wantErrCode: "ERR_NOT_IMPLEMENTED"},
-		{name: "teardown", args: []string{"teardown"}, wantErrCode: "ERR_NOT_IMPLEMENTED"},
-		{name: "upgrade", args: []string{"upgrade"}, wantErrCode: "ERR_NOT_IMPLEMENTED"},
+	cases := []commandCase{
+		{name: "status", args: []string{"status"}, wantErrCode: "ERR_DRASI_CLI_NOT_FOUND"},
+		{name: "logs", args: []string{"logs"}, wantErrCode: "ERR_VALIDATION_FAILED"},
+		{name: "diagnose", args: []string{"diagnose"}, wantErrCode: "ERR_DRASI_CLI_NOT_FOUND"},
+		{name: "teardown", args: []string{"teardown"}, wantErrCode: "ERR_FORCE_REQUIRED"},
+		{name: "upgrade", args: []string{"upgrade"}, wantErrCode: "ERR_FORCE_REQUIRED"},
 	}
 
-	for _, tc := range stubs {
+	for _, tc := range cases {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
@@ -210,7 +208,7 @@ func TestCommandMatrix_StubCommandsReturnNotImplemented(t *testing.T) {
 			root.SetArgs(tc.args)
 
 			err := root.Execute()
-			require.Error(t, err, "%s must return an error (stub command)", tc.name)
+			require.Error(t, err, "%s must return an error in dependency-absent test context", tc.name)
 			assert.Contains(t, err.Error(), tc.wantErrCode,
 				"%s must return %s; got: %s", tc.name, tc.wantErrCode, err.Error())
 		})

@@ -10,8 +10,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestStatusCommand_NotImplemented verifies the current stub returns ERR_NOT_IMPLEMENTED.
-func TestStatusCommand_NotImplemented(t *testing.T) {
+// TestStatusCommand_NoDrasiCLI verifies status fails with drasi CLI error when absent.
+func TestStatusCommand_NoDrasiCLI(t *testing.T) {
 	t.Parallel()
 	root := cmd.NewRootCommand()
 	root.SetOut(&bytes.Buffer{})
@@ -21,7 +21,12 @@ func TestStatusCommand_NotImplemented(t *testing.T) {
 	err := root.Execute()
 
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), output.ERR_NOT_IMPLEMENTED)
+	assert.True(t,
+		bytes.Contains([]byte(err.Error()), []byte(output.ERR_DRASI_CLI_NOT_FOUND)) ||
+			bytes.Contains([]byte(err.Error()), []byte(output.ERR_DRASI_CLI_VERSION)) ||
+			bytes.Contains([]byte(err.Error()), []byte(output.ERR_DRASI_CLI_ERROR)),
+		"status must fail with known drasi CLI code; got: %s", err.Error(),
+	)
 }
 
 // TestStatusCommand_Help verifies the command registers and shows usage.
@@ -42,22 +47,6 @@ func TestStatusCommand_Help(t *testing.T) {
 	assert.Empty(t, stderr.String())
 }
 
-// TestStatusCommand_EnvironmentFlagAccepted verifies --environment is a registered flag.
-func TestStatusCommand_EnvironmentFlagAccepted(t *testing.T) {
-	t.Parallel()
-	root := cmd.NewRootCommand()
-	root.SetOut(&bytes.Buffer{})
-	root.SetErr(&bytes.Buffer{})
-	root.SetArgs([]string{"status", "--environment", "dev"})
-
-	err := root.Execute()
-
-	require.Error(t, err)
-	assert.NotContains(t, err.Error(), "unknown flag",
-		"--environment must be accepted on status command")
-	assert.Contains(t, err.Error(), output.ERR_NOT_IMPLEMENTED)
-}
-
 // TestStatusCommand_OutputJSONFlagAccepted verifies --output json does not cause a flag parse error.
 func TestStatusCommand_OutputJSONFlagAccepted(t *testing.T) {
 	t.Parallel()
@@ -70,5 +59,29 @@ func TestStatusCommand_OutputJSONFlagAccepted(t *testing.T) {
 
 	require.Error(t, err)
 	assert.NotContains(t, err.Error(), "unknown flag")
-	assert.Contains(t, err.Error(), output.ERR_NOT_IMPLEMENTED)
+	assert.True(t,
+		bytes.Contains([]byte(err.Error()), []byte(output.ERR_DRASI_CLI_NOT_FOUND)) ||
+			bytes.Contains([]byte(err.Error()), []byte(output.ERR_DRASI_CLI_VERSION)) ||
+			bytes.Contains([]byte(err.Error()), []byte(output.ERR_DRASI_CLI_ERROR)),
+		"status must fail with known drasi CLI code; got: %s", err.Error(),
+	)
+}
+
+func TestStatusCommand_RootEnvironmentFlagAccepted(t *testing.T) {
+	t.Parallel()
+	root := cmd.NewRootCommand()
+	root.SetOut(&bytes.Buffer{})
+	root.SetErr(&bytes.Buffer{})
+	root.SetArgs([]string{"--environment", "dev", "status"})
+
+	err := root.Execute()
+
+	require.Error(t, err)
+	assert.NotContains(t, err.Error(), "unknown flag")
+	assert.True(t,
+		bytes.Contains([]byte(err.Error()), []byte(output.ERR_NO_AUTH)) ||
+			bytes.Contains([]byte(err.Error()), []byte(output.ERR_AKS_CONTEXT_NOT_FOUND)) ||
+			bytes.Contains([]byte(err.Error()), []byte(output.ERR_DRASI_CLI_NOT_FOUND)),
+		"status must fail with known auth/context/cli code; got: %s", err.Error(),
+	)
 }

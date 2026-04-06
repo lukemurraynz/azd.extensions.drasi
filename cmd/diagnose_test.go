@@ -10,8 +10,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestDiagnoseCommand_NotImplemented verifies the current stub returns ERR_NOT_IMPLEMENTED.
-func TestDiagnoseCommand_NotImplemented(t *testing.T) {
+// TestDiagnoseCommand_NoDrasiCLI verifies diagnose fails when drasi CLI is absent.
+func TestDiagnoseCommand_NoDrasiCLI(t *testing.T) {
 	t.Parallel()
 	root := cmd.NewRootCommand()
 	root.SetOut(&bytes.Buffer{})
@@ -21,7 +21,14 @@ func TestDiagnoseCommand_NotImplemented(t *testing.T) {
 	err := root.Execute()
 
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), output.ERR_NOT_IMPLEMENTED)
+	assert.True(t,
+		bytes.Contains([]byte(err.Error()), []byte(output.ERR_AKS_CONTEXT_NOT_FOUND)) ||
+			bytes.Contains([]byte(err.Error()), []byte(output.ERR_DRASI_CLI_NOT_FOUND)) ||
+			bytes.Contains([]byte(err.Error()), []byte(output.ERR_DRASI_CLI_VERSION)) ||
+			bytes.Contains([]byte(err.Error()), []byte(output.ERR_DRASI_CLI_ERROR)) ||
+			bytes.Contains([]byte(err.Error()), []byte(output.ERR_DAPR_NOT_READY)),
+		"diagnose must fail with known context/drasi code; got: %s", err.Error(),
+	)
 }
 
 // TestDiagnoseCommand_Help verifies the command registers and shows usage.
@@ -42,22 +49,6 @@ func TestDiagnoseCommand_Help(t *testing.T) {
 	assert.Empty(t, stderr.String())
 }
 
-// TestDiagnoseCommand_EnvironmentFlagAccepted verifies --environment does not cause a flag parse error.
-func TestDiagnoseCommand_EnvironmentFlagAccepted(t *testing.T) {
-	t.Parallel()
-	root := cmd.NewRootCommand()
-	root.SetOut(&bytes.Buffer{})
-	root.SetErr(&bytes.Buffer{})
-	root.SetArgs([]string{"diagnose", "--environment", "dev"})
-
-	err := root.Execute()
-
-	require.Error(t, err)
-	assert.NotContains(t, err.Error(), "unknown flag",
-		"--environment must be accepted on diagnose command")
-	assert.Contains(t, err.Error(), output.ERR_NOT_IMPLEMENTED)
-}
-
 // TestDiagnoseCommand_OutputJSONFlagAccepted verifies --output json does not cause a flag parse error.
 func TestDiagnoseCommand_OutputJSONFlagAccepted(t *testing.T) {
 	t.Parallel()
@@ -70,5 +61,35 @@ func TestDiagnoseCommand_OutputJSONFlagAccepted(t *testing.T) {
 
 	require.Error(t, err)
 	assert.NotContains(t, err.Error(), "unknown flag")
-	assert.Contains(t, err.Error(), output.ERR_NOT_IMPLEMENTED)
+	assert.True(t,
+		bytes.Contains([]byte(err.Error()), []byte(output.ERR_AKS_CONTEXT_NOT_FOUND)) ||
+			bytes.Contains([]byte(err.Error()), []byte(output.ERR_NO_AUTH)) ||
+			bytes.Contains([]byte(err.Error()), []byte(output.ERR_DRASI_CLI_NOT_FOUND)) ||
+			bytes.Contains([]byte(err.Error()), []byte(output.ERR_DRASI_CLI_VERSION)) ||
+			bytes.Contains([]byte(err.Error()), []byte(output.ERR_DRASI_CLI_ERROR)) ||
+			bytes.Contains([]byte(err.Error()), []byte(output.ERR_DAPR_NOT_READY)),
+		"diagnose must fail with known context/auth/drasi code; got: %s", err.Error(),
+	)
+}
+
+func TestDiagnoseCommand_RootEnvironmentFlagAccepted(t *testing.T) {
+	t.Parallel()
+	root := cmd.NewRootCommand()
+	root.SetOut(&bytes.Buffer{})
+	root.SetErr(&bytes.Buffer{})
+	root.SetArgs([]string{"--environment", "dev", "diagnose"})
+
+	err := root.Execute()
+
+	require.Error(t, err)
+	assert.NotContains(t, err.Error(), "unknown flag")
+	assert.True(t,
+		bytes.Contains([]byte(err.Error()), []byte(output.ERR_AKS_CONTEXT_NOT_FOUND)) ||
+			bytes.Contains([]byte(err.Error()), []byte(output.ERR_NO_AUTH)) ||
+			bytes.Contains([]byte(err.Error()), []byte(output.ERR_DRASI_CLI_NOT_FOUND)) ||
+			bytes.Contains([]byte(err.Error()), []byte(output.ERR_DRASI_CLI_VERSION)) ||
+			bytes.Contains([]byte(err.Error()), []byte(output.ERR_DRASI_CLI_ERROR)) ||
+			bytes.Contains([]byte(err.Error()), []byte(output.ERR_DAPR_NOT_READY)),
+		"diagnose must fail with known auth/context/drasi code; got: %s", err.Error(),
+	)
 }

@@ -73,7 +73,11 @@ func TestDeployCommand_EnvironmentFlagAccepted(t *testing.T) {
 	require.Error(t, err)
 	assert.NotContains(t, err.Error(), "unknown flag",
 		"--environment must be a registered flag on deploy command")
-	assert.Contains(t, err.Error(), output.ERR_NO_AUTH)
+	assert.True(t,
+		bytes.Contains([]byte(err.Error()), []byte(output.ERR_NO_AUTH)) ||
+			bytes.Contains([]byte(err.Error()), []byte(output.ERR_NO_MANIFEST)),
+		"deploy must fail with known auth/manifest code; got: %s", err.Error(),
+	)
 }
 
 // TestDeployCommand_NoAuth_ReturnsError verifies that without AZD_SERVER the command returns ERR_NO_AUTH.

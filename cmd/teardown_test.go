@@ -10,7 +10,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestTeardownCommand_NotImplemented(t *testing.T) {
+func TestTeardownCommand_ForceRequired(t *testing.T) {
+	t.Parallel()
 	root := cmd.NewRootCommand()
 	root.SetOut(&bytes.Buffer{})
 	root.SetErr(&bytes.Buffer{})
@@ -19,7 +20,21 @@ func TestTeardownCommand_NotImplemented(t *testing.T) {
 	err := root.Execute()
 
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), output.ERR_NOT_IMPLEMENTED)
+	assert.Contains(t, err.Error(), output.ERR_FORCE_REQUIRED)
+}
+
+func TestTeardownCommand_ForceFlagAccepted(t *testing.T) {
+	t.Parallel()
+	root := cmd.NewRootCommand()
+	root.SetOut(&bytes.Buffer{})
+	root.SetErr(&bytes.Buffer{})
+	root.SetArgs([]string{"teardown", "--force"})
+
+	err := root.Execute()
+
+	require.Error(t, err)
+	assert.NotContains(t, err.Error(), "unknown flag")
+	assert.Contains(t, err.Error(), output.ERR_NO_AUTH)
 }
 
 func TestTeardownCommand_Help(t *testing.T) {

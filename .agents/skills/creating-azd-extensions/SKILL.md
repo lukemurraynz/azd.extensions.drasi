@@ -2,8 +2,8 @@
 name: creating-azd-extensions
 description: >-
   Author, build, and publish Azure Developer CLI (azd) extensions in Go. USE FOR: creating new azd extensions, implementing lifecycle hooks, exposing custom CLI commands, building MCP server capabilities, writing extension.yaml manifests, cross-platform build scripts, distributing via registry or local sources.
-version: 1.3.0
-lastUpdated: 2026-04-06
+version: 1.5.0
+lastUpdated: 2026-04-07
 ---
 
 # Creating Azure Developer CLI Extensions
@@ -20,6 +20,23 @@ Build Go binaries that extend `azd` with custom commands, lifecycle hooks, and M
 - ✅ **`t.Parallel()` restriction for mutating command tests** — tests that mutate package-level vars must NOT call `t.Parallel()`
 - ✅ **`//go:embed all:templates` requirement** — the `all:` prefix is mandatory to include dotfiles in embedded FS
 - ✅ **`commandError` pattern** — error code embedded in `.Error()` string; `writeCommandError` vs `notImplemented` distinction
+
+## What's New in v1.4.0 (2026-04-06)
+
+- ✅ **Environment-aware operational commands** — for status/logs/diagnose, root `--environment` now resolves `AZURE_AKS_CONTEXT` from azd env state and routes Drasi/Kubectl calls to the correct cluster context.
+- ✅ **Context-capable Drasi wrappers** — add `ListComponentsInContext` / `DescribeComponentInContext` so CLI wrappers can prepend `--context` deterministically instead of relying on ambient kube context.
+- ✅ **Force-gated destructive/runtime operations** — `teardown` and `upgrade` require `--force`; return `ERR_FORCE_REQUIRED` when omitted.
+- ✅ **No-stub production rule enforcement** — remove `ERR_NOT_IMPLEMENTED` runtime paths from shipping command surface; keep placeholders out of non-test code.
+- ✅ **Command testability seam pattern (recommended)** — use command-local injectable factories (e.g., `newLogsDrasiClient`, `newStatusDrasiClient`) to test success/error/output branches without live azd or Drasi.
+- ✅ **Toolchain preflight for CI/dev** — verify `go`, `gopls`, and `golangci-lint` are installed before claiming build/test validation; fail closed with explicit blocker reporting when missing.
+
+## What's New in v1.5.0 (2026-04-07)
+
+- ✅ **Windows PATH persistence pitfall** — Go may be installed (`C:\Program Files\Go\bin\go.exe`) but absent from the active shell PATH. Always verify command resolution, then patch session PATH before build/test.
+- ✅ **Persistent user PATH remediation** — when needed, set user PATH via `[Environment]::SetEnvironmentVariable("Path", ..., "User")` and include `C:\Program Files\Go\bin`; re-open shells to inherit.
+- ✅ **Preflight commands (mandatory before reporting failures):** `Get-Command go`, `go version`, `go env GOPATH GOROOT`, and PATH inspection. Do not conclude “Go not installed” from `where go` alone.
+- ✅ **Runtime-verified compatibility checks** — after toolchain repair, run both `go test ./...` and `go build ./...` plus extension `build.ps1` to validate cross-arch artifact generation.
+- ✅ **Drasi CLI version output normalization** — parse `drasi version` outputs that include labels/prefixes (e.g., `Drasi CLI version: 0.10.0`, `v0.10.0`) before semver comparison.
 
 ## What's New in v1.2.0 (2026-04-05)
 

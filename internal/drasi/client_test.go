@@ -52,6 +52,8 @@ func TestClient_CheckVersion_PassesAtMinimumVersion(t *testing.T) {
 		version string
 	}{
 		{name: "minimum version accepted", version: "0.10.0"},
+		{name: "prefixed version accepted", version: "v0.10.0"},
+		{name: "labelled version accepted", version: "Drasi CLI version: 0.10.0"},
 	}
 
 	for _, tt := range tests {

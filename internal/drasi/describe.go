@@ -30,7 +30,21 @@ var ErrComponentNotFound error = &ComponentNotFoundError{}
 
 // DescribeComponent returns full detail about a specific component.
 func (c *Client) DescribeComponent(ctx context.Context, kind, id string) (*ComponentDetail, error) {
-	stdout, stderr, exitCode, err := c.runner.Run(ctx, "describe", kind, id)
+	return c.describeComponent(ctx, kind, id, "")
+}
+
+// DescribeComponentInContext returns full detail about a specific component against a specific kube context.
+func (c *Client) DescribeComponentInContext(ctx context.Context, kind, id, kubeContext string) (*ComponentDetail, error) {
+	return c.describeComponent(ctx, kind, id, kubeContext)
+}
+
+func (c *Client) describeComponent(ctx context.Context, kind, id, kubeContext string) (*ComponentDetail, error) {
+	args := []string{"describe", kind, id}
+	if strings.TrimSpace(kubeContext) != "" {
+		args = append([]string{"--context", kubeContext}, args...)
+	}
+
+	stdout, stderr, exitCode, err := c.runner.Run(ctx, args...)
 	if err != nil {
 		return nil, err
 	}

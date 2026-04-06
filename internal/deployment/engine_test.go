@@ -119,13 +119,13 @@ func TestEngine_Deploy_NoOp_WhenHashUnchanged(t *testing.T) {
 	t.Parallel()
 
 	h := newEngineHarness()
-	// Pre-populate state with the same hash the engine would compute
-	// manifestToHashes uses ID as hash placeholder, so hash == ID
-	h.mockState.store["DRASI_HASH_SOURCE_alerts-source"] = "alerts-source"
-
 	manifest := &config.ResolvedManifest{
 		Sources: []config.Source{{ID: "alerts-source"}},
 	}
+	computed := manifestToHashes(manifest)
+	require.Len(t, computed, 1)
+	h.mockState.store[computed[0].StateKey()] = computed[0].Hash
+
 	err := h.engine.Deploy(context.Background(), manifest, DeployOptions{Environment: "test-env"})
 	require.NoError(t, err)
 
@@ -137,7 +137,6 @@ func TestEngine_Deploy_DeleteThenApply_WhenHashChanged(t *testing.T) {
 	t.Parallel()
 
 	h := newEngineHarness()
-	// Pre-populate state with a different hash
 	h.mockState.store["DRASI_HASH_SOURCE_alerts-source"] = "old-hash"
 
 	manifest := &config.ResolvedManifest{

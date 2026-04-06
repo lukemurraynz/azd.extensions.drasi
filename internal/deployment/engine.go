@@ -2,6 +2,8 @@ package deployment
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"os"
 
@@ -171,21 +173,30 @@ func marshalComponent(action ComponentAction, manifest *config.ResolvedManifest)
 }
 
 // manifestToHashes converts a ResolvedManifest to a flat slice of ComponentHash values.
-// The hash is computed from the component ID as a stable placeholder; real content
-// hashing will be layered on when KV-ref translation is implemented.
+// Hashes are computed from canonical YAML content so unchanged components become no-ops.
 func manifestToHashes(manifest *config.ResolvedManifest) []config.ComponentHash {
 	var hashes []config.ComponentHash
 	for _, s := range manifest.Sources {
-		hashes = append(hashes, config.ComponentHash{Kind: "source", ID: s.ID, Hash: s.ID})
+		hashes = append(hashes, config.ComponentHash{Kind: "source", ID: s.ID, Hash: hashYAML(s)})
 	}
 	for _, q := range manifest.Queries {
-		hashes = append(hashes, config.ComponentHash{Kind: "continuousquery", ID: q.ID, Hash: q.ID})
+		hashes = append(hashes, config.ComponentHash{Kind: "continuousquery", ID: q.ID, Hash: hashYAML(q)})
 	}
 	for _, m := range manifest.Middlewares {
-		hashes = append(hashes, config.ComponentHash{Kind: "middleware", ID: m.ID, Hash: m.ID})
+		hashes = append(hashes, config.ComponentHash{Kind: "middleware", ID: m.ID, Hash: hashYAML(m)})
 	}
 	for _, r := range manifest.Reactions {
-		hashes = append(hashes, config.ComponentHash{Kind: "reaction", ID: r.ID, Hash: r.ID})
+		hashes = append(hashes, config.ComponentHash{Kind: "reaction", ID: r.ID, Hash: hashYAML(r)})
 	}
 	return hashes
+}
+
+func hashYAML(v any) string {
+	raw, err := yaml.Marshal(v)
+	if err != nil {
+		// yaml.Marshal should be deterministic for config model structs.
+		raw = []byte(fmt.Sprintf("%#v", v))
+	}
+	digest := sha256.Sum256(raw)
+	return hex.EncodeToString(digest[:])
 }

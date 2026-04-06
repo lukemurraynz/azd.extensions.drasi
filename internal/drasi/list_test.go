@@ -42,6 +42,20 @@ func TestListComponents_ParsesTabularOutput(t *testing.T) {
 	}
 }
 
+func TestListComponentsInContext_PassesContextFlag(t *testing.T) {
+	t.Parallel()
+
+	runner := &mockRunner{responses: []runnerResponse{{stdout: "ID KIND STATUS\nalerts query Online\n"}}}
+	client := newTestClient(runner)
+
+	got, err := client.ListComponentsInContext(context.Background(), "query", "aks-dev")
+
+	require.NoError(t, err)
+	require.Len(t, got, 1)
+	require.NotEmpty(t, runner.args)
+	assert.Equal(t, []string{"--context", "aks-dev", "list", "query"}, runner.args[0])
+}
+
 func TestListComponents_EmptyList_ReturnsEmptySlice(t *testing.T) {
 	t.Parallel()
 
