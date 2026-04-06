@@ -3,6 +3,7 @@ active: true
 iteration: 3
 completion_promise: "VERIFIED"
 initial_completion_promise: "DONE"
+verification_attempt_id: "9113c9b7-8b83-4d36-b445-d5b42bc776a0"
 started_at: "2026-04-06T10:10:52.887Z"
 session_id: "ses_29dbe3d09ffe6OjCcmM7zrG1wT"
 ultrawork: true

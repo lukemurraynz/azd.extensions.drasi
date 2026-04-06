@@ -94,6 +94,7 @@ description: >-
 | [AgentEval](../agenteval/SKILL.md)                       | **Required.** Evaluation, red team, and responsible AI testing for MAF agents |
 | [MAF Agentic Patterns](../maf-agentic-patterns/SKILL.md) | Orchestration patterns (handoff, group chat, Magentic-One)                    |
 | [MAF AI Integration](../maf-ai-integration/SKILL.md)     | AI client setup, model selection, tool calling                                |
+| microsoft-foundry (user-level)                           | Foundry operational lifecycle: deploy, invoke, observe, trace, troubleshoot   |
 
 > **Cross-reference:** When creating or modifying MAF agents, always run AgentEval functional evaluation
 > and red team scans before deployment. The [create-agent](actions/create-agent.md) action includes
