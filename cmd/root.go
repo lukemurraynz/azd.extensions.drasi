@@ -7,8 +7,16 @@ const (
 	metadataSchemaVersion = "1.0"
 )
 
+var extensionVersion = "dev"
+
+func SetVersion(version string) {
+	extensionVersion = version
+}
+
 // NewRootCommand builds the cobra command tree for azd drasi.
 func NewRootCommand() *cobra.Command {
+	var outputFormat string
+
 	rootCmd := &cobra.Command{
 		Use:           "azd drasi <command> [options]",
 		Short:         "Manage Drasi reactive data pipeline workloads",
@@ -16,12 +24,13 @@ func NewRootCommand() *cobra.Command {
 		SilenceErrors: true,
 	}
 
-	rootCmd.PersistentFlags().String("output", "table", "Output format: table or json")
+	rootCmd.PersistentFlags().StringVar(&outputFormat, "output", "table", "Output format: table or json")
 	rootCmd.PersistentFlags().Bool("debug", false, "Enable verbose debug logging")
 	rootCmd.PersistentFlags().StringP("environment", "e", "", "Name of the azd environment to use")
 
 	rootCmd.AddCommand(newListenCommand())
 	rootCmd.AddCommand(newMetadataCommand())
+	rootCmd.AddCommand(newVersionCommand(&outputFormat))
 	rootCmd.AddCommand(newValidateCommand())
 	rootCmd.AddCommand(newInitCommand())
 	rootCmd.AddCommand(newProvisionCommand())

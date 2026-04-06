@@ -25,6 +25,7 @@ func TestNewRootCommand(t *testing.T) {
 
 	hasListen := false
 	hasMetadata := false
+	hasVersion := false
 	for _, subCmd := range rootCmd.Commands() {
 		if subCmd.Name() == "listen" {
 			hasListen = true
@@ -38,6 +39,12 @@ func TestNewRootCommand(t *testing.T) {
 				t.Fatal("expected metadata subcommand to be hidden")
 			}
 		}
+		if subCmd.Name() == "version" {
+			hasVersion = true
+			if subCmd.Hidden {
+				t.Fatal("expected version subcommand to be visible")
+			}
+		}
 	}
 
 	if !hasListen {
@@ -46,5 +53,9 @@ func TestNewRootCommand(t *testing.T) {
 
 	if !hasMetadata {
 		t.Fatal("expected metadata subcommand to be registered")
+	}
+
+	if !hasVersion {
+		t.Fatal("expected version subcommand to be registered")
 	}
 }

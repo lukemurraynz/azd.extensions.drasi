@@ -102,3 +102,4 @@ infra/main.json
 infra/modules/*.json
 internal/scaffold/templates/*/infra/main.json
 internal/scaffold/templates/*/infra/modules/*.json
+/.tmp

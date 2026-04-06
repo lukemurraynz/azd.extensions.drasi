@@ -89,3 +89,21 @@ func TestDescribeComponentInContext_PassesContextFlag(t *testing.T) {
 	require.NotEmpty(t, runner.args)
 	assert.Equal(t, []string{"--context", "aks-dev", "describe", "query", "alerts"}, runner.args[0])
 }
+
+func TestDescribeComponentInContext_UnknownContextFlag_FallsBackWithoutContext(t *testing.T) {
+	t.Parallel()
+
+	runner := &mockRunner{responses: []runnerResponse{
+		{stderr: "Error: unknown flag: --context", exitCode: 1},
+		{stdout: "ID: alerts\nKind: query\nStatus: Online\n"},
+	}}
+	client := newTestClient(runner)
+
+	got, err := client.DescribeComponentInContext(context.Background(), "query", "alerts", "aks-dev")
+
+	require.NoError(t, err)
+	require.NotNil(t, got)
+	require.Len(t, runner.args, 2)
+	assert.Equal(t, []string{"--context", "aks-dev", "describe", "query", "alerts"}, runner.args[0])
+	assert.Equal(t, []string{"describe", "query", "alerts"}, runner.args[1])
+}

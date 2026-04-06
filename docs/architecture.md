@@ -2,35 +2,46 @@
 
 This document describes how the `azd-drasi` extension is structured and how its main flows work.
 
-## Component diagram
+## Diagram artifact
+
+The canonical architecture diagram is maintained as a draw.io file:
+
+- [docs/diagrams/azd-drasi-solution.drawio](diagrams/azd-drasi-solution.drawio)
+
+It currently contains two sheets:
+
+- **System Overview**
+- **Deploy Flow**
+
+## Component diagram (text view)
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────┐
 │ Developer workstation                                                    │
 │                                                                          │
-│  ┌─────────────┐   gRPC (AZD_SERVER)   ┌──────────────────────────┐    │
-│  │ azd-drasi   │ ─────────────────────► │ azd host process         │    │
-│  │ (this ext.) │ ◄───────────────────── │  - environment service   │    │
-│  └──────┬──────┘                        │  - provisioning service  │    │
-│         │                               └──────────────────────────┘    │
+│  ┌─────────────────────────┐ gRPC (AZD_SERVER) ┌──────────────────┐    │
+│  │ azd-drasi extension     │───────────────────►│ azd host         │    │
+│  │ (gRPC)                  │◄───────────────────│                  │    │
+│  └──────────┬──────────────┘                    └──────────────────┘    │
+│             │                                                           │
 │         │ os.Exec (subprocess)                                           │
 │         ▼                                                                │
-│  ┌─────────────┐                                                         │
-│  │  drasi CLI  │ ────────── kubectl / HTTP ──────────────────────────┐  │
-│  └─────────────┘                                                      │  │
+│  ┌─────────────┐                                                        │
+│  │ Drasi CLI   │ ────────── kubectl / HTTP ──────────────────────────┐ │
+│  └─────────────┘                                                      │ │
 └───────────────────────────────────────────────────────────────────────┼──┘
                                                                         │
-                                        Azure                           │
+                                         Azure                           │
                                                                         ▼
                               ┌──────────────────────────────────────────┐
-                              │  AKS cluster                             │
+                              │ AKS Runtime                              │
                               │  ┌────────────────────────────────────┐  │
-                              │  │  drasi-system namespace             │  │
-                              │  │   drasi-api (Sources, Queries,      │  │
-                              │  │             Reactions, Middleware)  │  │
-                              │  │   Dapr runtime (sidecar)            │  │
+                              │  │ drasi-system namespace              │  │
+                              │  │ drasi-api + Dapr sidecars           │  │
                               │  └────────────────────────────────────┘  │
                               └──────────────────────────────────────────┘
+
+                               Key Vault | Log Analytics | Managed Identity
 ```
 
 Key boundaries:
@@ -39,7 +50,15 @@ Key boundaries:
 - The extension never calls Azure APIs directly. Provisioning delegates to `azd` lifecycle hooks and Bicep. Key Vault data-plane access is handled at deploy time by translating secret references into Kubernetes Secrets before handing off to the Drasi CLI.
 - The Drasi CLI (`drasi`) is a subprocess. The extension invokes it with `os.Exec`, captures stdout/stderr, and surfaces errors using structured error codes.
 
-## Provision flow
+## Deploy flow (summary)
+
+The **Deploy Flow** sheet uses three top-level phases:
+
+1. Provision (Bicep/Terraform)
+2. Deploy (azd-drasi + CLI)
+3. Configure Sources/Queries
+
+## Provision flow (detailed)
 
 ```
 azd drasi provision

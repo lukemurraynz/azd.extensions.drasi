@@ -33,6 +33,21 @@ jobs:
           go-version-file: go.mod
           cache: true
 
+      - name: Validate release version inputs
+        shell: bash
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          test "$(tr -d '[:space:]' < version.txt)" = "${VERSION}"
+          python3 - <<'PY'
+          import sys, yaml
+          version = sys.argv[1]
+          with open('extension.yaml', 'r', encoding='utf-8') as f:
+              manifest = yaml.safe_load(f)
+          if str(manifest.get('version')) != version:
+              raise SystemExit(f"extension.yaml version {manifest.get('version')} does not match tag {version}")
+          PY
+          "${VERSION}"
+
       - name: Build all targets
         shell: bash
         run: |
@@ -43,33 +58,41 @@ jobs:
       - name: Package archives
         shell: bash
         run: |
+          mkdir -p dist
           cd bin
 
           # windows/amd64
-          zip windows.zip windows/amd64/azd-drasi.exe
+          zip ../dist/azd-drasi-windows-amd64.zip windows/amd64/azd-drasi.exe
 
           # linux/amd64
-          tar -czf linux-amd64.tar.gz -C linux/amd64 azd-drasi
+          tar -czf ../dist/azd-drasi-linux-amd64.tar.gz -C linux/amd64 azd-drasi
 
           # linux/arm64
-          tar -czf linux-arm64.tar.gz -C linux/arm64 azd-drasi
+          tar -czf ../dist/azd-drasi-linux-arm64.tar.gz -C linux/arm64 azd-drasi
 
           # darwin/amd64
-          tar -czf darwin-amd64.tar.gz -C darwin/amd64 azd-drasi
+          tar -czf ../dist/azd-drasi-darwin-amd64.tar.gz -C darwin/amd64 azd-drasi
 
           # darwin/arm64
-          tar -czf darwin-arm64.tar.gz -C darwin/arm64 azd-drasi
+          tar -czf ../dist/azd-drasi-darwin-arm64.tar.gz -C darwin/arm64 azd-drasi
+
+      - name: Generate registry.json
+        shell: bash
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          python3 scripts/generate-registry.py "${VERSION}" "${GITHUB_REPOSITORY}" "${GITHUB_REF_NAME}" dist
 
       - name: Upload archives
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: release-archives
           path: |
-            bin/windows.zip
-            bin/linux-amd64.tar.gz
-            bin/linux-arm64.tar.gz
-            bin/darwin-amd64.tar.gz
-            bin/darwin-arm64.tar.gz
+            dist/azd-drasi-windows-amd64.zip
+            dist/azd-drasi-linux-amd64.tar.gz
+            dist/azd-drasi-linux-arm64.tar.gz
+            dist/azd-drasi-darwin-amd64.tar.gz
+            dist/azd-drasi-darwin-arm64.tar.gz
+            dist/registry.json
           if-no-files-found: error
 
   create-release:
@@ -93,15 +116,15 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          VERSION="${GITHUB_REF_NAME#v}"
           gh release create "${GITHUB_REF_NAME}" \
             --title "Drasi azd Extension ${GITHUB_REF_NAME}" \
             --generate-notes \
-            dist/windows.zip \
-            dist/linux-amd64.tar.gz \
-            dist/linux-arm64.tar.gz \
-            dist/darwin-amd64.tar.gz \
-            dist/darwin-arm64.tar.gz
+            dist/azd-drasi-windows-amd64.zip \
+            dist/azd-drasi-linux-amd64.tar.gz \
+            dist/azd-drasi-linux-arm64.tar.gz \
+            dist/azd-drasi-darwin-amd64.tar.gz \
+            dist/azd-drasi-darwin-arm64.tar.gz \
+            dist/registry.json
 
   update-registry:
     name: Update extension registry

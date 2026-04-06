@@ -40,6 +40,7 @@ func (c *Client) DescribeComponentInContext(ctx context.Context, kind, id, kubeC
 
 func (c *Client) describeComponent(ctx context.Context, kind, id, kubeContext string) (*ComponentDetail, error) {
 	args := []string{"describe", kind, id}
+	argsWithoutContext := args
 	if strings.TrimSpace(kubeContext) != "" {
 		args = append([]string{"--context", kubeContext}, args...)
 	}
@@ -49,10 +50,23 @@ func (c *Client) describeComponent(ctx context.Context, kind, id, kubeContext st
 		return nil, err
 	}
 	if exitCode != 0 {
-		if strings.Contains(stderr, "not found") {
-			return nil, &ComponentNotFoundError{Kind: kind, ID: id}
+		if strings.TrimSpace(kubeContext) != "" && isUnsupportedContextFlagError(stderr) {
+			stdout, stderr, exitCode, err = c.runner.Run(ctx, argsWithoutContext...)
+			if err != nil {
+				return nil, err
+			}
+			if exitCode != 0 {
+				if strings.Contains(stderr, "not found") {
+					return nil, &ComponentNotFoundError{Kind: kind, ID: id}
+				}
+				return nil, fmt.Errorf("drasi describe %s %s: %s", kind, id, strings.TrimSpace(stderr))
+			}
+		} else {
+			if strings.Contains(stderr, "not found") {
+				return nil, &ComponentNotFoundError{Kind: kind, ID: id}
+			}
+			return nil, fmt.Errorf("drasi describe %s %s: %s", kind, id, strings.TrimSpace(stderr))
 		}
-		return nil, fmt.Errorf("drasi describe %s %s: %s", kind, id, strings.TrimSpace(stderr))
 	}
 
 	detail := &ComponentDetail{}
