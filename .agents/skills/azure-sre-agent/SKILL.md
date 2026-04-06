@@ -40,6 +40,11 @@ Use this skill when the user asks to:
 - Introduce governance controls (approval gates, audits, hook policies).
 - Productionize existing SRE Agent proof-of-concepts.
 
+Specialization boundary:
+
+- This skill is for specialized SRE incident response and operations workflows.
+- It is not a general-purpose assistant skill.
+
 ## Model Provider Preference
 
 When this skill recommends or configures LLM providers:
@@ -183,20 +188,26 @@ Use these defaults unless the user requests otherwise:
 
 1. **Memory-first triage**
    - Search memory for similar incidents before new diagnostics.
-2. **Structured incident reporting**
+2. **Multi-source RCA evidence required**
+   - For incident analysis, correlate evidence across logs, metrics, recent code or config changes, and deployment or change records when available.
+   - Distinguish symptoms, likely causes, and confirmed root cause in outputs.
+3. **Structured incident reporting**
    - Use consistent sections: Summary, Impact, Timeline, Evidence, Root Cause, Remediation, Action Items, References.
-3. **Idempotent setup scripts**
+4. **Idempotent setup scripts**
    - Prefer upsert behavior and safe re-runs for post-provision steps.
-4. **Eventual consistency aware**
+5. **Eventual consistency aware**
    - Add bounded retries for APIs that may not be immediately ready.
-5. **Verification pass required**
+6. **Verification pass required**
    - Verify all configured objects (KB, subagents, connectors, response plans, tasks) before handoff.
-6. **Environment-neutral examples**
+7. **Environment-neutral examples**
    - Never hardcode personal email, tenant-specific IDs, or one-off resource names in reusable templates.
-7. **KT severity policy**
+8. **KT severity policy**
    - Full KT (`SA -> PA -> DA -> PPA`) for P1/P2 incidents.
    - Lightweight KT for P3/P4 unless elevated by risk.
-8. **Bundle-first capability changes**
+9. **Autonomy ladder and approvals**
+   - Use this escalation of control: assistive investigation, operator-approved remediation proposals, then tightly bounded autonomous remediation.
+   - Do not move to a higher autonomy level unless RBAC, approval points, escalation paths, and rollback steps are explicit.
+10. **Bundle-first capability changes**
    - Add or modify capability in bundles, not in core skill body.
    - Register new capability packs in `bundles/catalog.yaml`.
 
@@ -247,6 +258,18 @@ When producing deployment recommendations or runbooks with this skill:
 4. Include verification steps and expected evidence.
 5. Separate facts from assumptions.
 6. When KT is required, include `Situation Appraisal`, `Problem Analysis`, `Decision Analysis`, and `Potential Problem Analysis` headings explicitly.
+7. For high-impact write actions, include explicit approval point, RBAC boundary, escalation path, and rollback path.
+8. For incident RCA outputs, reference correlated evidence from logs, metrics, change history, and deployment records when available.
+
+## Post-incident feedback loop
+
+After remediation or escalation, capture lightweight operational feedback:
+
+1. Record incident outcome (`resolved`, `escalated`, `partial`).
+2. Record whether RCA was confirmed, partially confirmed, or not confirmed.
+3. Record whether proposed or executed remediation was effective.
+4. Add reusable learnings to response plans, scheduled tasks, or KT templates.
+5. Track repeated failure patterns for bundle updates and governance review.
 
 ## Source and Currency Policy
 

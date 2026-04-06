@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os/exec"
+	"strings"
 	"time"
 
 	"github.com/azure/azure-dev/cli/azd/pkg/azdext"
@@ -177,15 +178,47 @@ func defaultRunProvision(cmd *cobra.Command, _ []string) error {
 }
 
 // runDrasiInit runs `drasi init` against the target AKS cluster.
+//
+// NOTE: `drasi init` (v0.10.0+) does not accept a --context flag; it always uses the
+// active kubectl context. If aksContext is non-empty and differs from the current context,
+// we switch to it via `kubectl config use-context` before calling init.
+// We also call `drasi env kube` to register the current kubectl context as the active
+// Drasi environment so that the drasi CLI connects to the right cluster.
 func runDrasiInit(ctx context.Context, aksContext string, usePrivateAcr bool, acrLoginServer string) error {
-	args := []string{"init"}
 	if aksContext != "" {
-		args = append(args, "--context", aksContext)
+		if err := switchKubectlContext(ctx, aksContext); err != nil {
+			return fmt.Errorf("switching kubectl context to %s: %w", aksContext, err)
+		}
 	}
+	// Register the current kubectl context as the active Drasi environment.
+	// This ensures `drasi init` (and subsequent drasi commands) target the right cluster
+	// regardless of any previously registered drasi environments.
+	if err := runDrasiCommand(ctx, "env", "kube"); err != nil {
+		return fmt.Errorf("registering drasi environment from kubectl context: %w", err)
+	}
+	args := []string{"init"}
 	if usePrivateAcr && acrLoginServer != "" {
 		args = append(args, "--registry", acrLoginServer)
 	}
 	return runDrasiCommand(ctx, args...)
+}
+
+// switchKubectlContext sets the active kubectl context if it differs from the current one.
+func switchKubectlContext(ctx context.Context, contextName string) error {
+	kubectlPath, err := exec.LookPath("kubectl")
+	if err != nil {
+		return fmt.Errorf("kubectl not found on PATH: %w", err)
+	}
+	// Check current context first to avoid a no-op switch.
+	cur, err := exec.CommandContext(ctx, kubectlPath, "config", "current-context").Output()
+	if err == nil && strings.TrimSpace(string(cur)) == contextName {
+		return nil // already on the right context
+	}
+	cmd := exec.CommandContext(ctx, kubectlPath, "config", "use-context", contextName)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("kubectl config use-context %s: %w\n%s", contextName, err, out)
+	}
+	return nil
 }
 
 // applyDefaultProviders applies the source and reaction provider manifests required by

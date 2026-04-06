@@ -23,4 +23,16 @@ module drasiInfra 'modules/drasi-infra.bicep' = {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Outputs — azd maps SCREAMING_SNAKE_CASE output names to environment variables
+// These are read by azd drasi provision and azd drasi deploy commands.
+// ---------------------------------------------------------------------------
+output AZURE_RESOURCE_GROUP string = resourceGroup().name
+output AZURE_AKS_CLUSTER_NAME string = drasiInfra.outputs.aksClusterName
+// AZURE_AKS_CONTEXT is the kubeconfig context name; for AKS it matches the cluster name.
+output AZURE_AKS_CONTEXT string = drasiInfra.outputs.aksClusterName
+output AZURE_KEY_VAULT_NAME string = drasiInfra.outputs.keyVaultName
+output AZURE_KEY_VAULT_URI string = drasiInfra.outputs.keyVaultUri
+output AZURE_LOG_ANALYTICS_WORKSPACE_ID string = drasiInfra.outputs.logAnalyticsWorkspaceId
+output AZURE_UAMI_CLIENT_ID string = drasiInfra.outputs.uamiClientId
 output drasiResourceGroupName string = resourceGroup().name
