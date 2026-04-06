@@ -144,7 +144,7 @@ jobs:
 
       - name: Upload timing artifact
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6b4eb7e4b5ef41b7e1a0d2d2b1e8e # v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: e2e-timing-${{ github.run_id }}
           path: /tmp/e2e-timing.json
