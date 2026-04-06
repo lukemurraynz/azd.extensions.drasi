@@ -93,3 +93,12 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
+
+# =============================================================================
+# azd extension local build outputs and generated IaC artifacts
+# =============================================================================
+.local/azd-extension-registry/artifacts/
+infra/main.json
+infra/modules/*.json
+internal/scaffold/templates/*/infra/main.json
+internal/scaffold/templates/*/infra/modules/*.json
