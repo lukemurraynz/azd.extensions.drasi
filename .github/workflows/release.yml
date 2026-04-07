@@ -35,7 +35,7 @@ jobs:
           go-version-file: go.mod
           cache: true
 
-      - name: Validate release version inputs
+      - name: Stamp version from tag
         shell: bash
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
@@ -44,13 +44,19 @@ jobs:
           # of internal versioning patterns in workflow logs.
           echo "::add-mask::${VERSION}"
 
-          test "$(tr -d '[:space:]' < version.txt)" = "${VERSION}"
+          # Stamp version.txt from the git tag (single source of truth)
+          printf '%s' "${VERSION}" > version.txt
+
+          # Stamp extension.yaml version from the git tag
+          sed -i "s/^version:.*$/version: \"${VERSION}\"/" extension.yaml
+
+          # Verify the stamp succeeded
           MANIFEST_VERSION=$(grep -E '^version:' extension.yaml | head -1 | sed 's/^version:[[:space:]]*//' | tr -d '"'"'"'[:space:]')
           if [ "${MANIFEST_VERSION}" != "${VERSION}" ]; then
-            echo "extension.yaml version '${MANIFEST_VERSION}' does not match tag '${VERSION}'"
+            echo "Failed to stamp extension.yaml with version '${VERSION}'"
             exit 1
           fi
-          echo "Validated version: ${VERSION}"
+          echo "Stamped version: ${VERSION}"
 
       - name: Build all targets
         shell: bash

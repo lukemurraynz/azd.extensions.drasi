@@ -290,8 +290,6 @@ func TestClient_RunCommandOutput_NoAutomaticRetry(t *testing.T) {
 }
 
 func TestRealRunner_Run_Success(t *testing.T) {
-	t.Parallel()
-
 	installFakeDrasiCLI(t, scriptBehavior{
 		stdout:   "Drasi CLI version: v0.10.2\n",
 		exitCode: 0,
@@ -307,8 +305,6 @@ func TestRealRunner_Run_Success(t *testing.T) {
 }
 
 func TestRealRunner_Run_NonZeroExit_ReturnsExitCodeAndStderr(t *testing.T) {
-	t.Parallel()
-
 	installFakeDrasiCLI(t, scriptBehavior{
 		stdout:   "partial output\n",
 		stderr:   "boom\n",

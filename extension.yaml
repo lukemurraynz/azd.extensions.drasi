@@ -4,7 +4,7 @@ namespace: drasi
 displayName: "Drasi for Azure Developer CLI"
 description: "Manage Drasi reactive data pipeline workloads with azd. Scaffold, provision, deploy, and operate Drasi sources, queries, and reactions using familiar azd workflows."
 usage: azd drasi <command> [options]
-version: "1.0.0"
+version: "0.0.0-dev"
 requiredAzdVersion: ">= 1.10.0"
 language: go
 capabilities:
