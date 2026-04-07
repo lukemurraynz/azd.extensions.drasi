@@ -3,7 +3,7 @@ package cmd
 import (
 	"time"
 
-	"github.com/azure/azd.extensions.drasi/internal/output"
+	"github.com/lukemurraynz/azd.extensions.drasi/internal/output"
 	"github.com/spf13/cobra"
 	"github.com/theckman/yacspin"
 )

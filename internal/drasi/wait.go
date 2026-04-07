@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/azure/azd.extensions.drasi/internal/output"
+	"github.com/lukemurraynz/azd.extensions.drasi/internal/output"
 )
 
 // WaitOnline polls until the component reaches Online status or timeout.

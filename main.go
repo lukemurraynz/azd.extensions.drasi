@@ -4,7 +4,7 @@ import (
 	"log/slog"
 	"os"
 
-	"github.com/azure/azd.extensions.drasi/cmd"
+	"github.com/lukemurraynz/azd.extensions.drasi/cmd"
 	"github.com/azure/azure-dev/cli/azd/pkg/azdext"
 )
 

@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/azure/azd.extensions.drasi/internal/output"
-	"github.com/azure/azd.extensions.drasi/internal/scaffold"
+	"github.com/lukemurraynz/azd.extensions.drasi/internal/output"
+	"github.com/lukemurraynz/azd.extensions.drasi/internal/scaffold"
 	"github.com/spf13/cobra"
 )
 

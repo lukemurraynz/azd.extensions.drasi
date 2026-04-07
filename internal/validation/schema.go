@@ -7,8 +7,8 @@ import (
 
 	jsonschema "github.com/santhosh-tekuri/jsonschema/v6"
 
-	"github.com/azure/azd.extensions.drasi/internal/config"
-	"github.com/azure/azd.extensions.drasi/internal/output"
+	"github.com/lukemurraynz/azd.extensions.drasi/internal/config"
+	"github.com/lukemurraynz/azd.extensions.drasi/internal/output"
 )
 
 var (
@@ -35,6 +35,11 @@ func ValidateReactionSchema(reaction config.Reaction, result *ValidationResult) 
 // ValidateMiddlewareSchema validates a Middleware against the JSON schema.
 func ValidateMiddlewareSchema(middleware config.Middleware, result *ValidationResult) {
 	validateSchema("schema/middleware.schema.json", middleware, middleware.FilePath, middleware.Line, "middleware", result)
+}
+
+// ValidateEnvironmentOverlaySchema validates an environment overlay against the JSON schema.
+func ValidateEnvironmentOverlaySchema(environment config.Environment, file string, result *ValidationResult) {
+	validateSchema("schema/environment-overlay.schema.json", environment, file, 1, "environment overlay", result)
 }
 
 func validateSchema(schemaName string, value any, file string, line int, componentKind string, result *ValidationResult) {
@@ -79,12 +84,13 @@ func validateSchema(schemaName string, value any, file string, line int, compone
 func compiledSchemas() (map[string]*jsonschema.Schema, error) {
 	loadSchemaOnce.Do(func() {
 		compiler := jsonschema.NewCompiler()
-		schemas = make(map[string]*jsonschema.Schema, 4)
+		schemas = make(map[string]*jsonschema.Schema, 5)
 		for _, name := range []string{
 			"schema/source.schema.json",
 			"schema/continuousquery.schema.json",
 			"schema/reaction.schema.json",
 			"schema/middleware.schema.json",
+			"schema/environment-overlay.schema.json",
 		} {
 			data, err := config.SchemaFS.ReadFile(name)
 			if err != nil {
@@ -108,6 +114,7 @@ func compiledSchemas() (map[string]*jsonschema.Schema, error) {
 			"schema/continuousquery.schema.json",
 			"schema/reaction.schema.json",
 			"schema/middleware.schema.json",
+			"schema/environment-overlay.schema.json",
 		} {
 			compiled, err := compiler.Compile(name)
 			if err != nil {

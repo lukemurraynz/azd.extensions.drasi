@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/azure/azd.extensions.drasi/cmd"
+	"github.com/lukemurraynz/azd.extensions.drasi/cmd"
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

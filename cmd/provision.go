@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/azure/azd.extensions.drasi/internal/output"
+	"github.com/lukemurraynz/azd.extensions.drasi/internal/output"
 	"github.com/azure/azure-dev/cli/azd/pkg/azdext"
 	"github.com/google/uuid"
 	"github.com/spf13/cobra"

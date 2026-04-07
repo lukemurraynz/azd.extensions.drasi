@@ -14,6 +14,15 @@ param tags object = {
   'azd-env-name': environmentName
 }
 
+// SECURITY: Admin password must be supplied as a secure parameter.
+// For production, store in Key Vault and reference via azd environment variables.
+@secure()
+@description('Administrator login password for the PostgreSQL server.')
+param postgresAdminPassword string
+
+@description('Public network access for PostgreSQL. Use Disabled with private endpoints for production.')
+param postgresPublicNetworkAccess string = 'Enabled'
+
 module drasiInfra 'modules/drasi-infra.bicep' = {
   name: 'drasi-infra'
   params: {
@@ -29,6 +38,8 @@ module postgresServer 'modules/postgresql.bicep' = {
     location: location
     environmentName: environmentName
     tags: tags
+    administratorLoginPassword: postgresAdminPassword
+    publicNetworkAccess: postgresPublicNetworkAccess
   }
 }
 

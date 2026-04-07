@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"github.com/AlecAivazis/survey/v2"
-	"github.com/azure/azd.extensions.drasi/internal/output"
+	"github.com/lukemurraynz/azd.extensions.drasi/internal/output"
 	"github.com/mattn/go-isatty"
 	"os"
 )

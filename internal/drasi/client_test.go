@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/azure/azd.extensions.drasi/internal/output"
+	"github.com/lukemurraynz/azd.extensions.drasi/internal/output"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -121,6 +121,31 @@ func TestClient_CheckVersion_BinaryNotFound(t *testing.T) {
 			assert.Contains(t, err.Error(), tt.want)
 		})
 	}
+}
+
+func TestClient_GetVersion_ReturnsParsedVersion(t *testing.T) {
+	t.Parallel()
+
+	runner := &mockRunner{responses: []runnerResponse{{stdout: "Drasi CLI version: v0.10.1\n"}}}
+	client := newTestClient(runner)
+
+	version, err := client.GetVersion(context.Background())
+
+	require.NoError(t, err)
+	assert.Equal(t, "0.10.1", version)
+	assert.Equal(t, [][]string{{"version"}}, runner.args)
+}
+
+func TestClient_GetVersion_NonZeroExit_MapsToCliError(t *testing.T) {
+	t.Parallel()
+
+	runner := &mockRunner{responses: []runnerResponse{{stderr: "boom", exitCode: 1}}}
+	client := newTestClient(runner)
+
+	_, err := client.GetVersion(context.Background())
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), output.ERR_DRASI_CLI_ERROR)
 }
 
 func TestClient_RunCommand_NonZeroExit_MapsToCliError(t *testing.T) {

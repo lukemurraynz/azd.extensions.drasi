@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/azure/azd.extensions.drasi/internal/config"
-	"github.com/azure/azd.extensions.drasi/internal/output"
+	"github.com/lukemurraynz/azd.extensions.drasi/internal/config"
+	"github.com/lukemurraynz/azd.extensions.drasi/internal/output"
 )
 
 // ValidateDependencyGraph detects cycles between queries that reference other queries as reactions.

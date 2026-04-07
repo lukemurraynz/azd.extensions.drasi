@@ -1,4 +1,4 @@
-module github.com/azure/azd.extensions.drasi
+module github.com/lukemurraynz/azd.extensions.drasi
 
 go 1.26.0
 

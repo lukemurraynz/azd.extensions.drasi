@@ -283,7 +283,7 @@ shows Failed with error reason; exit code 1. Run `azd drasi diagnose` — Secret
 - [ ] T099 Implement `cmd/upgrade.go` — FR-010 requires a valid registered command stub; the command MUST:
   - Register as `azd drasi upgrade` on the root Cobra command
   - Accept `--environment <name>` (inherited persistent flag) and handle it consistently with all other commands per FR-004
-  - Return `ERR_NOT_IMPLEMENTED` with the message `"upgrade is planned for a future release \u2014 see https://github.com/azure/azd.extensions.drasi/issues for the roadmap"`
+  - Return `ERR_NOT_IMPLEMENTED` with the message `"upgrade is planned for a future release \u2014 see https://github.com/lukemurraynz/azd.extensions.drasi/issues for the roadmap"`
   - Exit with code 2 (same as other not-implemented paths)
   - Be annotated in code with `// intentional stub \u2014 FR-010; remove when upgrade logic is implemented`
   - Have one [TEST] confirming exit code 2 + ERR_NOT_IMPLEMENTED in output and inherited `--environment` acceptance — `cmd/upgrade_test.go`

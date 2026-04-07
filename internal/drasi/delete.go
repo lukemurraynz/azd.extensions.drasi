@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/azure/azd.extensions.drasi/internal/output"
+	"github.com/lukemurraynz/azd.extensions.drasi/internal/output"
 )
 
 // DeleteComponent deletes the named component. Returns nil if not found.

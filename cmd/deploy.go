@@ -6,12 +6,13 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/azure/azd.extensions.drasi/internal/config"
-	"github.com/azure/azd.extensions.drasi/internal/deployment"
-	"github.com/azure/azd.extensions.drasi/internal/drasi"
-	"github.com/azure/azd.extensions.drasi/internal/output"
-	"github.com/azure/azd.extensions.drasi/internal/validation"
 	"github.com/azure/azure-dev/cli/azd/pkg/azdext"
+	"github.com/google/uuid"
+	"github.com/lukemurraynz/azd.extensions.drasi/internal/config"
+	"github.com/lukemurraynz/azd.extensions.drasi/internal/deployment"
+	"github.com/lukemurraynz/azd.extensions.drasi/internal/drasi"
+	"github.com/lukemurraynz/azd.extensions.drasi/internal/output"
+	"github.com/lukemurraynz/azd.extensions.drasi/internal/validation"
 	"github.com/spf13/cobra"
 )
 
@@ -20,6 +21,7 @@ func newDeployCommand() *cobra.Command {
 	var dryRun bool
 	var envName string
 	var noRollback bool
+	var timeoutStr string
 
 	cmd := &cobra.Command{
 		Use:   "deploy",
@@ -27,6 +29,25 @@ func newDeployCommand() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			format := outputFormatFromCommand(cmd)
 			ctx := azdext.WithAccessToken(cmd.Context())
+			var err error
+
+			startedAt := time.Now().UTC()
+			correlationID := uuid.New().String()
+
+			var totalTimeout time.Duration
+			if timeoutStr != "" {
+				totalTimeout, err = time.ParseDuration(timeoutStr)
+				if err != nil {
+					return writeCommandError(
+						cmd,
+						output.ERR_VALIDATION_FAILED,
+						fmt.Sprintf("invalid --timeout value %q: %s", timeoutStr, err),
+						"Use Go duration format: 30m, 1h, 2h30m.",
+						format,
+						output.ExitCodes[output.ERR_VALIDATION_FAILED],
+					)
+				}
+			}
 
 			progress, progressErr := NewProgressHelper(cmd)
 			if progressErr != nil {
@@ -186,7 +207,12 @@ func newDeployCommand() *cobra.Command {
 
 			progress.Message("Deploying components...")
 
-			if err := engine.Deploy(ctx, &resolved, deployment.DeployOptions{DryRun: dryRun, Environment: resolvedEnv, NoRollback: noRollback}); err != nil {
+			if err := engine.Deploy(ctx, &resolved, deployment.DeployOptions{
+				DryRun:       dryRun,
+				Environment:  resolvedEnv,
+				NoRollback:   noRollback,
+				TotalTimeout: totalTimeout,
+			}); err != nil {
 				code := errorCodeFromError(err, output.ERR_DRASI_CLI_ERROR)
 				return writeCommandError(
 					cmd,
@@ -197,6 +223,31 @@ func newDeployCommand() *cobra.Command {
 					output.ExitCodes[code],
 				)
 			}
+
+			slog.InfoContext(ctx, "deploy completed",
+				slog.String("environment", resolvedEnv),
+				slog.String("correlation_id", correlationID),
+				slog.Bool("dry_run", dryRun),
+				slog.Int("component_count", len(resolved.Sources)+len(resolved.Queries)+len(resolved.Reactions)+len(resolved.Middlewares)),
+			)
+
+			endedAt := time.Now().UTC()
+			deployResult := "success"
+			if dryRun {
+				deployResult = "dry-run"
+			}
+
+			// Emit structured audit event to stderr (matching provision command pattern).
+			auditEvent := output.AuditEvent{
+				Operation:     "deploy",
+				Environment:   resolvedEnv,
+				CorrelationID: correlationID,
+				Target:        "drasi-components",
+				Result:        deployResult,
+				StartedAtUtc:  startedAt,
+				EndedAtUtc:    endedAt,
+			}
+			_, _ = fmt.Fprintln(cmd.ErrOrStderr(), output.FormatAuditEvent(auditEvent, format))
 
 			if format == output.FormatJSON {
 				_ = progress.Stop()
@@ -220,6 +271,7 @@ func newDeployCommand() *cobra.Command {
 	cmd.Flags().StringVar(&configPath, "config", filepath.Join("drasi", "drasi.yaml"), "Path to drasi.yaml manifest")
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Compute changes without applying resources")
 	cmd.Flags().BoolVar(&noRollback, "no-rollback", false, "Skip rollback on deploy failure")
+	cmd.Flags().StringVar(&timeoutStr, "timeout", "", "Total deploy timeout (e.g. 30m, 1h). Default: 15m")
 	cmd.Flags().StringVar(&envName, "environment", "", "Target azd environment name")
 
 	return cmd

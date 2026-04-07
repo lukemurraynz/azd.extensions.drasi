@@ -4,8 +4,8 @@ import (
 	"bytes"
 	"testing"
 
-	"github.com/azure/azd.extensions.drasi/cmd"
-	"github.com/azure/azd.extensions.drasi/internal/output"
+	"github.com/lukemurraynz/azd.extensions.drasi/cmd"
+	"github.com/lukemurraynz/azd.extensions.drasi/internal/output"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -69,4 +69,24 @@ func TestUpgrade_JSONOutput_ErrorCode(t *testing.T) {
 			bytes.Contains(errBuf.Bytes(), []byte(output.ERR_DRASI_CLI_ERROR)),
 		"stderr must include known drasi CLI error code; got: %s", errBuf.String(),
 	)
+}
+
+func TestUpgrade_DryRunFlagAccepted(t *testing.T) {
+	t.Parallel()
+	root := cmd.NewRootCommand()
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	root.SetOut(stdout)
+	root.SetErr(stderr)
+	root.SetArgs([]string{"upgrade", "--force", "--dry-run"})
+
+	err := root.Execute()
+
+	if err != nil {
+		assert.NotContains(t, err.Error(), "unknown flag",
+			"--dry-run must be a registered flag on upgrade command")
+		return
+	}
+
+	assert.Contains(t, stdout.String(), "Dry-run:")
 }

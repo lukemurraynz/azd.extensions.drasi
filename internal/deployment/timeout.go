@@ -14,11 +14,21 @@ const (
 )
 
 // WithPerComponentTimeout wraps ctx with a per-component deadline.
-func WithPerComponentTimeout(ctx context.Context) (context.Context, context.CancelFunc) {
-	return context.WithTimeout(ctx, PerComponentTimeout)
+// If override is zero, uses the default PerComponentTimeout.
+func WithPerComponentTimeout(ctx context.Context, override time.Duration) (context.Context, context.CancelFunc) {
+	d := PerComponentTimeout
+	if override > 0 {
+		d = override
+	}
+	return context.WithTimeout(ctx, d)
 }
 
 // WithTotalDeployTimeout wraps ctx with the total deploy deadline.
-func WithTotalDeployTimeout(ctx context.Context) (context.Context, context.CancelFunc) {
-	return context.WithTimeout(ctx, TotalDeployTimeout)
+// If override is zero, uses the default TotalDeployTimeout.
+func WithTotalDeployTimeout(ctx context.Context, override time.Duration) (context.Context, context.CancelFunc) {
+	d := TotalDeployTimeout
+	if override > 0 {
+		d = override
+	}
+	return context.WithTimeout(ctx, d)
 }

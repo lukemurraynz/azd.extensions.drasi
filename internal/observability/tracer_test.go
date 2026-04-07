@@ -5,7 +5,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/azure/azd.extensions.drasi/internal/observability"
+	"github.com/lukemurraynz/azd.extensions.drasi/internal/observability"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel/trace"

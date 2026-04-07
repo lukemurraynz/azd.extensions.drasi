@@ -95,6 +95,9 @@ This will:
 3. Run `drasi init` to install the Drasi runtime on AKS
 4. Configure FederatedIdentityCredential for `system:serviceaccount:drasi-system:drasi-api`
 
+> [!NOTE]
+> The provision step creates the FederatedIdentityCredential automatically. If you also follow the standalone Drasi documentation, do not create this credential manually or you will get a conflict error. The extension manages this credential for you.
+
 Expected duration: 8–12 minutes.
 
 ---

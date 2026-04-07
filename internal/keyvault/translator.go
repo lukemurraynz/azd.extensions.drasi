@@ -3,10 +3,11 @@ package keyvault
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"os"
 
-	"github.com/azure/azd.extensions.drasi/internal/config"
-	"github.com/azure/azd.extensions.drasi/internal/output"
+	"github.com/lukemurraynz/azd.extensions.drasi/internal/config"
+	"github.com/lukemurraynz/azd.extensions.drasi/internal/output"
 )
 
 // TranslatedValue is the result of resolving a config.Value.
@@ -62,6 +63,9 @@ func (t *Translator) Translate(ctx context.Context, v config.Value) (*Translated
 	}
 
 	if v.EnvRef != nil {
+		slog.InfoContext(ctx, "resolving environment variable reference",
+			slog.String("env_var", v.EnvRef.Name),
+		)
 		value, ok := os.LookupEnv(v.EnvRef.Name)
 		if !ok {
 			return nil, fmt.Errorf("%s: environment variable %s is not set", output.ERR_VALIDATION_FAILED, v.EnvRef.Name)
@@ -69,6 +73,11 @@ func (t *Translator) Translate(ctx context.Context, v config.Value) (*Translated
 		return &TranslatedValue{StringValue: value, IsSecretRef: false}, nil
 	}
 
+	// SECURITY: Log vault and secret name for audit trail, but never the secret value.
+	slog.InfoContext(ctx, "resolving Key Vault secret reference",
+		slog.String("vault_name", v.SecretRef.VaultName),
+		slog.String("secret_name", v.SecretRef.SecretName),
+	)
 	secretValue, err := t.secretClient.GetSecret(ctx, v.SecretRef.VaultName, v.SecretRef.SecretName)
 	if err != nil {
 		return nil, err

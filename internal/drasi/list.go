@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/azure/azd.extensions.drasi/internal/output"
+	"github.com/lukemurraynz/azd.extensions.drasi/internal/output"
 )
 
 // ComponentSummary is a row from `drasi list <kind>` output.

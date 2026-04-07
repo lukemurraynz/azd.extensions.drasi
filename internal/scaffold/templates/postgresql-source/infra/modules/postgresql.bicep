@@ -11,6 +11,19 @@ param environmentName string
 @description('Tags to apply to all resources.')
 param tags object = {}
 
+// SECURITY: Admin password must be supplied as a secure parameter and stored in Key Vault.
+// Never use deterministic functions (uniqueString) for credentials.
+@secure()
+@description('Administrator login password for the PostgreSQL server. Store in Key Vault for production.')
+param administratorLoginPassword string
+
+@description('Public network access setting. Use Disabled with private endpoints for production.')
+@allowed([
+  'Enabled'
+  'Disabled'
+])
+param publicNetworkAccess string = 'Enabled'
+
 var serverName = 'psql-drasi-${environmentName}-${uniqueString(resourceGroup().id)}'
 var databaseName = 'drasidb'
 var adminLogin = 'drasiAdmin'
@@ -28,7 +41,7 @@ resource postgresServer 'Microsoft.DBforPostgreSQL/flexibleServers@2024-08-01' =
   }
   properties: {
     administratorLogin: adminLogin
-    administratorLoginPassword: uniqueString(resourceGroup().id, serverName, 'pgpwd')
+    administratorLoginPassword: administratorLoginPassword
     version: '16'
     storage: {
       storageSizeGB: 32
@@ -41,7 +54,7 @@ resource postgresServer 'Microsoft.DBforPostgreSQL/flexibleServers@2024-08-01' =
       mode: 'Disabled'
     }
     network: {
-      publicNetworkAccess: 'Enabled'
+      publicNetworkAccess: publicNetworkAccess
     }
   }
 }

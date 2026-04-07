@@ -1,0 +1,37 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "EnvironmentOverlay",
+  "type": "object",
+  "properties": {
+    "name": { "type": "string" },
+    "parameters": {
+      "type": "object",
+      "additionalProperties": { "type": "string" }
+    },
+    "components": {
+      "type": "object",
+      "properties": {
+        "exclude": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["kind", "id"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["source", "Source", "continuousquery", "ContinuousQuery", "reaction", "Reaction", "middleware", "Middleware"]
+              },
+              "id": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

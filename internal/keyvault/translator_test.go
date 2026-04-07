@@ -1,13 +1,15 @@
 package keyvault
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"log/slog"
 	"os"
 	"testing"
 
-	"github.com/azure/azd.extensions.drasi/internal/config"
-	"github.com/azure/azd.extensions.drasi/internal/output"
+	"github.com/lukemurraynz/azd.extensions.drasi/internal/config"
+	"github.com/lukemurraynz/azd.extensions.drasi/internal/output"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -76,4 +78,48 @@ func TestTranslator_EnvRef_MissingVariable_ReturnsValidationError(t *testing.T) 
 	_, err := translator.Translate(context.Background(), config.Value{EnvRef: &config.EnvRef{Name: missing}})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), output.ERR_VALIDATION_FAILED)
+}
+
+func TestTranslator_SecretRef_EmitsAuditLog(t *testing.T) {
+	t.Parallel()
+
+	var buf bytes.Buffer
+	handler := slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelInfo})
+	original := slog.Default()
+	slog.SetDefault(slog.New(handler))
+	t.Cleanup(func() { slog.SetDefault(original) })
+
+	translator := NewTranslatorWithSecretClient(&fakeSecretClient{value: "s3cret"})
+	_, err := translator.Translate(context.Background(), config.Value{SecretRef: &config.SecretRef{
+		VaultName:  "kv-audit-test",
+		SecretName: "my-secret",
+	}})
+	require.NoError(t, err)
+
+	logOutput := buf.String()
+	assert.Contains(t, logOutput, "resolving Key Vault secret reference")
+	assert.Contains(t, logOutput, "kv-audit-test")
+	assert.Contains(t, logOutput, "my-secret")
+	// The secret value must never appear in logs.
+	assert.NotContains(t, logOutput, "s3cret")
+}
+
+func TestTranslator_EnvRef_EmitsAuditLog(t *testing.T) {
+	t.Setenv("DRASI_AUDIT_LOG_TEST", "test-value")
+
+	var buf bytes.Buffer
+	handler := slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelInfo})
+	original := slog.Default()
+	slog.SetDefault(slog.New(handler))
+	t.Cleanup(func() { slog.SetDefault(original) })
+
+	translator := NewTranslator()
+	_, err := translator.Translate(context.Background(), config.Value{EnvRef: &config.EnvRef{Name: "DRASI_AUDIT_LOG_TEST"}})
+	require.NoError(t, err)
+
+	logOutput := buf.String()
+	assert.Contains(t, logOutput, "resolving environment variable reference")
+	assert.Contains(t, logOutput, "DRASI_AUDIT_LOG_TEST")
+	// The resolved value must never appear in logs.
+	assert.NotContains(t, logOutput, "test-value")
 }

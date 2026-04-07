@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"github.com/azure/azd.extensions.drasi/internal/output"
-	"github.com/azure/azd.extensions.drasi/internal/validation"
+	"github.com/lukemurraynz/azd.extensions.drasi/internal/output"
+	"github.com/lukemurraynz/azd.extensions.drasi/internal/validation"
 	"github.com/spf13/cobra"
 )
 

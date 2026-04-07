@@ -24,7 +24,8 @@
     "ses_29a0ec55effeP7vJnvyHoUGh0Z",
     "ses_29a0dbb54ffeR6cWVKxLOmwZjE",
     "ses_299f341f7ffeY0C1N0StXaMEcX",
-    "ses_299f30141ffeTjnbQD70sNMAaM"
+    "ses_299f30141ffeTjnbQD70sNMAaM",
+    "ses_299e1d742ffeC1Nh52wACKPDTg"
   ],
   "plan_name": "drasi-extension-improvements",
   "agent": "atlas",
@@ -60,9 +61,10 @@
       "task_key": "todo:14",
       "task_label": "14",
       "task_title": "Add PostgreSQL Source Scaffold Template",
-      "session_id": "ses_299f30141ffeTjnbQD70sNMAaM",
-      "agent": "explore",
-      "updated_at": "2026-04-07T03:56:31.638Z"
+      "session_id": "ses_299e1d742ffeC1Nh52wACKPDTg",
+      "agent": "Sisyphus-Junior",
+      "category": "unspecified-high",
+      "updated_at": "2026-04-07T04:08:44.572Z"
     }
   }
 }

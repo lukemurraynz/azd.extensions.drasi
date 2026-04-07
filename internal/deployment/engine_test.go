@@ -3,9 +3,11 @@ package deployment
 import (
 	"context"
 	"fmt"
+	"os"
+	"runtime"
 	"testing"
 
-	"github.com/azure/azd.extensions.drasi/internal/config"
+	"github.com/lukemurraynz/azd.extensions.drasi/internal/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -357,4 +359,43 @@ func TestEngine_Teardown_ClearsStateOnSuccess(t *testing.T) {
 
 	// State should be cleared
 	assert.Equal(t, "", h.mockState.store["DRASI_HASH_SOURCE_my_source"])
+}
+
+func TestEngine_ApplyComponent_TempFileHasRestrictedPermissions(t *testing.T) {
+	t.Parallel()
+
+	h := newEngineHarness()
+
+	// Capture the temp file path from the drasi apply call so we can stat it.
+	var capturedPath string
+	h.mockDrasi.runCommandFunc = func(ctx context.Context, args ...string) error {
+		if len(args) >= 3 && args[0] == "apply" && args[1] == "-f" {
+			capturedPath = args[2]
+			// Stat the file while it still exists (before defer os.Remove runs).
+			info, err := os.Stat(capturedPath)
+			if err != nil {
+				return fmt.Errorf("stat temp file: %w", err)
+			}
+			// On Unix-like systems, os.Chmod(0600) restricts to owner read/write.
+			// On Windows, os.Chmod only affects the read-only bit; permission
+			// masking is not supported, so we skip the permission assertion.
+			if runtime.GOOS != "windows" {
+				mode := info.Mode().Perm()
+				if mode&0077 != 0 {
+					return fmt.Errorf("temp file has insecure permissions %04o; expected 0600", mode)
+				}
+			} else {
+				// Windows: just verify the file exists and is writable.
+				_ = info.Mode()
+			}
+		}
+		return nil
+	}
+
+	manifest := &config.ResolvedManifest{
+		Sources: []config.Source{{ID: "perm-test-source"}},
+	}
+	err := h.engine.Deploy(context.Background(), manifest, DeployOptions{Environment: "test-env"})
+	require.NoError(t, err)
+	assert.NotEmpty(t, capturedPath, "drasi apply should have been called with a temp file path")
 }

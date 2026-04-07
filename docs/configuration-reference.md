@@ -22,6 +22,21 @@ This document describes every YAML entity type the extension reads and the full 
 
 The manifest controls which files are included. By default all YAML files in the four entity directories are loaded.
 
+## Choosing a template
+
+Use this guide to pick the right starter template for `azd drasi init --template <name>`.
+
+| Template | Use when | Data source | What you get |
+|----------|----------|-------------|--------------|
+| `cosmos-change-feed` | You need to react to changes in Azure Cosmos DB | Cosmos DB change feed | Cosmos DB source, sample query, Dapr pub/sub reaction, AKS + Key Vault + Cosmos DB infra |
+| `postgresql-source` | You need to react to changes in PostgreSQL via logical replication | PostgreSQL (logical replication) | PostgreSQL source, sample query, debug reaction, AKS + Key Vault + PostgreSQL infra |
+| `event-hub-routing` | You need to route events from Azure Event Hubs through Drasi queries | Azure Event Hubs | Event Hub source, routing query, reaction, AKS + Key Vault + Event Hub infra |
+| `query-subscription` | You need a notification workflow triggered by query result changes | Any (bring your own source) | Sample query with subscription reaction, minimal infra |
+| `blank` | You want an empty Drasi project structure with Bicep infra | N/A | Empty drasi/ directory structure, blank Bicep modules |
+| `blank-terraform` | You want an empty Drasi project structure with Terraform infra | N/A | Empty drasi/ directory structure, blank Terraform modules |
+
+If you are evaluating Drasi for the first time, start with `cosmos-change-feed` or `postgresql-source`. These templates include working infrastructure and sample components that you can deploy end-to-end in a single session.
+
 ## drasi.yaml (manifest)
 
 ```yaml
@@ -238,6 +253,28 @@ azd drasi deploy --environment prod
 ```
 
 The resolver merges the overlay parameters into matching entity property values. Overlay keys must match the `id` of existing properties.
+
+### Overlay capabilities and limits
+
+Overlays support two operations. They can override parameter values, and they can exclude components from the deployment. They cannot add new components. If you need a component that exists only in one environment, maintain a separate entity file for that environment.
+
+To exclude specific components from a deployment in a given environment, add a `components` section with an `exclude` list:
+
+```yaml
+# drasi/environments/staging.yaml
+apiVersion: v1
+
+parameters:
+  database:
+    value: "orders-staging"
+
+components:
+  exclude:
+    - kind: reaction
+      id: production-alerting
+```
+
+Components listed in `exclude` are removed from the deployment plan before any apply or delete actions run.
 
 ## Feature flags
 

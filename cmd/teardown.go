@@ -6,10 +6,10 @@ import (
 	"os/exec"
 	"path/filepath"
 
-	"github.com/azure/azd.extensions.drasi/internal/config"
-	"github.com/azure/azd.extensions.drasi/internal/deployment"
-	"github.com/azure/azd.extensions.drasi/internal/drasi"
-	"github.com/azure/azd.extensions.drasi/internal/output"
+	"github.com/lukemurraynz/azd.extensions.drasi/internal/config"
+	"github.com/lukemurraynz/azd.extensions.drasi/internal/deployment"
+	"github.com/lukemurraynz/azd.extensions.drasi/internal/drasi"
+	"github.com/lukemurraynz/azd.extensions.drasi/internal/output"
 	"github.com/azure/azure-dev/cli/azd/pkg/azdext"
 	"github.com/spf13/cobra"
 )

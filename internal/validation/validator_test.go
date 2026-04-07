@@ -1,10 +1,11 @@
 package validation_test
 
 import (
+	"os"
 	"path/filepath"
 	"testing"
 
-	"github.com/azure/azd.extensions.drasi/internal/validation"
+	"github.com/lukemurraynz/azd.extensions.drasi/internal/validation"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -70,4 +71,57 @@ func TestValidator_OverlayWarning(t *testing.T) {
 	require.NoError(t, err)
 	assert.False(t, result.HasErrors(), "overlay warning must not be an error")
 	assert.True(t, result.HasWarnings(), "expected warning for undeclared overlay parameter")
+}
+
+func TestValidator_MissingExcludedComponentWarning(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	writeValidationFile(t, dir, "drasi.yaml", `
+apiVersion: v1
+includes:
+  - kind: sources
+    pattern: "sources/*.yaml"
+environments:
+  dev: "environments/dev.yaml"
+`)
+	writeValidationFile(t, dir, filepath.Join("sources", "postgres-source.yaml"), `
+apiVersion: v1
+kind: Source
+name: postgres-source
+spec:
+  kind: PostgreSQL
+  properties:
+    host:
+      value: localhost
+`)
+	writeValidationFile(t, dir, filepath.Join("environments", "dev.yaml"), `
+name: dev
+components:
+  exclude:
+    - kind: source
+      id: missing-source
+`)
+
+	result, err := validation.Validate(dir, "drasi.yaml", "dev")
+	require.NoError(t, err)
+	assert.False(t, result.HasErrors())
+	assert.True(t, result.HasWarnings())
+
+	found := false
+	for _, issue := range result.Issues {
+		if issue.Code == "WARN_MISSING_COMPONENT_EXCLUSION" {
+			found = true
+			assert.Contains(t, issue.Message, "missing-source")
+		}
+	}
+	assert.True(t, found)
+}
+
+func writeValidationFile(t *testing.T, dir, relPath, content string) {
+	t.Helper()
+
+	path := filepath.Join(dir, relPath)
+	require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o755))
+	require.NoError(t, os.WriteFile(path, []byte(content), 0o600))
 }

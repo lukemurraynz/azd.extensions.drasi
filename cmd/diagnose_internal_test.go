@@ -6,7 +6,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/azure/azd.extensions.drasi/internal/drasi"
+	"github.com/lukemurraynz/azd.extensions.drasi/internal/drasi"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

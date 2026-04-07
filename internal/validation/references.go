@@ -3,8 +3,8 @@ package validation
 import (
 	"fmt"
 
-	"github.com/azure/azd.extensions.drasi/internal/config"
-	"github.com/azure/azd.extensions.drasi/internal/output"
+	"github.com/lukemurraynz/azd.extensions.drasi/internal/config"
+	"github.com/lukemurraynz/azd.extensions.drasi/internal/output"
 )
 
 // ValidateReferences checks query references against declared components.

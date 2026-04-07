@@ -5,7 +5,7 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/azure/azd.extensions.drasi/internal/observability"
+	"github.com/lukemurraynz/azd.extensions.drasi/internal/observability"
 	"github.com/spf13/cobra"
 	"go.opentelemetry.io/otel/metric"
 	"go.opentelemetry.io/otel/trace"
@@ -102,6 +102,7 @@ func NewRootCommand() *cobra.Command {
 	rootCmd.AddCommand(newDeployCommand())
 	rootCmd.AddCommand(newStatusCommand())
 	rootCmd.AddCommand(newLogsCommand())
+	rootCmd.AddCommand(newCheckCommand())
 	rootCmd.AddCommand(newDiagnoseCommand())
 	rootCmd.AddCommand(newTeardownCommand())
 	rootCmd.AddCommand(newUpgradeCommand())

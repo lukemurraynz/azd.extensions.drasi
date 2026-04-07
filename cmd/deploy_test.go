@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/azure/azd.extensions.drasi/cmd"
-	"github.com/azure/azd.extensions.drasi/internal/output"
+	"github.com/lukemurraynz/azd.extensions.drasi/cmd"
+	"github.com/lukemurraynz/azd.extensions.drasi/internal/output"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -94,6 +94,35 @@ func TestDeployCommand_NoRollbackFlagAccepted(t *testing.T) {
 	assert.NotContains(t, err.Error(), "unknown flag",
 		"--no-rollback must be a registered flag on deploy command")
 	assert.Contains(t, err.Error(), output.ERR_NO_AUTH)
+}
+
+func TestDeployCommand_TimeoutFlagAccepted(t *testing.T) {
+	t.Parallel()
+	root := cmd.NewRootCommand()
+	root.SetOut(&bytes.Buffer{})
+	root.SetErr(&bytes.Buffer{})
+	root.SetArgs([]string{"deploy", "--timeout", "30m"})
+
+	err := root.Execute()
+
+	require.Error(t, err)
+	assert.NotContains(t, err.Error(), "unknown flag",
+		"--timeout must be a registered flag on deploy command")
+	assert.Contains(t, err.Error(), output.ERR_NO_AUTH)
+}
+
+func TestDeployCommand_InvalidTimeoutValue_ReturnsValidationError(t *testing.T) {
+	t.Parallel()
+	root := cmd.NewRootCommand()
+	root.SetOut(&bytes.Buffer{})
+	root.SetErr(&bytes.Buffer{})
+	root.SetArgs([]string{"deploy", "--timeout", "not-a-duration"})
+
+	err := root.Execute()
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), output.ERR_VALIDATION_FAILED)
+	assert.Contains(t, err.Error(), "invalid --timeout value")
 }
 
 // TestDeployCommand_NoAuth_ReturnsError verifies that without AZD_SERVER the command returns ERR_NO_AUTH.

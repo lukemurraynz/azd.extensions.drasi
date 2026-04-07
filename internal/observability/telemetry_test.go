@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/azure/azd.extensions.drasi/internal/observability"
+	"github.com/lukemurraynz/azd.extensions.drasi/internal/observability"
 	"github.com/stretchr/testify/assert"
 	metricnoop "go.opentelemetry.io/otel/metric/noop"
 )

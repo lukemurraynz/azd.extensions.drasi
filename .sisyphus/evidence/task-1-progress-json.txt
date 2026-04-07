@@ -11,4 +11,4 @@
 --- PASS: TestProgressHelper_JSONMode_NoOutput (0.04s)
 --- PASS: TestProgressHelper_TableMode_CreatesSpinner (0.04s)
 PASS
-ok  	github.com/azure/azd.extensions.drasi/cmd	1.686s
+ok  	github.com/lukemurraynz/azd.extensions.drasi/cmd	1.686s

@@ -1,6 +1,6 @@
 package deployment
 
-import "github.com/azure/azd.extensions.drasi/internal/config"
+import "github.com/lukemurraynz/azd.extensions.drasi/internal/config"
 
 // Action describes what to do with a component.
 type Action int

@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"testing"
-	"github.com/azure/azd.extensions.drasi/internal/config"
-	"github.com/azure/azd.extensions.drasi/internal/validation"
+	"github.com/lukemurraynz/azd.extensions.drasi/internal/config"
+	"github.com/lukemurraynz/azd.extensions.drasi/internal/validation"
 )
 
 func TestDebugSchema2(t *testing.T) {

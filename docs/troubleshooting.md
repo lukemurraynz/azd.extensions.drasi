@@ -70,6 +70,31 @@ This indicates the command could not resolve `AZURE_AKS_CONTEXT` for the selecte
 3. Ensure `AZURE_AKS_CONTEXT` is present (typically written by `azd drasi provision`).
 4. If missing, re-run `azd drasi provision` for that environment.
 
+### New data source connections blocked by network policy
+
+If a source component deploys successfully but cannot connect to its data store, the default `drasi-allow-datastores` network policy may not include the required endpoint.
+
+The extension applies baseline Kubernetes NetworkPolicies during provisioning. The `drasi-allow-datastores` policy permits egress to common data store ports (5432 for PostgreSQL, 27017 for MongoDB, 443 for Cosmos DB). If your data source uses a non-standard port or a private endpoint with a different IP range, you need to update the policy.
+
+To check current network policies:
+
+```bash
+kubectl get networkpolicies -n drasi-system
+kubectl describe networkpolicy drasi-allow-datastores -n drasi-system
+```
+
+To add a new egress rule, edit the policy directly or update the embedded `network_policies.yaml` in the extension source and re-provision. For quick unblocking during development, you can temporarily allow all egress from the namespace:
+
+```bash
+kubectl delete networkpolicy drasi-default-deny -n drasi-system
+```
+
+Restore the default-deny policy before moving to production by re-running `azd drasi provision`.
+
+### Deploy uses delete-then-apply for component updates
+
+When you run `azd drasi deploy` on a component that already exists, the extension deletes it and re-applies it from the entity file. This is a limitation of the current Drasi CLI, which does not support in-place updates. The brief downtime is usually acceptable because Drasi queries resume automatically after the component restarts. If your workflow requires zero-downtime updates, deploy to a second environment first and switch traffic after validation.
+
 ## Diagnostic flow
 
 If the error code table does not resolve the issue, work through this sequence:

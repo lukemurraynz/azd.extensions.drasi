@@ -137,9 +137,21 @@ type Middleware struct {
 	Line           int              `yaml:"-"`
 }
 
+// ComponentRef identifies a specific component by kind and ID.
+type ComponentRef struct {
+	Kind string `yaml:"kind" json:"kind"`
+	ID   string `yaml:"id"   json:"id"`
+}
+
+// Components defines inclusion/exclusion rules for environment overlays.
+type Components struct {
+	Exclude []ComponentRef `yaml:"exclude,omitempty" json:"exclude,omitempty"`
+}
+
 type Environment struct {
-	Name       string            `yaml:"name"`
-	Parameters map[string]string `yaml:"parameters,omitempty"`
+	Name       string            `yaml:"name" json:"name"`
+	Parameters map[string]string `yaml:"parameters,omitempty" json:"parameters,omitempty"`
+	Components Components        `yaml:"components,omitempty" json:"components,omitempty"`
 }
 
 // Value can hold a plain string, a Key Vault secret reference, or an env var reference.
@@ -196,6 +208,18 @@ type ResolvedManifest struct {
 	// ManifestDir is the absolute directory of the drasi.yaml file.
 	// Used by the deploy engine to locate original YAML files for each component.
 	ManifestDir string
+}
+
+const (
+	WarningUndeclaredOverlayParameter = "WARN_UNDECLARED_PARAMETER"
+	WarningInvalidComponentExclusion  = "WARN_INVALID_COMPONENT_EXCLUSION"
+	WarningMissingComponentExclusion  = "WARN_MISSING_COMPONENT_EXCLUSION"
+)
+
+// OverlayWarning captures a non-fatal issue found while resolving environment overlays.
+type OverlayWarning struct {
+	Code    string
+	Message string
 }
 
 // ComponentHash stores the content hash of a deployed component.

@@ -49,4 +49,4 @@
 --- PASS: TestLogsCommand_Help (0.07s)
 --- PASS: TestLogsCommand_ValidationRequiresComponentAndKind (0.07s)
 PASS
-ok  	github.com/azure/azd.extensions.drasi/cmd	2.027s
+ok  	github.com/lukemurraynz/azd.extensions.drasi/cmd	2.027s

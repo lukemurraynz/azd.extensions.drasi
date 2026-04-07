@@ -3,7 +3,7 @@ package deployment
 import (
 	"testing"
 
-	"github.com/azure/azd.extensions.drasi/internal/config"
+	"github.com/lukemurraynz/azd.extensions.drasi/internal/config"
 	"github.com/stretchr/testify/assert"
 )
 

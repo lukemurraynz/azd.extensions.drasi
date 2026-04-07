@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/azure/azd.extensions.drasi/internal/drasi"
-	"github.com/azure/azd.extensions.drasi/internal/validation"
+	"github.com/lukemurraynz/azd.extensions.drasi/internal/drasi"
+	"github.com/lukemurraynz/azd.extensions.drasi/internal/validation"
 	"github.com/azure/azure-dev/cli/azd/pkg/azdext"
 	"github.com/spf13/cobra"
 )

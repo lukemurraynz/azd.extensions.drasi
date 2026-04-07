@@ -8,10 +8,11 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"time"
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/azure/azd.extensions.drasi/internal/config"
+	"github.com/lukemurraynz/azd.extensions.drasi/internal/config"
 )
 
 // drasiRunner is the consumer-side interface for drasi CLI execution.
@@ -23,9 +24,11 @@ type drasiRunner interface {
 
 // DeployOptions configures a deploy run.
 type DeployOptions struct {
-	DryRun      bool
-	Environment string
-	NoRollback  bool
+	DryRun              bool
+	Environment         string
+	NoRollback          bool
+	TotalTimeout        time.Duration
+	PerComponentTimeout time.Duration
 }
 
 // Engine orchestrates the full deploy lifecycle.
@@ -43,7 +46,7 @@ func NewEngine(state *StateManager, drasi drasiRunner) *Engine {
 // Sources → queries → middleware → reactions. Skips no-op components.
 // Writes state hashes on success. Dry-run mode computes the diff without running commands.
 func (e *Engine) Deploy(ctx context.Context, manifest *config.ResolvedManifest, opts DeployOptions) error {
-	ctx, cancel := WithTotalDeployTimeout(ctx)
+	ctx, cancel := WithTotalDeployTimeout(ctx, opts.TotalTimeout)
 	defer cancel()
 
 	hashes := manifestToHashes(manifest)
@@ -68,7 +71,7 @@ func (e *Engine) Deploy(ctx context.Context, manifest *config.ResolvedManifest, 
 			continue
 		}
 
-		compCtx, compCancel := WithPerComponentTimeout(ctx)
+		compCtx, compCancel := WithPerComponentTimeout(ctx, opts.PerComponentTimeout)
 
 		var applyErr error
 		if action.Action == ActionDeleteThenApply {
@@ -148,6 +151,13 @@ func (e *Engine) applyComponent(ctx context.Context, action ComponentAction, man
 		return fmt.Errorf("creating temp file for %s/%s: %w", action.Kind, action.ID, err)
 	}
 	defer os.Remove(tmpFile.Name())
+
+	// SECURITY: Restrict temp file to owner-only read/write. Temp files may contain
+	// resolved configuration values; prevent other local users from reading them.
+	if err := os.Chmod(tmpFile.Name(), 0600); err != nil {
+		tmpFile.Close()
+		return fmt.Errorf("securing temp file for %s/%s: %w", action.Kind, action.ID, err)
+	}
 
 	if _, err = tmpFile.Write(raw); err != nil {
 		tmpFile.Close()

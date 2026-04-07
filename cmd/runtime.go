@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"github.com/azure/azure-dev/cli/azd/pkg/azdext"
-	"github.com/azure/azd.extensions.drasi/internal/output"
+	"github.com/lukemurraynz/azd.extensions.drasi/internal/output"
 	"github.com/spf13/cobra"
 )
 

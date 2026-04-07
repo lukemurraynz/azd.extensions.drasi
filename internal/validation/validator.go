@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"github.com/azure/azd.extensions.drasi/internal/config"
-	"github.com/azure/azd.extensions.drasi/internal/output"
+	"github.com/lukemurraynz/azd.extensions.drasi/internal/config"
+	"github.com/lukemurraynz/azd.extensions.drasi/internal/output"
 )
 
 // Validate runs the full configuration validation pipeline.
@@ -21,14 +21,33 @@ func Validate(dir, manifestFile, envName string) (*ValidationResult, error) {
 	}
 
 	result := &ValidationResult{}
+	if envName != "" {
+		envFile := filepath.ToSlash(filepath.Join("environments", envName+".yaml"))
+		if rel, ok := manifest.Environments[envName]; ok {
+			envFile = filepath.ToSlash(rel)
+		}
+		ValidateEnvironmentOverlaySchema(resolved.Environment, envFile, result)
+	}
+
 	for _, warning := range warnings {
+		code := warning.Code
+		remediation := "Remove undeclared overlay parameters or align them with manifest expectations."
+		switch warning.Code {
+		case config.WarningInvalidComponentExclusion:
+			remediation = "Use component kinds source, continuousquery, reaction, or middleware in environment overlay exclusions."
+		case config.WarningMissingComponentExclusion:
+			remediation = "Update the environment overlay to exclude only components that exist in the base manifest."
+		case "":
+			code = config.WarningUndeclaredOverlayParameter
+		}
+
 		result.Add(ValidationIssue{
 			Level:       LevelWarning,
 			File:        filepath.ToSlash(manifestFile),
 			Line:        1,
-			Code:        "WARN_UNDECLARED_PARAMETER",
-			Message:     warning,
-			Remediation: "Remove undeclared overlay parameters or align them with manifest expectations.",
+			Code:        code,
+			Message:     warning.Message,
+			Remediation: remediation,
 		})
 	}
 

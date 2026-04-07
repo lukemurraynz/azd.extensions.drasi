@@ -9,7 +9,7 @@ import (
 	"strings"
 
 	"github.com/Masterminds/semver/v3"
-	"github.com/azure/azd.extensions.drasi/internal/output"
+	"github.com/lukemurraynz/azd.extensions.drasi/internal/output"
 )
 
 // minimumVersion is the lowest drasi CLI version this extension supports (FR-046).
@@ -76,6 +76,24 @@ func (c *Client) CheckVersion(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+// GetVersion returns the drasi CLI version string.
+func (c *Client) GetVersion(ctx context.Context) (string, error) {
+	stdout, stderr, exitCode, err := c.runner.Run(ctx, "version")
+	if err != nil {
+		return "", fmt.Errorf("%s: %w", output.ERR_DRASI_CLI_NOT_FOUND, err)
+	}
+	if exitCode != 0 {
+		return "", fmt.Errorf("%s: drasi version: %s", output.ERR_DRASI_CLI_ERROR, strings.TrimSpace(stderr))
+	}
+
+	version := parseSemverFromVersionOutput(stdout)
+	if strings.TrimSpace(version) == "" {
+		return "", fmt.Errorf("%s: cannot parse version from empty output", output.ERR_DRASI_CLI_VERSION)
+	}
+
+	return version, nil
 }
 
 func parseSemverFromVersionOutput(stdout string) string {

@@ -37,6 +37,11 @@ jobs:
         shell: bash
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
+
+          # SECURITY: Mask derived version string to prevent accidental exposure
+          # of internal versioning patterns in workflow logs.
+          echo "::add-mask::${VERSION}"
+
           test "$(tr -d '[:space:]' < version.txt)" = "${VERSION}"
           MANIFEST_VERSION=$(grep -E '^version:' extension.yaml | head -1 | sed 's/^version:[[:space:]]*//' | tr -d '"'"'"'[:space:]')
           if [ "${MANIFEST_VERSION}" != "${VERSION}" ]; then
@@ -83,6 +88,7 @@ jobs:
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7
         with:
           name: release-archives
+          retention-days: 7
           path: |
             dist/azd-drasi-windows-amd64.zip
             dist/azd-drasi-linux-amd64.tar.gz
@@ -144,6 +150,7 @@ jobs:
         shell: bash
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
+          echo "::add-mask::${VERSION}"
           REPO="azure/azd-extensions-registry"
           BRANCH="update-drasi-${VERSION}"
 
@@ -178,4 +185,4 @@ jobs:
             --head "${BRANCH}" \
             --base main \
             --title "chore: bump drasi extension to ${VERSION}" \
-            --body "Automated bump from release ${GITHUB_REF_NAME} in azure/azd.extensions.drasi."
+            --body "Automated bump from release ${GITHUB_REF_NAME} in lukemurraynz/azd.extensions.drasi."

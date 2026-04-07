@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/azure/azd.extensions.drasi/internal/drasi"
-	"github.com/azure/azd.extensions.drasi/internal/output"
+	"github.com/lukemurraynz/azd.extensions.drasi/internal/drasi"
+	"github.com/lukemurraynz/azd.extensions.drasi/internal/output"
 	"github.com/spf13/cobra"
 )
 
