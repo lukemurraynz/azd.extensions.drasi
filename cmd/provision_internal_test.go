@@ -2,10 +2,15 @@ package cmd
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"path/filepath"
 	"testing"
 
+	"github.com/azure/azure-dev/cli/azd/pkg/azdext"
+	"github.com/lukemurraynz/azd.extensions.drasi/internal/output"
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -101,4 +106,311 @@ func TestProvisionCommand_DRASIPROVISIONEDWrittenOnSuccess(t *testing.T) {
 	err := root.Execute()
 
 	require.NoError(t, err)
+}
+
+func TestGetEnvValue_ReturnsValue(t *testing.T) {
+	t.Parallel()
+
+	azdClient := newTestAzdClient(t, &testEnvironmentService{
+		getValueFunc: func(_ context.Context, req *azdext.GetEnvRequest) (*azdext.KeyValueResponse, error) {
+			require.Equal(t, "dev", req.EnvName)
+			require.Equal(t, "AZURE_AKS_CONTEXT", req.Key)
+			return &azdext.KeyValueResponse{Value: "aks-dev"}, nil
+		},
+	})
+
+	value, err := getEnvValue(context.Background(), azdClient, "dev", "AZURE_AKS_CONTEXT")
+
+	require.NoError(t, err)
+	assert.Equal(t, "aks-dev", value)
+}
+
+func TestGetEnvValue_NilResponseReturnsEmptyString(t *testing.T) {
+	t.Parallel()
+
+	azdClient := newTestAzdClient(t, &testEnvironmentService{
+		getValueFunc: func(_ context.Context, _ *azdext.GetEnvRequest) (*azdext.KeyValueResponse, error) {
+			return nil, nil
+		},
+	})
+
+	value, err := getEnvValue(context.Background(), azdClient, "dev", "AZURE_AKS_CONTEXT")
+
+	require.NoError(t, err)
+	assert.Empty(t, value)
+}
+
+func TestGetEnvValue_GetValueFails(t *testing.T) {
+	t.Parallel()
+
+	azdClient := newTestAzdClient(t, &testEnvironmentService{
+		getValueFunc: func(_ context.Context, _ *azdext.GetEnvRequest) (*azdext.KeyValueResponse, error) {
+			return nil, errors.New("grpc unavailable")
+		},
+	})
+
+	value, err := getEnvValue(context.Background(), azdClient, "dev", "AZURE_AKS_CONTEXT")
+
+	assert.Empty(t, value)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "grpc unavailable")
+}
+
+func TestBuildResourceIDs_AllEnvValuesPresent(t *testing.T) {
+	t.Parallel()
+
+	values := map[string]string{
+		"AZURE_AKS_CLUSTER_NAME":           "aks-cluster",
+		"AZURE_KEY_VAULT_NAME":             "kv-name",
+		"AZURE_LOG_ANALYTICS_WORKSPACE_ID": "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.OperationalInsights/workspaces/la",
+		"AZURE_ACR_LOGIN_SERVER":           "example.azurecr.io",
+		"AZURE_RESOURCE_GROUP":             "rg-name",
+	}
+
+	azdClient := newTestAzdClient(t, &testEnvironmentService{
+		getValueFunc: func(_ context.Context, req *azdext.GetEnvRequest) (*azdext.KeyValueResponse, error) {
+			return &azdext.KeyValueResponse{Value: values[req.Key]}, nil
+		},
+	})
+
+	resourceIDs := buildResourceIDs(context.Background(), azdClient, "dev")
+
+	assert.Equal(t, values, resourceIDs)
+}
+
+func TestBuildResourceIDs_SkipsEmptyValues(t *testing.T) {
+	t.Parallel()
+
+	values := map[string]string{
+		"AZURE_AKS_CLUSTER_NAME":           "aks-cluster",
+		"AZURE_KEY_VAULT_NAME":             "",
+		"AZURE_LOG_ANALYTICS_WORKSPACE_ID": "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.OperationalInsights/workspaces/la",
+		"AZURE_ACR_LOGIN_SERVER":           "",
+		"AZURE_RESOURCE_GROUP":             "rg-name",
+	}
+
+	azdClient := newTestAzdClient(t, &testEnvironmentService{
+		getValueFunc: func(_ context.Context, req *azdext.GetEnvRequest) (*azdext.KeyValueResponse, error) {
+			return &azdext.KeyValueResponse{Value: values[req.Key]}, nil
+		},
+	})
+
+	resourceIDs := buildResourceIDs(context.Background(), azdClient, "dev")
+
+	assert.Equal(t, map[string]string{
+		"AZURE_AKS_CLUSTER_NAME":           "aks-cluster",
+		"AZURE_LOG_ANALYTICS_WORKSPACE_ID": "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.OperationalInsights/workspaces/la",
+		"AZURE_RESOURCE_GROUP":             "rg-name",
+	}, resourceIDs)
+}
+
+func TestBuildResourceIDs_AllLookupsFailReturnsEmptyMap(t *testing.T) {
+	t.Parallel()
+
+	azdClient := newTestAzdClient(t, &testEnvironmentService{
+		getValueFunc: func(_ context.Context, _ *azdext.GetEnvRequest) (*azdext.KeyValueResponse, error) {
+			return nil, errors.New("lookup failed")
+		},
+	})
+
+	resourceIDs := buildResourceIDs(context.Background(), azdClient, "dev")
+
+	assert.Empty(t, resourceIDs)
+}
+
+func TestWarnUnmanagedResources_EmptyOrAbsentResourceGroupReturnsNil(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		response *azdext.KeyValueResponse
+	}{
+		{name: "absent resource group", response: nil},
+		{name: "empty resource group", response: &azdext.KeyValueResponse{Value: ""}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			azdClient := newTestAzdClient(t, &testEnvironmentService{
+				getValueFunc: func(_ context.Context, req *azdext.GetEnvRequest) (*azdext.KeyValueResponse, error) {
+					require.Equal(t, "AZURE_RESOURCE_GROUP", req.Key)
+					return tc.response, nil
+				},
+			})
+
+			cmd := &cobra.Command{}
+			cmd.SetErr(&bytes.Buffer{})
+
+			err := warnUnmanagedResources(cmd, context.Background(), azdClient, "dev", output.FormatTable)
+
+			require.NoError(t, err)
+		})
+	}
+}
+
+func TestWarnUnmanagedResources_AzCLIUnavailableReturnsNil(t *testing.T) {
+	t.Setenv("PATH", t.TempDir())
+
+	azdClient := newTestAzdClient(t, &testEnvironmentService{
+		getValueFunc: func(_ context.Context, req *azdext.GetEnvRequest) (*azdext.KeyValueResponse, error) {
+			require.Equal(t, "AZURE_RESOURCE_GROUP", req.Key)
+			return &azdext.KeyValueResponse{Value: "rg-dev"}, nil
+		},
+	})
+
+	cmd := &cobra.Command{}
+	cmd.SetErr(&bytes.Buffer{})
+
+	err := warnUnmanagedResources(cmd, context.Background(), azdClient, "dev", output.FormatTable)
+
+	require.NoError(t, err)
+}
+
+func TestSwitchKubectlContext_KubectlMissingReturnsError(t *testing.T) {
+	t.Setenv("PATH", t.TempDir())
+
+	err := switchKubectlContext(context.Background(), "desired-context")
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "kubectl not found")
+}
+
+func TestSwitchKubectlContext_CurrentContextAlreadyMatches(t *testing.T) {
+	logFile := filepath.Join(t.TempDir(), "kubectl.log")
+	installFakeCommands(t, map[string]string{
+		"kubectl": fmt.Sprintf(`
+echo %%*>>"%s"
+if "%%1 %%2"=="config current-context" (
+  echo desired-context
+  exit /b 0
+)
+if "%%1 %%2"=="config use-context" (
+  exit /b 99
+)
+exit /b 1
+`, logFile),
+	})
+
+	err := switchKubectlContext(context.Background(), "desired-context")
+
+	require.NoError(t, err)
+	assert.Equal(t, []string{"config current-context"}, readNonEmptyLines(t, logFile))
+}
+
+func TestSwitchKubectlContext_ContextSwitchSucceeds(t *testing.T) {
+	logFile := filepath.Join(t.TempDir(), "kubectl.log")
+	installFakeCommands(t, map[string]string{
+		"kubectl": fmt.Sprintf(`
+echo %%*>>"%s"
+if "%%1 %%2"=="config current-context" (
+  echo other-context
+  exit /b 0
+)
+if "%%1 %%2"=="config use-context" (
+  exit /b 0
+)
+exit /b 1
+`, logFile),
+	})
+
+	err := switchKubectlContext(context.Background(), "desired-context")
+
+	require.NoError(t, err)
+	assert.Equal(t, []string{"config current-context", "config use-context desired-context"}, readNonEmptyLines(t, logFile))
+}
+
+func TestSwitchKubectlContext_ContextSwitchFails(t *testing.T) {
+	logFile := filepath.Join(t.TempDir(), "kubectl.log")
+	installFakeCommands(t, map[string]string{
+		"kubectl": fmt.Sprintf(`
+echo %%*>>"%s"
+if "%%1 %%2"=="config current-context" (
+  echo other-context
+  exit /b 0
+)
+if "%%1 %%2"=="config use-context" (
+  echo failed to switch 1>&2
+  exit /b 1
+)
+exit /b 1
+`, logFile),
+	})
+
+	err := switchKubectlContext(context.Background(), "desired-context")
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "kubectl config use-context desired-context")
+	assert.Equal(t, []string{"config current-context", "config use-context desired-context"}, readNonEmptyLines(t, logFile))
+}
+
+func TestRunDrasiInit_DrasiMissingReturnsError(t *testing.T) {
+	t.Setenv("PATH", t.TempDir())
+
+	err := runDrasiInit(context.Background(), "", false, "")
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "drasi binary not found")
+}
+
+func TestRunDrasiInit_DrasiEnvAndInitSucceed(t *testing.T) {
+	logFile := filepath.Join(t.TempDir(), "drasi.log")
+	installFakeCommands(t, map[string]string{
+		"drasi": fmt.Sprintf(`
+echo %%*>>"%s"
+if "%%1 %%2"=="env kube" exit /b 0
+if "%%1"=="init" exit /b 0
+exit /b 1
+`, logFile),
+	})
+
+	err := runDrasiInit(context.Background(), "", false, "")
+
+	require.NoError(t, err)
+	assert.Equal(t, []string{"env kube", "init"}, readNonEmptyLines(t, logFile))
+}
+
+func TestRunDrasiInit_PrivateAcrPassesRegistryFlag(t *testing.T) {
+	logFile := filepath.Join(t.TempDir(), "drasi.log")
+	installFakeCommands(t, map[string]string{
+		"drasi": fmt.Sprintf(`
+echo %%*>>"%s"
+if "%%1 %%2"=="env kube" exit /b 0
+if "%%1"=="init" exit /b 0
+exit /b 1
+`, logFile),
+	})
+
+	err := runDrasiInit(context.Background(), "", true, "example.azurecr.io")
+
+	require.NoError(t, err)
+	assert.Equal(t, []string{"env kube", "init --registry example.azurecr.io"}, readNonEmptyLines(t, logFile))
+}
+
+func TestApplyDrasiNetworkPolicies_KubectlMissingReturnsError(t *testing.T) {
+	t.Setenv("PATH", t.TempDir())
+
+	err := applyDrasiNetworkPolicies(context.Background(), "")
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "kubectl not found on PATH")
+}
+
+func TestApplyDrasiNetworkPolicies_KubectlApplySucceeds(t *testing.T) {
+	logFile := filepath.Join(t.TempDir(), "kubectl.log")
+	installFakeCommands(t, map[string]string{
+		"kubectl": fmt.Sprintf(`
+echo %%*>>"%s"
+if "%%1 %%2"=="config current-context" (
+  echo other-context
+  exit /b 0
+)
+if "%%1 %%2"=="config use-context" exit /b 0
+if "%%1"=="apply" (
+  more >nul
+  exit /b 0
+)
+exit /b 1
+`, logFile),
+	})
+
+	err := applyDrasiNetworkPolicies(context.Background(), "desired-context")
+
+	require.NoError(t, err)
+	assert.Equal(t, []string{"config current-context", "config use-context desired-context", "apply -f -"}, readNonEmptyLines(t, logFile))
 }

@@ -3,9 +3,11 @@ package cmd
 import (
 	"context"
 	"errors"
+	"os"
 	"testing"
 	"time"
 
+	"github.com/azure/azure-dev/cli/azd/pkg/azdext"
 	"github.com/lukemurraynz/azd.extensions.drasi/internal/validation"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -112,4 +114,42 @@ func TestHandlePreDeploy_ManifestLoadError(t *testing.T) {
 	err := handlePreDeploy(context.Background(), nil)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "pre-deploy validation")
+}
+
+func TestHandlePreDown_DrasiNotOnPath_ReturnsNilAndLogs(t *testing.T) {
+	originalPath := os.Getenv("PATH")
+	t.Cleanup(func() {
+		require.NoError(t, os.Setenv("PATH", originalPath))
+	})
+	require.NoError(t, os.Setenv("PATH", t.TempDir()))
+
+	err := handlePreDown(context.Background(), nil)
+	require.NoError(t, err)
+}
+
+func TestHandlePreDown_WithProjectArgs(t *testing.T) {
+	originalPath := os.Getenv("PATH")
+	t.Cleanup(func() {
+		require.NoError(t, os.Setenv("PATH", originalPath))
+	})
+	require.NoError(t, os.Setenv("PATH", t.TempDir()))
+
+	err := handlePreDown(context.Background(), &azdext.ProjectEventArgs{
+		Project: &azdext.ProjectConfig{Name: "sample-project"},
+	})
+	require.NoError(t, err)
+}
+
+func TestHandlePreDown_ContextCancelled(t *testing.T) {
+	originalPath := os.Getenv("PATH")
+	t.Cleanup(func() {
+		require.NoError(t, os.Setenv("PATH", originalPath))
+	})
+	require.NoError(t, os.Setenv("PATH", t.TempDir()))
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	err := handlePreDown(ctx, nil)
+	require.NoError(t, err)
 }
