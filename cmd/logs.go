@@ -24,7 +24,6 @@ var newLogsDrasiClient = func() logsDrasiClient {
 func newLogsCommand() *cobra.Command {
 	var componentID string
 	var kind string
-	var tail int
 	var follow bool
 
 	cmd := &cobra.Command{
@@ -97,7 +96,6 @@ func newLogsCommand() *cobra.Command {
 			if kubeContext != "" {
 				logArgs = append([]string{"--context", kubeContext}, logArgs...)
 			}
-			_ = tail
 			if follow {
 				// drasi watch streams by default; --follow remains a compatibility alias.
 			}
@@ -141,7 +139,6 @@ func newLogsCommand() *cobra.Command {
 
 	cmd.Flags().StringVar(&componentID, "component", "", "Filter logs by component ID")
 	cmd.Flags().StringVar(&kind, "kind", "", "Filter logs by component kind (source, continuousquery, middleware, reaction)")
-	cmd.Flags().IntVar(&tail, "tail", 0, "Number of recent log lines to show (0 = all)")
 	cmd.Flags().BoolVar(&follow, "follow", false, "Stream log output (compatibility alias)")
 
 	return cmd

@@ -163,16 +163,16 @@ func newDiagnoseCommand() *cobra.Command {
 
 			checks = append(checks, diagnosticCheck{
 				Name:        "key-vault-auth",
-				Status:      "ok",
-				Detail:      "Key Vault auth cannot be validated without a deployed secret reference; provision/deploy path validates this at runtime",
-				Remediation: "",
+				Status:      "skipped",
+				Detail:      "Key Vault auth requires a deployed secret reference; validated at provision/deploy time",
+				Remediation: "Deploy a component with a Key Vault secret reference to validate auth end-to-end.",
 			})
 
 			checks = append(checks, diagnosticCheck{
 				Name:        "log-analytics",
-				Status:      "ok",
+				Status:      "skipped",
 				Detail:      "Log Analytics workspace wiring is validated during provision and runtime observability checks",
-				Remediation: "",
+				Remediation: "Run `azd drasi provision` to validate Log Analytics workspace integration.",
 			})
 
 			payload := map[string]any{"status": "ok", "checks": checks}

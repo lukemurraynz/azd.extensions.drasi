@@ -9,7 +9,7 @@ Use this matrix to compose or trim capabilities without editing the core skill.
 | [`../bundles/containerapps-production`](../bundles/containerapps-production) | Container Apps diagnostics and revision regression analysis | agents, response plans, scheduled tasks |
 | [`../bundles/drasi-aks-production`](../bundles/drasi-aks-production) | Drasi lag/staleness triage and AKS-correlated diagnostics | agents, response plans, scheduled tasks |
 | [`../bundles/governance-kt`](../bundles/governance-kt) | approval gates, tool audit, KT completeness policy | hooks |
-| [`../bundles/connectors-observability`](../bundles/connectors-observability) | connector templates for GitHub/PagerDuty/Dynatrace/Grafana | connectors |
+| [`../bundles/connectors-observability`](../bundles/connectors-observability) | connector templates for GitHub/PagerDuty/Dynatrace/Grafana/Datadog/New Relic/Splunk/Elasticsearch/Hawkeye/AWS | connectors |
 
 ## Recommended Compositions
 

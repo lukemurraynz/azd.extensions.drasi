@@ -13,7 +13,6 @@ func SetVersion(version string) {
 	extensionVersion = version
 }
 
-// NewRootCommand builds the cobra command tree for azd drasi.
 func NewRootCommand() *cobra.Command {
 	var outputFormat string
 

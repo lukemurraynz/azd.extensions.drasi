@@ -8,14 +8,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/azure/azure-dev/cli/azd/pkg/azdext"
 	"github.com/azure/azd.extensions.drasi/internal/output"
+	"github.com/azure/azure-dev/cli/azd/pkg/azdext"
 	"github.com/google/uuid"
 	"github.com/spf13/cobra"
 )
 
-// runProvisionFunc is a package-level var so tests can override it without a live Azure
-// connection. The real default calls gRPC and the drasi CLI.
+// runProvisionFunc can be overridden in tests to avoid a live Azure connection.
 var runProvisionFunc = defaultRunProvision
 
 func newProvisionCommand() *cobra.Command {
@@ -30,12 +29,7 @@ func newProvisionCommand() *cobra.Command {
 	return cmd
 }
 
-// defaultRunProvision is the real implementation of azd drasi provision.
-//
-// It calls the azdext gRPC service to read AKS context and ACR settings, runs
-// `drasi init` to bootstrap the runtime, applies workload identity patches,
-// writes DRASI_PROVISIONED=true to azd env state, and emits a structured audit
-// event on success.
+// (doc: see NOTE in runDrasiInit for non-obvious behavior)
 func defaultRunProvision(cmd *cobra.Command, _ []string) error {
 	outputFormat, _ := cmd.Root().PersistentFlags().GetString("output")
 	format := output.FormatTable
@@ -189,13 +183,6 @@ func defaultRunProvision(cmd *cobra.Command, _ []string) error {
 	return nil
 }
 
-// runDrasiInit runs `drasi init` against the target AKS cluster.
-//
-// NOTE: `drasi init` (v0.10.0+) does not accept a --context flag; it always uses the
-// active kubectl context. If aksContext is non-empty and differs from the current context,
-// we switch to it via `kubectl config use-context` before calling init.
-// We also call `drasi env kube` to register the current kubectl context as the active
-// Drasi environment so that the drasi CLI connects to the right cluster.
 func runDrasiInit(ctx context.Context, aksContext string, usePrivateAcr bool, acrLoginServer string) error {
 	if aksContext != "" {
 		if err := switchKubectlContext(ctx, aksContext); err != nil {
@@ -215,7 +202,6 @@ func runDrasiInit(ctx context.Context, aksContext string, usePrivateAcr bool, ac
 	return runDrasiCommand(ctx, args...)
 }
 
-// switchKubectlContext sets the active kubectl context if it differs from the current one.
 func switchKubectlContext(ctx context.Context, contextName string) error {
 	kubectlPath, err := exec.LookPath("kubectl")
 	if err != nil {
@@ -245,7 +231,6 @@ func applyDefaultProviders(_ context.Context, _ string) error {
 	return nil
 }
 
-// runDrasiCommand runs a drasi CLI subcommand.
 func runDrasiCommand(ctx context.Context, args ...string) error {
 	drasiPath, err := exec.LookPath("drasi")
 	if err != nil {

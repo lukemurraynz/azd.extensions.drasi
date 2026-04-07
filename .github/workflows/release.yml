@@ -38,15 +38,12 @@ jobs:
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
           test "$(tr -d '[:space:]' < version.txt)" = "${VERSION}"
-          python3 - <<'PY'
-          import sys, yaml
-          version = sys.argv[1]
-          with open('extension.yaml', 'r', encoding='utf-8') as f:
-              manifest = yaml.safe_load(f)
-          if str(manifest.get('version')) != version:
-              raise SystemExit(f"extension.yaml version {manifest.get('version')} does not match tag {version}")
-          PY
-          "${VERSION}"
+          MANIFEST_VERSION=$(grep -E '^version:' extension.yaml | head -1 | sed 's/^version:[[:space:]]*//' | tr -d '"'"'"'[:space:]')
+          if [ "${MANIFEST_VERSION}" != "${VERSION}" ]; then
+            echo "extension.yaml version '${MANIFEST_VERSION}' does not match tag '${VERSION}'"
+            exit 1
+          fi
+          echo "Validated version: ${VERSION}"
 
       - name: Build all targets
         shell: bash
@@ -132,12 +129,16 @@ jobs:
     needs: create-release
     permissions:
       contents: read
+    env:
+      REGISTRY_PAT_SET: ${{ secrets.REGISTRY_PAT != '' }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        if: env.REGISTRY_PAT_SET == 'true'
         with:
           persist-credentials: false
 
       - name: Open registry PR
+        if: env.REGISTRY_PAT_SET == 'true'
         env:
           GH_TOKEN: ${{ secrets.REGISTRY_PAT }}
         shell: bash

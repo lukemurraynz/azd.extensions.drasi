@@ -15,11 +15,9 @@ import (
 const appInsightsEnvVar = "APPLICATIONINSIGHTS_CONNECTION_STRING"
 
 // NewTracer returns an OpenTelemetry tracer and a shutdown function.
-//
-// When APPLICATIONINSIGHTS_CONNECTION_STRING is absent the tracer is a no-op
-// and the shutdown function is a safe no-op. When the env var is present an
-// OTLP/HTTP TracerProvider is configured — the caller must invoke shutdown
-// before process exit to flush pending spans.
+// If APPLICATIONINSIGHTS_CONNECTION_STRING is absent, a no-op tracer is returned
+// with a no-op shutdown. If present, an OTLP/HTTP tracer provider is configured
+// and should be shutdown on exit to flush spans.
 func NewTracer(ctx context.Context) (trace.Tracer, func(context.Context) error, error) {
 	connStr := os.Getenv(appInsightsEnvVar)
 	if connStr == "" {

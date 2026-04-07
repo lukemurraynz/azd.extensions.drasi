@@ -19,8 +19,11 @@ Add connectors when access is required outside core Azure surfaces.
 
 1. Data sources (for non-default telemetry).
 2. Source code and knowledge (GitHub, Azure DevOps).
-3. Collaboration (Teams, Outlook).
-4. Custom MCP servers (third-party and internal systems).
+3. Collaboration (Teams, Outlook, Slack, Jira).
+4. Incident management (PagerDuty, ServiceNow).
+5. Observability (Datadog, New Relic, Splunk, Elasticsearch, Dynatrace, Grafana).
+6. Cloud infrastructure (AWS).
+7. Custom MCP servers (third-party and internal systems).
 
 ## MCP Health States
 
@@ -71,14 +74,26 @@ Notes:
    - automatic adoption of future tools is acceptable.
 3. Split custom agents by connector trust domain when possible.
 
+## MCP Transport Types
+
+Two transport modes are supported:
+
+| Transport | Use case |
+| --- | --- |
+| Streamable-HTTP | Cloud-hosted MCP servers with HTTPS endpoints |
+| Stdio | Locally hosted MCP servers running as sidecar processes |
+
+Choose Streamable-HTTP for SaaS connectors (Datadog, Splunk, etc.) and Stdio for self-hosted or internal MCP servers.
+
 ## AKS and Container Apps Connector Set
 
 Typical production set:
 
 1. Built-in Azure tools for metrics/logs/resource state.
-2. GitHub connector for source and PR correlation.
+2. GitHub or Azure DevOps connector for source and PR correlation.
 3. Optional PagerDuty or ServiceNow incident platform.
-4. Optional Grafana/Datadog/Dynatrace MCP for cross-platform observability.
+4. Optional Datadog/New Relic/Splunk/Dynatrace/Grafana MCP for cross-platform observability.
+5. Optional Slack or Jira for collaboration and work tracking.
 
 ## Troubleshooting Checklist
 
@@ -93,3 +108,4 @@ Typical production set:
 - Connectors: https://learn.microsoft.com/en-us/azure/sre-agent/connectors
 - Workflow automation: https://learn.microsoft.com/en-us/azure/sre-agent/workflow-automation
 - Official plugins: https://github.com/Azure/sre-agent-plugins
+- MCP connectors (pre-configured partners): https://sre.azure.com/docs/capabilities/mcp-connectors

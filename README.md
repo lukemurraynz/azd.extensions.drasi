@@ -8,7 +8,7 @@ Drasi requires coordinating several Azure resources (AKS, Key Vault, managed ide
 
 ## Features
 
-- Scaffold new Drasi projects from built-in templates (blank, cosmos-change-feed)
+- Scaffold new Drasi projects from built-in templates (blank, blank-terraform, cosmos-change-feed, event-hub-routing, query-subscription)
 - Offline validation of sources, queries, reactions, and middleware before any deployment
 - Provision AKS with OIDC and Workload Identity, Key Vault, Log Analytics, and the Drasi runtime in a single command
 - Deploy components in dependency order with per-component health checks
@@ -110,23 +110,257 @@ See the [full quick start guide](specs/001-azd-drasi-extension/quickstart.md) fo
 
 ## Command reference
 
-| Command | Description |
-|---------|-------------|
-| `azd drasi init` | Scaffold a new project from a template |
-| `azd drasi validate` | Validate configuration offline |
-| `azd drasi provision` | Provision Azure infrastructure and Drasi runtime |
-| `azd drasi deploy` | Deploy Drasi sources, queries, and reactions |
-| `azd drasi status` | Show component health and state (uses active kube context or `--environment` root flag) |
-| `azd drasi logs` | Watch continuous query output via `drasi watch` (uses active kube context or `--environment` root flag) |
-| `azd drasi diagnose` | Run five health checks against a live cluster (uses active kube context or `--environment` root flag) |
-| `azd drasi teardown --force` | Remove components or full infrastructure |
-| `azd drasi upgrade --force` | Upgrade the Drasi runtime on an existing cluster |
+### Global flags
 
-Run `azd drasi <command> --help` for flags and examples on any command.
+These flags are available on every command.
 
-The extension also contains hidden host-invoked commands (`listen` for lifecycle events and
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--debug` | bool | `false` | Enable verbose debug logging. |
+| `-e, --environment` | string | | Name of the azd environment to use. Controls which AKS context the command targets. |
+| `--output` | string | `table` | Output format. Accepted values: `table`, `json`. |
+
+### init
+
+Scaffold a new Drasi project from a built-in template.
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--template` | string | `blank` | Template name. One of: `blank`, `blank-terraform`, `cosmos-change-feed`, `event-hub-routing`, `query-subscription`. |
+| `--output-dir` | string | `.` | Directory to write scaffolded files into. |
+| `--force` | bool | `false` | Overwrite existing files without prompting. |
+
+```bash
+azd drasi init --template cosmos-change-feed
+azd drasi init --template blank-terraform --output-dir ./my-project
+```
+
+### validate
+
+Validate the Drasi configuration offline (no cluster or network access required).
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--config` | string | `drasi\drasi.yaml` | Path to the Drasi manifest file. |
+| `--strict` | bool | `false` | Treat warnings as errors. |
+
+```bash
+azd drasi validate
+azd drasi validate --strict
+azd drasi validate --config path/to/drasi.yaml
+```
+
+### provision
+
+Provision Azure infrastructure (AKS, Key Vault, UAMI, Log Analytics) and install the Drasi runtime.
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `-e, --environment` | string | | Target azd environment name. |
+
+```bash
+azd drasi provision
+azd drasi provision --environment staging
+```
+
+### deploy
+
+Deploy Drasi sources, queries, middleware, and reactions in dependency order.
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--config` | string | `drasi\drasi.yaml` | Path to the Drasi manifest file. |
+| `--dry-run` | bool | `false` | Preview what would be applied without making changes. |
+| `-e, --environment` | string | | Target azd environment for overlay resolution. |
+
+```bash
+azd drasi deploy
+azd drasi deploy --dry-run
+azd drasi deploy --environment prod
+azd drasi deploy --output json
+```
+
+### status
+
+Show component health and state for the active cluster.
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--kind` | string | | Filter by component kind. One of: `source`, `continuousquery`, `middleware`, `reaction`. |
+
+Uses the active kube context, or resolves `AZURE_AKS_CONTEXT` from azd environment state when `--environment` is passed as a root flag.
+
+```bash
+azd drasi status
+azd drasi status --kind source
+azd drasi --environment staging status
+azd drasi status --output json
+```
+
+### logs
+
+Stream logs from Drasi components. When `--kind` and `--component` are provided for a continuous query, runs in watch mode via `drasi watch`.
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--kind` | string | | Component kind. One of: `source`, `continuousquery`, `middleware`, `reaction`. |
+| `--component` | string | | Component ID to stream logs for. |
+| `--follow` | bool | `false` | Keep the stream open and follow new output. |
+
+```bash
+azd drasi logs --kind continuousquery --component order-changes --follow
+azd drasi logs --kind source --component my-source
+azd drasi --environment dev logs --kind continuousquery --component my-query
+```
+
+### diagnose
+
+Run five health checks against a live cluster: AKS connectivity, Drasi API, Dapr runtime, Key Vault auth, and Log Analytics.
+
+No command-specific flags. Uses global flags only.
+
+```bash
+azd drasi diagnose
+azd drasi --environment prod diagnose
+azd drasi diagnose --output json
+```
+
+### teardown
+
+Remove deployed Drasi components. With `--infrastructure`, also deletes the Azure resource group.
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--config` | string | `drasi\drasi.yaml` | Path to the Drasi manifest file. |
+| `--force` | bool | `false` | Required. Confirms the destructive action. |
+| `--infrastructure` | bool | `false` | Also delete the Azure resource group and all infrastructure. |
+| `-e, --environment` | string | | Target azd environment. |
+
+```bash
+# Remove components only (keep infrastructure)
+azd drasi teardown --force
+
+# Remove components and infrastructure
+azd drasi teardown --force --infrastructure
+
+# Target a specific environment
+azd drasi teardown --force --environment staging
+```
+
+### upgrade
+
+Upgrade the Drasi runtime on an existing cluster.
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--force` | bool | `false` | Required. Confirms the upgrade action. |
+
+Uses the active kube context, or resolves `AZURE_AKS_CONTEXT` from azd environment state when `--environment` is passed as a root flag.
+
+```bash
+azd drasi upgrade --force
+azd drasi --environment prod upgrade --force
+```
+
+### version
+
+Print the extension version.
+
+No command-specific flags.
+
+```bash
+azd drasi version
+```
+
+### Hidden commands
+
+The extension also contains host-invoked commands (`listen` for lifecycle events and
 `metadata` for azd command discovery). These are internal integration points and are not part of
 the user-facing command surface.
+
+## Example scenarios
+
+### Scaffold, validate, and deploy
+
+A typical first-run workflow from an empty directory:
+
+```bash
+mkdir my-drasi-app && cd my-drasi-app
+azd init
+azd drasi init --template cosmos-change-feed
+azd drasi validate --strict
+azd auth login
+azd drasi provision
+azd drasi deploy
+azd drasi status
+```
+
+### Dry-run before deploying
+
+Preview what components would be applied without touching the cluster:
+
+```bash
+azd drasi deploy --dry-run
+```
+
+### Multi-environment workflow
+
+Use environment overlays to target different clusters with different parameter values:
+
+```bash
+# Provision and deploy to dev
+azd drasi provision --environment dev
+azd drasi deploy --environment dev
+
+# Provision and deploy to prod with production secrets
+azd drasi provision --environment prod
+azd drasi deploy --environment prod
+```
+
+### Monitor a running deployment
+
+Check component health, stream query output, and run diagnostics:
+
+```bash
+azd drasi status
+azd drasi status --kind continuousquery --output json
+azd drasi logs --kind continuousquery --component order-changes --follow
+azd drasi diagnose
+```
+
+### JSON output for scripting
+
+All commands support `--output json` for machine-readable output:
+
+```bash
+azd drasi status --output json
+azd drasi diagnose --output json
+azd drasi deploy --output json
+```
+
+### Teardown and cleanup
+
+Remove components when done, or tear down the full environment:
+
+```bash
+# Remove Drasi components only
+azd drasi teardown --force
+
+# Remove everything including Azure infrastructure
+azd drasi teardown --force --infrastructure
+
+# Upgrade the Drasi runtime on an existing cluster
+azd drasi upgrade --force
+```
+
+### Using a non-default config path
+
+Point to a manifest in a different location:
+
+```bash
+azd drasi validate --config custom/path/drasi.yaml
+azd drasi deploy --config custom/path/drasi.yaml
+```
 
 ## Configuration
 

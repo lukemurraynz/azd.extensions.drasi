@@ -4,16 +4,14 @@ import (
 	"context"
 	"os"
 
-	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/metric"
 	metricnoop "go.opentelemetry.io/otel/metric/noop"
+	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 )
 
 // NewMeter returns an OpenTelemetry meter and a shutdown function.
-//
-// When APPLICATIONINSIGHTS_CONNECTION_STRING is absent the meter is a no-op.
-// When the env var is present a real SDK MeterProvider is configured.
-// The caller must invoke shutdown before process exit to flush pending metrics.
+// If APPLICATIONINSIGHTS_CONNECTION_STRING is absent, a no-op meter is used.
+// When present, a real MeterProvider is configured. Call shutdown to flush metrics.
 func NewMeter(ctx context.Context) (metric.Meter, func(context.Context) error, error) {
 	connStr := os.Getenv(appInsightsEnvVar)
 	if connStr == "" {

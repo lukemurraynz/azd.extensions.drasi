@@ -51,7 +51,7 @@ bundles:
       - audit-hooks
       - kt-policy-enforcement
   - name: connectors-observability
-    version: 1.0.0
+    version: 1.1.0
     purpose: Connector templates for source, incident, and observability integrations.
     path: ./connectors-observability
     depends_on: []
@@ -60,3 +60,9 @@ bundles:
       - pagerduty-integration
       - dynatrace-integration
       - azure-managed-grafana-integration
+      - datadog-integration
+      - new-relic-integration
+      - splunk-integration
+      - elasticsearch-integration
+      - hawkeye-integration
+      - aws-integration

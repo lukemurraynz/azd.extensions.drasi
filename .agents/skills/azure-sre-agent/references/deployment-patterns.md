@@ -103,6 +103,16 @@ For high-severity incidents and production write paths:
 
 Use hooks to reject incomplete major-incident responses.
 
+## Pattern 9: Starter Lab Deployment (azd-based)
+
+The official starter lab at `microsoft/sre-agent/labs/starter-lab` uses `azd up` for deployment:
+
+1. Deploy: SRE Agent, sample app (Grubify), Log Analytics, App Insights, Alert, Container Registry, Managed Identity.
+2. Three scenario tracks: IT Operations, Developer (GitHub), Workflow Automation.
+3. Estimated time: ~40 minutes.
+
+Use this as a reference for azd-based SRE Agent provisioning patterns. See https://github.com/microsoft/sre-agent/tree/main/labs/starter-lab.
+
 ## AKS and Container Apps Production Pattern
 
 ### Split specialist custom agents

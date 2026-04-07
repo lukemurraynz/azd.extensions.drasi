@@ -1,15 +1,23 @@
 ---
 name: azure-defaults
 description: >-
-  Provide Azure infrastructure defaults for naming conventions, regions, tags,
-  security baselines, WAF criteria, and pricing guidance.
+  Provide Azure infrastructure defaults for naming conventions (CAF, ALZ,
+  enterprise), regions, tags, security baselines, WAF criteria, AVM module
+  policy, private DNS zones, RBAC role IDs, SDK packages, landing zone IDs,
+  governance policies, service registry, and pricing guidance.
   USE FOR: looking up Azure naming standards, choosing regions, setting resource
-  tags, applying security baselines, or verifying governance defaults before deployment.
+  tags, applying security baselines, verifying governance defaults before
+  deployment, creating Bicep templates, writing Terraform modules, deploying
+  Azure resources, provisioning infrastructure, choosing SKUs, estimating costs,
+  configuring AKS clusters, setting up storage accounts, creating key vaults,
+  deploying container apps, writing IaC, applying CAF or ALZ naming strategies,
+  selecting landing zones, finding private DNS zone names, looking up RBAC role
+  IDs, or checking API versions for Azure services.
 compatibility: Works with Claude Code, GitHub Copilot, VS Code, and any Agent Skills compatible tool.
 license: MIT
 metadata:
   author: jonathan-vella
-  version: "1.0"
+  version: "2.0"
   category: azure-infrastructure
 ---
 
@@ -86,6 +94,93 @@ module keyVault 'modules/key-vault.bicep' = {
 
 ---
 
+### Azure Service Registry
+
+Canonical reference for private endpoint DNS zones, RBAC role IDs, authentication, and SDK
+packages per Azure service. Sourced from ARM resource type namespaces.
+
+#### Private Endpoint DNS Zones
+
+| Service | ARM Namespace | Private DNS Zone | Group ID |
+| --- | --- | --- | --- |
+| SQL Server | `Microsoft.Sql/servers` | `privatelink.database.windows.net` | `sqlServer` |
+| Cosmos DB | `Microsoft.DocumentDB/databaseAccounts` | `privatelink.documents.azure.com` | `Sql` |
+| Storage (Blob) | `Microsoft.Storage/storageAccounts` | `privatelink.blob.core.windows.net` | `blob` |
+| Key Vault | `Microsoft.KeyVault/vaults` | `privatelink.vaultcore.azure.net` | `vault` |
+| Service Bus | `Microsoft.ServiceBus/namespaces` | `privatelink.servicebus.windows.net` | `namespace` |
+| Event Grid | `Microsoft.EventGrid/topics` | `privatelink.eventgrid.azure.net` | `topic` |
+| Redis Cache | `Microsoft.Cache/redis` | `privatelink.redis.cache.windows.net` | `redisCache` |
+| Azure OpenAI | `Microsoft.CognitiveServices/accounts` | `privatelink.openai.azure.com` | `account` |
+| Container Registry | `Microsoft.ContainerRegistry/registries` | `privatelink.azurecr.io` | `registry` |
+| PostgreSQL Flexible | `Microsoft.DBforPostgreSQL/flexibleServers` | `privatelink.postgres.database.azure.com` | `postgresqlServer` |
+| App Configuration | `Microsoft.AppConfiguration/configurationStores` | `privatelink.azconfig.io` | `configurationStores` |
+
+#### RBAC Role IDs (Common Data Plane Roles)
+
+| Service | Role | Role Definition ID |
+| --- | --- | --- |
+| Storage Blob | Data Reader | `2a2b9908-6ea1-4ae2-8e65-a410df84e7d1` |
+| Storage Blob | Data Contributor | `ba92f5b4-2d11-453d-a403-e96b0029c9fe` |
+| Storage Blob | Data Owner | `b7e6dc6d-f1e8-4753-8033-0f276bb0955b` |
+| Key Vault | Secrets User | `4633458b-17de-408a-b874-0445c86b69e6` |
+| Key Vault | Secrets Officer | `b86a8fe4-44ce-4948-aee5-eccb2c155cd7` |
+| Key Vault | Administrator | `00482a5a-887f-4fb3-b363-3b7fe8e74483` |
+| Service Bus | Data Receiver | `4f6d3b9b-027b-4f4c-9142-0e5a2a2247e0` |
+| Service Bus | Data Sender | `69a216fc-b8fb-44d8-bc22-1f3c2cd27a39` |
+| Service Bus | Data Owner | `090c5cfd-751d-490a-894a-3ce6f1109419` |
+| Cosmos DB | Built-in Data Reader | `00000000-0000-0000-0000-000000000001` |
+| Cosmos DB | Built-in Data Contributor | `00000000-0000-0000-0000-000000000002` |
+| Azure OpenAI | Cognitive Services User | `a97b65f3-24c7-4388-baec-2e87135dc908` |
+| Azure OpenAI | Cognitive Services Contributor | `25fbc0a9-bd7c-42a3-aa1a-3b75d497ee68` |
+| Event Grid | Data Sender | `d5a91429-5739-47e2-a06b-3470a27159e7` |
+
+> [!NOTE]
+> For a full RBAC role catalog and the ability to look up least-privilege roles, use the
+> `azure-role-selector` skill. The IDs above cover the most common data plane scenarios.
+
+#### Authentication Token Scopes
+
+| Service | Token Scope |
+| --- | --- |
+| SQL Database | `https://database.windows.net/.default` |
+| Cosmos DB | `https://cosmos.azure.com/.default` |
+| Storage | `https://storage.azure.com/.default` |
+| Key Vault | `https://vault.azure.net/.default` |
+| Service Bus | `https://servicebus.azure.net/.default` |
+| Event Grid | `https://eventgrid.azure.net/.default` |
+| Azure OpenAI | `https://cognitiveservices.azure.com/.default` |
+| Redis Cache | `https://redis.azure.com/.default` |
+
+#### SDK Packages by Language
+
+| Service | .NET | Python | Node.js |
+| --- | --- | --- | --- |
+| SQL Database | `Microsoft.Data.SqlClient` | `pyodbc` | `tedious` |
+| Cosmos DB | `Microsoft.Azure.Cosmos` | `azure-cosmos` | `@azure/cosmos` |
+| Storage (Blob) | `Azure.Storage.Blobs` | `azure-storage-blob` | `@azure/storage-blob` |
+| Key Vault (Secrets) | `Azure.Security.KeyVault.Secrets` | `azure-keyvault-secrets` | `@azure/keyvault-secrets` |
+| Service Bus | `Azure.Messaging.ServiceBus` | `azure-servicebus` | `@azure/service-bus` |
+| Event Grid | `Azure.Messaging.EventGrid` | `azure-eventgrid` | `@azure/eventgrid` |
+| Azure OpenAI | `Azure.AI.OpenAI` | `openai` | `openai` |
+| Identity (all) | `Azure.Identity` | `azure-identity` | `@azure/identity` |
+
+#### Stable API Versions
+
+| Service | API Version |
+| --- | --- |
+| `Microsoft.Sql/servers` | `2023-08-01-preview` |
+| `Microsoft.DocumentDB/databaseAccounts` | `2024-05-15` |
+| `Microsoft.Storage/storageAccounts` | `2023-05-01` |
+| `Microsoft.KeyVault/vaults` | `2023-07-01` |
+| `Microsoft.ServiceBus/namespaces` | `2024-01-01` |
+| `Microsoft.EventGrid/topics` | `2024-06-01-preview` |
+| `Microsoft.Cache/redis` | `2024-03-01` |
+| `Microsoft.CognitiveServices/accounts` | `2024-04-01-preview` |
+| `Microsoft.App/containerApps` | `2024-03-01` |
+| `Microsoft.ManagedIdentity/userAssignedIdentities` | `2023-07-31-preview` |
+
+---
+
 ### AKS Baseline Defaults (The AKS Book)
 
 | Decision Area      | Default for Future Projects                                                                 |
@@ -102,30 +197,79 @@ module keyVault 'modules/key-vault.bicep' = {
 
 ---
 
-## CAF Naming Conventions
+## Naming Strategies
 
-### Standard Abbreviations
+All agents use a shared naming resolver. Select a strategy based on organizational maturity and
+landing zone requirements. The strategy determines how resource names are composed.
 
-| Resource         | Abbreviation | Name Pattern                | Max Length |
-| ---------------- | ------------ | --------------------------- | ---------- |
-| Resource Group   | `rg`         | `rg-{project}-{env}`        | 90         |
-| Virtual Network  | `vnet`       | `vnet-{project}-{env}`      | 64         |
-| Subnet           | `snet`       | `snet-{purpose}-{env}`      | 80         |
-| NSG              | `nsg`        | `nsg-{purpose}-{env}`       | 80         |
-| Key Vault        | `kv`         | `kv-{short}-{env}-{suffix}` | **24**     |
-| Storage Account  | `st`         | `st{short}{env}{suffix}`    | **24**     |
-| App Service Plan | `asp`        | `asp-{project}-{env}`       | 40         |
-| App Service      | `app`        | `app-{project}-{env}`       | 60         |
-| SQL Server       | `sql`        | `sql-{project}-{env}`       | 63         |
-| SQL Database     | `sqldb`      | `sqldb-{project}-{env}`     | 128        |
-| Static Web App   | `stapp`      | `stapp-{project}-{env}`     | 40         |
-| CDN / Front Door | `fd`         | `fd-{project}-{env}`        | 64         |
-| Log Analytics    | `log`        | `log-{project}-{env}`       | 63         |
-| App Insights     | `appi`       | `appi-{project}-{env}`      | 255        |
-| Container App    | `ca`         | `ca-{project}-{env}`        | 32         |
-| Container Env    | `cae`        | `cae-{project}-{env}`       | 60         |
-| Cosmos DB        | `cosmos`     | `cosmos-{project}-{env}`    | 44         |
-| Service Bus      | `sb`         | `sb-{project}-{env}`        | 50         |
+### Strategy Selection
+
+| Strategy | Pattern | Example | When to Use |
+| --- | --- | --- | --- |
+| `microsoft-alz` **(default for new projects)** | `{zoneid}-{type}-{service}-{env}-{region}` | `zd-rg-api-dev-eus` | Azure Landing Zone deployments with zone-based governance |
+| `microsoft-caf` | `{type}-{org}-{service}-{env}-{region}-{instance}` | `rg-contoso-api-dev-eus-001` | Standard CAF-aligned organizations without ALZ zones |
+| `simple` | `{org}-{service}-{type}-{env}` | `contoso-api-rg-dev` | Prototypes, demos, small teams without governance |
+| `enterprise` | `{type}-{bu}-{org}-{service}-{env}-{region}-{instance}` | `rg-it-contoso-api-dev-eus-001` | Large orgs with business unit separation |
+| `custom` | User-defined pattern | Depends on template | When existing conventions must be preserved |
+
+### Landing Zone IDs (ALZ)
+
+When using `microsoft-alz`, resources are assigned to a landing zone by prefix:
+
+| Zone | ID | Used For |
+| --- | --- | --- |
+| Connectivity Platform | `pc` | Networking, DNS, firewall |
+| Identity Platform | `pi` | Entra ID, RBAC |
+| Management Platform | `pm` | Log Analytics, App Insights |
+| Development Zone | `zd` | Dev workloads **(default)** |
+| Testing Zone | `zt` | QA / test workloads |
+| Staging Zone | `zs` | UAT / staging workloads |
+| Production Zone | `zp` | Production workloads |
+
+### Standard Abbreviations (CAF)
+
+| Resource         | Abbreviation | CAF Pattern                 | ALZ Pattern                        | Max Length |
+| ---------------- | ------------ | --------------------------- | ---------------------------------- | ---------- |
+| Resource Group   | `rg`         | `rg-{org}-{svc}-{env}`     | `{zone}-rg-{svc}-{env}-{region}`  | 90         |
+| Virtual Network  | `vnet`       | `vnet-{org}-{svc}-{env}`   | `{zone}-vnet-{svc}-{env}-{region}` | 64         |
+| Subnet           | `snet`       | `snet-{purpose}-{env}`     | `{zone}-snet-{purpose}-{env}`     | 80         |
+| NSG              | `nsg`        | `nsg-{purpose}-{env}`      | `{zone}-nsg-{purpose}-{env}`      | 80         |
+| Key Vault        | `kv`         | `kv-{short}-{env}-{suffix}` | `{zone}-kv-{short}-{suffix}`     | **24**     |
+| Storage Account  | `st`         | `st{short}{env}{suffix}`   | `{zone}st{short}{suffix}`         | **24**     |
+| App Service Plan | `asp`        | `asp-{org}-{svc}-{env}`    | `{zone}-asp-{svc}-{env}-{region}` | 40         |
+| App Service      | `app`        | `app-{org}-{svc}-{env}`    | `{zone}-app-{svc}-{env}-{region}` | 60         |
+| SQL Server       | `sql`        | `sql-{org}-{svc}-{env}`    | `{zone}-sql-{svc}-{env}-{region}` | 63         |
+| SQL Database     | `sqldb`      | `sqldb-{org}-{svc}-{env}`  | `{zone}-sqldb-{svc}-{env}`        | 128        |
+| Static Web App   | `stapp`      | `stapp-{org}-{svc}-{env}`  | `{zone}-stapp-{svc}-{env}`        | 40         |
+| CDN / Front Door | `fd`         | `fd-{org}-{svc}-{env}`     | `{zone}-fd-{svc}-{env}`           | 64         |
+| Log Analytics    | `log`        | `log-{org}-{svc}-{env}`    | `{zone}-log-{svc}-{env}-{region}` | 63         |
+| App Insights     | `appi`       | `appi-{org}-{svc}-{env}`   | `{zone}-appi-{svc}-{env}`         | 255        |
+| Container App    | `ca`         | `ca-{org}-{svc}-{env}`     | `{zone}-ca-{svc}-{env}-{region}`  | 32         |
+| Container Env    | `cae`        | `cae-{org}-{svc}-{env}`    | `{zone}-cae-{svc}-{env}-{region}` | 60         |
+| Cosmos DB        | `cosmos`     | `cosmos-{org}-{svc}-{env}` | `{zone}-cosmos-{svc}-{env}`       | 44         |
+| Service Bus      | `sb`         | `sb-{org}-{svc}-{env}`     | `{zone}-sb-{svc}-{env}-{region}`  | 50         |
+| Container Registry | `cr`       | `cr{org}{svc}{env}`        | `{zone}cr{svc}{env}`              | 50         |
+| Managed Identity | `id`         | `id-{org}-{svc}-{env}`     | `{zone}-id-{svc}-{env}-{region}`  | 128        |
+| API Management   | `apim`       | `apim-{org}-{svc}-{env}`   | `{zone}-apim-{svc}-{env}-{region}` | 50        |
+| Azure OpenAI     | `oai`        | `oai-{org}-{svc}-{env}`    | `{zone}-oai-{svc}-{env}-{region}` | 64         |
+| Event Hub        | `evh`        | `evh-{org}-{svc}-{env}`    | `{zone}-evh-{svc}-{env}-{region}` | 50         |
+| Redis Cache      | `redis`      | `redis-{org}-{svc}-{env}`  | `{zone}-redis-{svc}-{env}`        | 63         |
+
+### Region Abbreviations (for naming)
+
+| Region | Abbreviation |
+| --- | --- |
+| `australiaeast` | `aue` |
+| `australiasoutheast` | `ause` |
+| `eastus` | `eus` |
+| `eastus2` | `eus2` |
+| `westus2` | `wus2` |
+| `centralus` | `cus` |
+| `westeurope` | `weu` |
+| `northeurope` | `neu` |
+| `eastasia` | `ea` |
+| `southeastasia` | `sea` |
+| `uksouth` | `uks` |
 
 ### Length-Constrained Resources
 
@@ -142,11 +286,125 @@ var stName = 'st${take(replace(projectName, '-', ''), 8)}${take(environment, 3)}
 ### Naming Rules
 
 - **DO**: Use lowercase with hyphens (`kv-myapp-dev-abc123`)
-- **DO**: Include `uniqueSuffix` in globally unique names (Key Vault, Storage, SQL Server)
+- **DO**: Include `uniqueSuffix` in globally unique names (Key Vault, Storage, SQL Server, Container Registry)
 - **DO**: Use `take()` to truncate long names within limits
-- **DON'T**: Use hyphens in Storage Account names (only lowercase + numbers)
+- **DO**: Include region abbreviation in names for multi-region deployments
+- **DO**: Include instance number (`-001`) for resources that may have multiple instances
+- **DON'T**: Use hyphens in Storage Account or Container Registry names (only lowercase + numbers)
 - **DON'T**: Hardcode unique values — always derive from `uniqueString(resourceGroup().id)`
 - **DON'T**: Exceed max length — Bicep won't warn, deployment will fail
+- **DON'T**: Mix naming strategies within a single deployment
+
+---
+
+## Architecture Taxonomy
+
+Four-level hierarchy for classifying Azure workloads. Aligns with CAF landing zone
+decomposition and governs how agents assign resources to deployment stages.
+
+### Layer Classification
+
+| Layer | Display Name | Description | Owned By |
+| --- | --- | --- | --- |
+| `core` | Core | Cross-cutting foundations: identity and observability | Cloud Architect |
+| `infra` | Infrastructure | Azure resource provisioning via IaC | Infrastructure Architect |
+| `data` | Data | Databases, storage, and messaging services | Data Architect |
+| `app` | Application | Application source code with distinct sub-layers | Application Architect |
+
+### Infrastructure Capabilities
+
+| Capability | Components | Examples |
+| --- | --- | --- |
+| Core Networking | connectivity, load-balancing, private-access, dns, api-gateway | VNet, subnets, App Gateway, Front Door, Private Endpoints, APIM |
+| Compute | container-hosting, web-hosting, serverless, static-hosting | Container Apps, AKS, App Service, Functions, Static Web Apps |
+| Security | secrets-management, threat-protection, identity-protection | Key Vault, Defender, Sentinel |
+| AI Services | cognitive, search, ml | Azure OpenAI, AI Search, ML Workspace |
+| Supporting | container-registry, configuration, communication | ACR, App Configuration, Communication Services |
+
+### Data Capabilities
+
+| Capability | Components | Examples |
+| --- | --- | --- |
+| Data Services | relational-db, nosql-db, caching, analytics | SQL, PostgreSQL, Cosmos DB, Redis, Databricks |
+| Storage Services | blob-storage, file-storage, data-lake | Blob, Azure Files, ADLS Gen2 |
+| Messaging | message-broker, event-streaming, event-routing, iot-ingestion | Service Bus, Event Hubs, Event Grid, IoT Hub |
+
+### Deployment Stage Ordering
+
+Deploy layers in dependency order. Each layer depends on the one above:
+
+```text
+1. Core       → Managed Identity, Log Analytics, App Insights
+2. Infra      → VNet, subnets, NSGs, compute, Key Vault, ACR
+3. Data       → SQL, Cosmos DB, Redis, Service Bus, storage
+4. App        → Container images, app code, background workers
+```
+
+---
+
+## Governance Policy Framework
+
+Governance policies are declarative rules that guide infrastructure and application code
+generation. Three enforcement levels map to prompt keywords.
+
+### Policy Severity Levels
+
+| Level | Prompt Keyword | Meaning |
+| --- | --- | --- |
+| `required` | **MUST** | Agent must follow this rule. A violation is a defect. |
+| `recommended` | **SHOULD** | Agent should follow unless there is a justified reason not to. |
+| `optional` | **MAY** | Best practice. Agent may skip if not relevant. |
+
+### Standard Policy Categories
+
+| Category | Scope | Example Rules |
+| --- | --- | --- |
+| `azure` | Service-specific IaC | Container Apps (CA-001..004), Key Vault (KV-001..005), SQL (SQL-001..005), Cosmos DB (CDB-001..004) |
+| `security` | Cross-cutting security | Managed Identity (MI-001..004), Authentication (AUTH-001..003), Data Protection (DP-001..004), Network Isolation (NET-001..004) |
+| `integration` | Service-to-service | APIM to Container Apps (INT-001..004) |
+
+### Mandatory Authentication Constraints
+
+All Azure services **MUST** use Managed Identity for service-to-service authentication:
+
+| Pattern | When to Use |
+| --- | --- |
+| System-assigned managed identity | Single-service resources with a 1:1 lifecycle |
+| User-assigned managed identity | Identity shared across resources, or identity must survive recreation |
+
+Authentication flow is always:
+
+```text
+Service → Managed Identity → RBAC Role Assignment → Target Azure Resource
+```
+
+### Mandatory Tagging Constraints
+
+Resources that do not carry required tags will be rejected by Azure Policy:
+
+| Constraint | Enforcement |
+| --- | --- |
+| All 3 required tags (`displayName`, `locationIdentifier`, `cloud`) present | Azure Policy Deny |
+| Tag values match expected patterns | Azure Policy Audit |
+| Resources inherit resource group tags where applicable | Azure Policy DeployIfNotExists |
+
+### Mandatory Network Constraints
+
+| Constraint | Enforcement |
+| --- | --- |
+| HTTPS-only traffic | `supportsHttpsTrafficOnly: true` on storage |
+| TLS 1.2 minimum | `minimumTlsVersion: 'TLS1_2'` on all services |
+| No public blob access | `allowBlobPublicAccess: false` on storage |
+| Public access disabled (prod) | `publicNetworkAccess: 'Disabled'` on data services |
+| SQL Azure AD-only | `azureADOnlyAuthentication: true` |
+
+### Policy Violation Resolution
+
+During code generation, violations are resolved conversationally:
+
+1. **Accept compliant** (default): Agent output meets the rule.
+2. **Override with justification**: Record rule ID, justification, and approver in audit trail.
+3. **Regenerate**: Agent produces new output that satisfies the rule.
 
 ---
 
@@ -719,9 +977,14 @@ Before completing any agent task, verify:
 - [ ] All required H2 headings from template are present
 - [ ] H2 headings match template text exactly
 - [ ] All 3 required tags included (`displayName`, `locationIdentifier`, `cloud`)
+- [ ] Naming strategy consistently applied (ALZ, CAF, simple, enterprise, or custom)
+- [ ] Landing zone ID correct for the target environment (if using ALZ)
 - [ ] Unique suffix used for globally unique names
 - [ ] Security baseline settings applied
+- [ ] Managed Identity used for all service-to-service auth (no connection strings or keys)
 - [ ] Region defaults correct (`australiaeast`, or exception documented)
+- [ ] Private DNS zones match the service registry table
+- [ ] RBAC role assignments use least-privilege role IDs from registry
 - [ ] Attribution header included with agent name and date
 
 ---
@@ -733,6 +996,10 @@ Before completing any agent task, verify:
 - [Cost Optimization](../cost-optimization/SKILL.md) — SKU sizing and spend controls
 - [Azure Troubleshooting](../azure-troubleshooting/SKILL.md) — Diagnosing deployed resource issues
 - [AKS Cluster Architecture](../aks-cluster-architecture/SKILL.md) — AKS-specific defaults and architecture decisions
+- [Identity Managed Identity](../identity-managed-identity/SKILL.md) — Managed identity patterns and DefaultAzureCredential
+- [Private Networking](../private-networking/SKILL.md) — Private endpoints, VNet integration, NSGs
+- [Secret Management](../secret-management/SKILL.md) — Key Vault RBAC, secret rotation, CSI driver
+- [Terraform Patterns](../terraform-patterns/SKILL.md) — Reusable Terraform patterns using AVM-TF modules
 
 ### MCP Tooling
 
@@ -742,10 +1009,19 @@ Before completing any agent task, verify:
 
 ## Currency and Verification
 
-- **Date checked:** 2026-03-31
-- **Compatibility:** Azure CLI, Bicep, ARM templates
-- **Sources:** [Azure naming conventions](https://learn.microsoft.com/azure/cloud-adoption-framework/ready/azure-best-practices/resource-naming), [Azure regions](https://learn.microsoft.com/azure/reliability/availability-zones-overview), [Azure resource tags](https://learn.microsoft.com/azure/azure-resource-manager/management/tag-resources)
+- **Date checked:** 2026-04-07
+- **Compatibility:** Azure CLI, Bicep, ARM templates, Terraform
+- **Sources:**
+  - [Azure naming conventions (CAF)](https://learn.microsoft.com/azure/cloud-adoption-framework/ready/azure-best-practices/resource-naming)
+  - [Azure Landing Zones](https://learn.microsoft.com/azure/cloud-adoption-framework/ready/landing-zone/)
+  - [Azure regions](https://learn.microsoft.com/azure/reliability/availability-zones-overview)
+  - [Azure resource tags](https://learn.microsoft.com/azure/azure-resource-manager/management/tag-resources)
+  - [Azure/az-prototype](https://github.com/Azure/az-prototype) — naming strategies, service registry, taxonomy, governance policies
+  - [Azure Private DNS zones](https://learn.microsoft.com/azure/private-link/private-endpoint-dns)
+  - [Azure built-in RBAC roles](https://learn.microsoft.com/azure/role-based-access-control/built-in-roles)
 - **Verification steps:**
   1. Verify region availability: `az account list-locations --query "[].name" -o tsv`
   2. Check naming rules per resource type: `az provider show --namespace Microsoft.Storage --query "resourceTypes[?resourceType=='storageAccounts'].{name:resourceType}"` (repeat per resource type)
   3. Verify tag policies: `az policy assignment list --query "[?contains(displayName, 'tag')]"`
+  4. Verify RBAC role IDs: `az role definition list --name "Storage Blob Data Reader" --query "[].name" -o tsv`
+  5. Verify private DNS zone names: `az network private-dns zone list --query "[].name" -o tsv`

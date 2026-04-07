@@ -70,7 +70,7 @@ func TestLogsCommand_TableSuccess_PrintsLogs(t *testing.T) {
 	stderr := &bytes.Buffer{}
 	root.SetOut(stdout)
 	root.SetErr(stderr)
-	root.SetArgs([]string{"logs", "--component", "q1", "--kind", "continuousquery", "--tail", "5", "--follow"})
+	root.SetArgs([]string{"logs", "--component", "q1", "--kind", "continuousquery", "--follow"})
 
 	err := root.Execute()
 	require.NoError(t, err)

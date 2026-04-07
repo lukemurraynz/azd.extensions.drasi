@@ -136,11 +136,8 @@ Reaction          pubsub-reaction     Online    2m
 ## Step 8: View Logs
 
 ```bash
-# Last 100 lines from all Drasi pods
-azd drasi logs
-
-# Follow logs for a specific query
-azd drasi logs --kind query --component order-changes --follow
+# Follow output for a specific continuous query
+azd drasi logs --kind continuousquery --component order-changes --follow
 ```
 
 ---

@@ -1,17 +1,21 @@
 ---
 name: azure-sre-agent
 description: >-
-  Guide creation, configuration, and operation of Azure SRE Agent for automated
-  incident response, scheduled tasks, custom agents, connectors, and governance
-  hooks. USE FOR: setting up Azure SRE Agent, routing incidents with response
-  plans, building scheduled automation, integrating GitHub/PagerDuty/ServiceNow/MCP,
-  and operationalizing production-safe SRE workflows at sre.azure.com, including
-  AKS, Container Apps, and Drasi-on-AKS operating patterns.
+  Guide creation, configuration, and operation of Azure SRE Agent (GA, March 2026)
+  for automated incident response, scheduled tasks, custom agents, connectors, skills,
+  plugin marketplace, and governance hooks. USE FOR: setting up Azure SRE Agent, routing
+  incidents with response plans, building scheduled automation, integrating
+  GitHub/PagerDuty/ServiceNow/Datadog/Splunk/MCP, and operationalizing production-safe
+  SRE workflows at sre.azure.com, including AKS, Container Apps, and Drasi-on-AKS
+  operating patterns.
   Model provider preference: Azure OpenAI first; Anthropic only as explicit fallback.
 compatibility: Requires Azure subscription with Owner or User Access Administrator role
 ---
 
 # Azure SRE Agent Operator Playbook
+
+> **GA Status**: Azure SRE Agent reached General Availability on March 10, 2026.
+> Portal: [sre.azure.com](https://sre.azure.com) | Firewall allowlist: `*.azuresre.ai`
 
 Use this skill for real deployments of Azure SRE Agent. Keep this top-level file
 lean and decision-oriented. Open the linked `references/` documents for deep
@@ -39,6 +43,8 @@ Use this skill when the user asks to:
 - Standardize incident handling with Kepner-Tregoe (KT) methodology.
 - Introduce governance controls (approval gates, audits, hook policies).
 - Productionize existing SRE Agent proof-of-concepts.
+- Browse or install skills and plugins from the Plugin Marketplace.
+- Configure persistent memory, extended knowledge base, or Python Code Interpreter.
 
 Specialization boundary:
 
@@ -94,55 +100,53 @@ See:
 
 ## Billing and Cost Control Model
 
-Azure SRE Agent uses token-based pricing for active usage, aligned with modern AI platform billing models used across Azure AI and GitHub Copilot.
+Azure SRE Agent uses Azure Agent Units (AAU) for billing with two cost components.
 
-Core Billing Model
-Two cost components
-Always-on cost
-Fixed at 4 AAUs per agent-hour
-Charged regardless of activity
-Active usage cost
-Based on tokens consumed
-Driven by:
-incident investigations
-response plan execution
-scheduled tasks
-MCP tool interactions
-AAU (Azure Agent Unit)
-Standard billing unit for agent activity
-Token consumption maps to AAU usage
-Critical Cost Risks
+### Always-On Cost
+
+Fixed at 4 AAUs per agent-hour, charged regardless of activity.
+
+### Active Flow Cost (Token-Based, effective April 15, 2026)
+
+Active flow billing is token-based. AAU rates vary by model:
+
+| Model | Input (per 1M tokens) | Output (per 1M tokens) | Cache Read (per 1M tokens) | Cache Write (per 1M tokens) |
+| --- | --- | --- | --- | --- |
+| Claude Opus 4.6 | 100 AAU | 500 AAU | 10 AAU | 125 AAU |
+| GPT-5.3 Codex | 35 AAU | 280 AAU | 3.5 AAU | — |
+| GPT-5.2 | 35 AAU | 280 AAU | 3.5 AAU | — |
+
+Monthly AAU allocation limit is configurable in Settings > Agent consumption. Active flow pauses when the limit is reached. There is no free tier.
+
+### Critical Cost Risks
 
 Treat the following as production risks, not just cost concerns:
 
-Autonomous execution loops
-Recursive or repeated reasoning chains can exponentially increase token usage
-High-context workflows
-KT methodology (SA/PA/DA/PPA) significantly increases prompt size
-MCP wildcard tool access
-Broad tool access can trigger unnecessary or repeated calls
-Scheduled task misconfiguration
-Missing Max executions can result in unbounded cost
-Mandatory Cost Controls
+1. **Autonomous execution loops** — recursive or repeated reasoning chains can exponentially increase token usage.
+2. **High-context workflows** — KT methodology (SA/PA/DA/PPA) significantly increases prompt size.
+3. **MCP wildcard tool access** — broad tool access can trigger unnecessary or repeated calls.
+4. **Scheduled task misconfiguration** — missing `Max executions` can result in unbounded cost.
+
+### Mandatory Cost Controls
 
 Apply these in all deployments:
 
-Budget enforcement
-Set AAU budget per agent
-Use auto-suspension as a safety boundary
-Execution discipline
-Default all:
-response plans → Review
-scheduled tasks → bounded runs
-Promote to Autonomous only after cost validation
-Prompt efficiency
-Minimize unnecessary context in:
-KT templates
-incident summaries
-Prefer structured data over verbose text
-Connector scoping
-Avoid MCP wildcard (*) unless justified
-Limit tool surface area to reduce unnecessary calls
+1. **Budget enforcement** — set monthly AAU allocation limit per agent, use auto-suspension as a safety boundary.
+2. **Execution discipline** — default all response plans to Review mode, scheduled tasks to bounded runs, promote to Autonomous only after cost validation.
+3. **Prompt efficiency** — minimize unnecessary context in KT templates and incident summaries, prefer structured data over verbose text.
+4. **Connector scoping** — avoid MCP wildcard (`*`) unless justified, limit tool surface area to reduce unnecessary calls.
+
+## Supported Regions
+
+Azure SRE Agent is available in three regions (one region per agent per subscription):
+
+| Region | Notes |
+| --- | --- |
+| East US 2 | Primary US region |
+| Sweden Central | Europe region |
+| Australia East | APAC region |
+
+An agent in one region can manage Azure resources across all regions.
 
 ## Safe Default Rollout
 
@@ -208,8 +212,40 @@ Use these defaults unless the user requests otherwise:
    - Use this escalation of control: assistive investigation, operator-approved remediation proposals, then tightly bounded autonomous remediation.
    - Do not move to a higher autonomy level unless RBAC, approval points, escalation paths, and rollback steps are explicit.
 10. **Bundle-first capability changes**
-   - Add or modify capability in bundles, not in core skill body.
-   - Register new capability packs in `bundles/catalog.yaml`.
+    - Add or modify capability in bundles, not in core skill body.
+    - Register new capability packs in `bundles/catalog.yaml`.
+
+## GA Capabilities (March 2026)
+
+These capabilities are available at GA. Treat them as production-ready features.
+
+### Plugin Marketplace and Skills
+
+Browse and install community-built skills and plugins via the SRE Agent portal. Skills are reusable packages of runbooks and domain knowledge that the agent loads automatically during investigations. Use the marketplace to extend agent capability without building from scratch.
+
+### Extended Knowledge Base
+
+Knowledge base now supports: Markdown, plain text, PDF, images, PowerPoint, Word, and Excel files. Use rich document types for architecture diagrams, runbooks with screenshots, and operational spreadsheets.
+
+### Python Code Interpreter
+
+Built-in Python tool execution for data analysis, log parsing, and custom computation during investigations. Available to custom agents as a tool.
+
+### Persistent Memory and Learning
+
+The agent remembers every investigation and learns team-specific patterns over time. Memory builds institutional knowledge that improves triage accuracy. Use memory-first investigation as the default (search memory for similar incidents before running new diagnostics).
+
+### Visual Subagent Builder
+
+No-code visual builder for creating custom subagents alongside the existing YAML-based approach. Includes playground testing for iterating on agent behavior before production deployment.
+
+### GitHub Copilot Integration
+
+Closed-loop DevOps workflow: SRE Agent opens GitHub issues from incidents, GitHub Copilot proposes code patches, creating an automated detect-to-fix pipeline.
+
+### Azure DevOps Integration
+
+Azure DevOps connector provides access to repos and work items alongside the existing GitHub integration. Use for teams on Azure DevOps for source correlation and work item tracking.
 
 ## Reference Routing
 
@@ -289,6 +325,8 @@ Currency checks:
   - connector status model
   - hook schema/API behavior
   - available regions and pricing
+  - plugin marketplace catalog and skills behavior
+  - persistent memory and learning patterns
 
 For source traceability, see [references/source-map.md](./references/source-map.md).
 
@@ -297,3 +335,16 @@ For source traceability, see [references/source-map.md](./references/source-map.
 - [Azure Troubleshooting](../azure-troubleshooting/SKILL.md) for ad-hoc diagnostics and KQL workflows.
 - [Cost Optimization](../cost-optimization/SKILL.md) for spend-focused remediation and ROI planning.
 - [Post Mortem](../post-mortem/SKILL.md) for incident retrospective and follow-up actions.
+
+## Official Resources
+
+| Resource | URL |
+| --- | --- |
+| Product documentation | https://aka.ms/sreagent/docs |
+| Self-paced hands-on labs | https://aka.ms/sreagent/lab |
+| Technical videos and demos | https://aka.ms/sreagent/youtube |
+| Azure SRE Agent home page | https://www.azure.com/sreagent |
+| Azure SRE Agent on X | https://x.com/azuresreagent |
+| Starter lab repository | https://github.com/microsoft/sre-agent/tree/main/labs/starter-lab |
+| GA announcement | https://techcommunity.microsoft.com/blog/appsonazureblog/announcing-general-availability-for-the-azure-sre-agent/4500682 |
+| Billing model update | https://techcommunity.microsoft.com/blog/appsonazureblog/an-update-to-the-active-flow-billing-model-for-azure-sre-agent/4507866 |

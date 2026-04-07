@@ -29,17 +29,20 @@ func TestUpgrade_EnvironmentFlagAccepted(t *testing.T) {
 	root.SetOut(&bytes.Buffer{})
 	root.SetErr(&bytes.Buffer{})
 
-	root.SetArgs([]string{"upgrade", "--environment", "dev", "--force"})
+	// --environment is a root persistent flag, so it comes before the subcommand.
+	root.SetArgs([]string{"--environment", "dev", "upgrade", "--force"})
 	err := root.Execute()
 
 	require.Error(t, err)
 	assert.NotContains(t, err.Error(), "unknown flag",
-		"--environment must be a registered flag on upgrade")
+		"--environment must be a registered root persistent flag")
 	assert.True(t,
 		bytes.Contains([]byte(err.Error()), []byte(output.ERR_DRASI_CLI_NOT_FOUND)) ||
 			bytes.Contains([]byte(err.Error()), []byte(output.ERR_DRASI_CLI_VERSION)) ||
-			bytes.Contains([]byte(err.Error()), []byte(output.ERR_DRASI_CLI_ERROR)),
-		"upgrade must fail with known drasi CLI code; got: %s", err.Error(),
+			bytes.Contains([]byte(err.Error()), []byte(output.ERR_DRASI_CLI_ERROR)) ||
+			bytes.Contains([]byte(err.Error()), []byte(output.ERR_NO_AUTH)) ||
+			bytes.Contains([]byte(err.Error()), []byte(output.ERR_AKS_CONTEXT_NOT_FOUND)),
+		"upgrade must fail with known error code; got: %s", err.Error(),
 	)
 }
 

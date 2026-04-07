@@ -1,0 +1,12 @@
+api_version: azuresre.ai/v1
+kind: DataConnector
+spec:
+  name: datadog-mcp
+  type: Mcp
+  endpoint: https://<DATADOG_SITE>/mcp/v1
+  auth:
+    type: Header
+    headerName: DD-API-KEY
+    headerValue: <DATADOG_API_KEY>
+
+# Ensure Datadog API and Application keys have required scopes.

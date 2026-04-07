@@ -56,6 +56,36 @@ This map ties key guidance in this skill to authoritative sources.
    - `references/bundles-operations.md`
    - `references/capability-matrix.md`
 
+## Pricing and Regions
+
+1. AAU billing model, always-on cost, token-based active flow, monthly allocation limit:
+   - https://learn.microsoft.com/en-us/azure/sre-agent/pricing-billing
+2. Supported regions (East US 2, Sweden Central, Australia East):
+   - https://learn.microsoft.com/en-us/azure/sre-agent/supported-regions
+3. Billing model update announcement (token-based active flow, effective April 15, 2026):
+   - https://techcommunity.microsoft.com/blog/appsonazureblog/an-update-to-the-active-flow-billing-model-for-azure-sre-agent/4507866
+
+## GA Announcement and New Capabilities
+
+1. GA announcement (March 10, 2026):
+   - https://techcommunity.microsoft.com/blog/appsonazureblog/announcing-general-availability-for-the-azure-sre-agent/4500682
+2. What's new in GA release:
+   - https://techcommunity.microsoft.com/blog/appsonazureblog/whats-new-in-azure-sre-agent-in-the-ga-release/4500779
+3. Plugin Marketplace and Skills:
+   - https://learn.microsoft.com/en-us/azure/sre-agent/skills
+4. MCP connectors (including pre-configured partners):
+   - https://sre.azure.com/docs/capabilities/mcp-connectors
+5. Starter lab (azd-based deployment):
+   - https://github.com/microsoft/sre-agent/tree/main/labs/starter-lab
+
+## Official Resources
+
+1. Product documentation: https://aka.ms/sreagent/docs
+2. Self-paced labs: https://aka.ms/sreagent/lab
+3. Technical videos: https://aka.ms/sreagent/youtube
+4. Home page: https://www.azure.com/sreagent
+5. X (Twitter): https://x.com/azuresreagent
+
 ## Notes
 
 1. Community references are optional context only.
