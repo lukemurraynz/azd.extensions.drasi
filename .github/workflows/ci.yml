@@ -7,9 +7,12 @@ on:
     branches: [main]
   workflow_call:
 
-# Cancel stale runs for the same ref
+# Cancel stale runs for the same ref.
+# Uses a fixed prefix instead of github.workflow because when called as a
+# reusable workflow the caller's workflow name is inherited, which can collide
+# with the caller's own concurrency group and cause a deadlock.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ci-${{ github.ref }}
   cancel-in-progress: true
 
 permissions: {}
