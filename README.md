@@ -22,44 +22,43 @@ Drasi requires coordinating several Azure resources (AKS, Key Vault, managed ide
 
 ## Prerequisites
 
-| Tool | Version | Install |
-| ------ | --------- | --------- |
-| Azure Developer CLI (`azd`) | >= 1.10.0 | <https://aka.ms/azd> |
-| Drasi CLI | >= 0.10.0 | <https://drasi.io/docs/getting-started> |
-| Azure CLI | >= 2.60.0 | <https://aka.ms/azcli> |
-| Docker | >= 24.0 | <https://www.docker.com> |
-| kubectl | >= 1.28 | <https://kubernetes.io/docs/tasks/tools/> |
+### Use the prebuilt extension from Releases (most users)
+
+If you install `azure.drasi` from this repository's GitHub Releases, you do **not** need Go or build tooling.
+
+| Tool                        | Version   | Required for                                                  | Install                                   |
+| --------------------------- | --------- | ------------------------------------------------------------- | ----------------------------------------- |
+| Azure Developer CLI (`azd`) | >= 1.10.0 | Installing and running the extension                          | <https://aka.ms/azd>                      |
+| Drasi CLI                   | >= 0.10.0 | Drasi component operations (`deploy`, `status`, `logs`, etc.) | <https://drasi.io/docs/getting-started>   |
+| Azure CLI                   | >= 2.60.0 | Azure authentication and infrastructure operations            | <https://aka.ms/azcli>                    |
+| kubectl                     | >= 1.28   | Cluster connectivity for health/status/log operations         | <https://kubernetes.io/docs/tasks/tools/> |
+
+### Build this repository from source (contributors)
+
+| Tool               | Version | Required for                     | Install                      |
+| ------------------ | ------- | -------------------------------- | ---------------------------- |
+| Go                 | >= 1.22 | `go test ./...`, local build     | <https://go.dev/dl/>         |
+| Bash or PowerShell | recent  | Running `build.sh` / `build.ps1` | Included on most dev systems |
+
+If you also want to run end-to-end commands against Azure/AKS from a local source build, install the runtime tools from the section above (`azd`, Drasi CLI, Azure CLI, `kubectl`).
 
 > [!TIP]
 > The fastest way to get all prerequisites is to open this repository in the included Dev Container. In VS Code, run **Dev Containers: Reopen in Container** or click the Codespace badge above. All tools are pre-installed.
 
 ## Installation
 
-```bash
-azd extension install azd-drasi
-```
-
-Verify:
-
-```bash
-azd drasi --help
-```
-
 ### Install from GitHub Releases
 
 You can also install from this repository's GitHub Releases by adding it as a custom extension source:
 
 ```bash
-azd extension source add \
-  -n drasi-github \
-  -t url \
-  -l "https://github.com/lukemurraynz/azd.extensions.drasi/releases/latest/download/registry.json"
+azd extension source add -n drasi-lukemurray-azdext -t url -l "https://github.com/lukemurraynz/azd.extensions.drasi/releases/latest/download/registry.json"
 ```
 
 Then install from that source:
 
 ```bash
-azd extension install azure.drasi -s drasi-github
+azd extension install azure.drasi -s drasi-lukemurray-azdext
 ```
 
 Verify:
@@ -71,7 +70,7 @@ azd drasi version
 
 ## Quick start
 
-1. Install the extension (see above).
+1. Install the runtime prerequisites from **Use the prebuilt extension from Releases** and then install the extension.
 2. Scaffold a project: `azd drasi init --template cosmos-change-feed`
 3. Validate: `azd drasi validate`
 4. Authenticate: `azd auth login`
@@ -351,7 +350,7 @@ to check AKS connectivity, Drasi API health, Dapr runtime, Key Vault auth, and L
 ## Contributing
 
 1. Clone the repository.
-2. Open in the Dev Container (recommended) or install prerequisites locally (Go 1.22+, Azure CLI, Drasi CLI).
+2. Open in the Dev Container (recommended) or install local build prerequisites (Go 1.22+ and Bash/PowerShell). Install runtime prerequisites (`azd`, Drasi CLI, Azure CLI, `kubectl`) only if you plan to run live Azure/AKS workflows.
 3. Run tests: `go test ./...`
 4. Build: `./build.sh` (Linux/macOS) or `./build.ps1` (Windows)
 
