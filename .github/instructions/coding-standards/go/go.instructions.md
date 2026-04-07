@@ -505,6 +505,197 @@ for _, tc := range tests {
 
 **Rule:** Prefer table-driven tests for multiple input/output scenarios. They are easier to extend and reduce duplicated setup.
 
+### Pattern 8: Parsing external CLI output
+
+When shelling out to external CLIs, the output format is a contract you don't control. Parse defensively.
+
+**❌ WRONG: Assuming tab-separated columns**
+
+```go
+parts := strings.Split(line, "\t")
+name := parts[0]
+// ⚠️ Breaks when the CLI uses pipes, variable whitespace, or changes format between versions
+```
+
+**✅ CORRECT: Detect delimiter, trim whitespace, validate column count**
+
+```go
+func parseLine(line string) ([]string, error) {
+    // Detect the delimiter the CLI actually uses
+    delimiter := "\t"
+    if strings.Contains(line, "|") {
+        delimiter = "|"
+    }
+
+    parts := strings.Split(line, delimiter)
+    for i := range parts {
+        parts[i] = strings.TrimSpace(parts[i])
+    }
+
+    // Filter out empty columns from leading/trailing delimiters
+    var cols []string
+    for _, p := range parts {
+        if p != "" {
+            cols = append(cols, p)
+        }
+    }
+
+    if len(cols) < expectedColumns {
+        return nil, fmt.Errorf("expected %d columns, got %d in line: %s", expectedColumns, len(cols), line)
+    }
+    return cols, nil
+}
+```
+
+**Rule:** Never assume delimiter format from external CLIs. Detect the delimiter, trim whitespace from every field, and validate column count before indexing.
+
+---
+
+### Pattern 9: Cobra persistent vs local flags
+
+Persistent flags on the root command are available to all subcommands. Local flags are not. Mixing them up causes flags that silently do nothing.
+
+**❌ WRONG: Redeclaring a root persistent flag as a local flag on a subcommand**
+
+```go
+// root.go
+rootCmd.PersistentFlags().StringP("environment", "e", "", "azd environment")
+
+// subcommand.go
+subCmd.Flags().StringP("environment", "e", "", "azd environment")
+// ⚠️ This shadows the root flag. The subcommand reads its own empty local flag
+// while the user expects the root persistent flag to propagate.
+```
+
+**✅ CORRECT: Read the root persistent flag from the subcommand**
+
+```go
+// subcommand.go — no flag declaration needed
+func newSubCommand() *cobra.Command {
+    return &cobra.Command{
+        Use:   "sub",
+        Short: "Does something",
+        RunE: func(cmd *cobra.Command, args []string) error {
+            env, _ := cmd.Root().Flags().GetString("environment")
+            // or use cmd.Flags().GetString("environment") which resolves persistent flags
+            // ...
+        },
+    }
+}
+```
+
+**Rule:** If a flag is declared as `PersistentFlags()` on the root, subcommands inherit it automatically. Never redeclare it locally. Read it via `cmd.Flags().GetString(...)` (which resolves persistent flags) or `cmd.Root().Flags().GetString(...)`.
+
+---
+
+### Pattern 10: Dead flag detection
+
+A flag that is declared but never read in the command's `RunE` is a bug that passes tests silently.
+
+**❌ WRONG: Declaring a flag that no code reads**
+
+```go
+cmd.Flags().Int("tail", 100, "Number of lines to show")
+// ⚠️ RunE never calls cmd.Flags().GetInt("tail")
+// Users pass --tail 50 and nothing happens
+```
+
+**✅ CORRECT: Every declared flag must be read in the handler**
+
+```go
+cmd.Flags().Int("tail", 100, "Number of lines to show")
+// ...
+RunE: func(cmd *cobra.Command, args []string) error {
+    tail, _ := cmd.Flags().GetInt("tail")
+    // Actually use tail in the command logic
+}
+```
+
+**Rule:** Audit flag declarations against `RunE` logic. Every `cmd.Flags().XxxP(...)` call must have a corresponding `cmd.Flags().GetXxx(...)` call in the handler. Remove flags that aren't wired to behavior.
+
+---
+
+### Pattern 11: Wrapping `exec.Command` with stderr capture
+
+When shelling out to external tools, capture stderr for error context. A bare `cmd.Run()` error says "exit status 1" with no useful information.
+
+**❌ WRONG: Discarding stderr**
+
+```go
+cmd := exec.CommandContext(ctx, "drasi", "apply", "-f", path)
+if err := cmd.Run(); err != nil {
+    return fmt.Errorf("drasi apply failed: %w", err) // ⚠️ No stderr = no diagnosis
+}
+```
+
+**✅ CORRECT: Capture stderr and include it in the error**
+
+```go
+func runCLI(ctx context.Context, name string, args ...string) (string, error) {
+    cmd := exec.CommandContext(ctx, name, args...)
+    var stdout, stderr bytes.Buffer
+    cmd.Stdout = &stdout
+    cmd.Stderr = &stderr
+
+    if err := cmd.Run(); err != nil {
+        return "", fmt.Errorf("%s %s: %w\nstderr: %s",
+            name, strings.Join(args, " "), err, strings.TrimSpace(stderr.String()))
+    }
+    return strings.TrimSpace(stdout.String()), nil
+}
+```
+
+**Rule:** Always capture stderr from `exec.Command`. Include it in the wrapped error so failures are diagnosable without re-running with `--debug`.
+
+---
+
+### Pattern 12: Validating embedded templates in tests
+
+When using `//go:embed` for templates (YAML, JSON, config files), validate them in tests. A missing field or broken template is caught at build time, not deployment time.
+
+**❌ WRONG: Embedding templates without validation**
+
+```go
+//go:embed templates
+var content embed.FS
+// ⚠️ A template missing a required field (e.g. kubeConfig in a K8s source)
+// compiles fine but fails at runtime
+```
+
+**✅ CORRECT: Walk embedded templates and validate in tests**
+
+```go
+func TestTemplates_ValidYAML(t *testing.T) {
+    t.Parallel()
+
+    err := fs.WalkDir(content, "templates", func(path string, d fs.DirEntry, err error) error {
+        if err != nil || d.IsDir() || !strings.HasSuffix(path, ".yaml") {
+            return err
+        }
+
+        data, err := fs.ReadFile(content, path)
+        require.NoError(t, err, "reading %s", path)
+
+        var doc map[string]interface{}
+        require.NoError(t, yaml.Unmarshal(data, &doc), "parsing %s", path)
+
+        // Validate required fields for your domain
+        if kind, ok := doc["kind"]; ok && kind == "Source" {
+            props, _ := doc["properties"].(map[string]interface{})
+            assert.Contains(t, props, "kubeConfig",
+                "source template %s missing required kubeConfig property", path)
+        }
+
+        return nil
+    })
+    require.NoError(t, err)
+}
+```
+
+**Rule:** Write tests that walk `embed.FS` templates and validate required fields. Catch missing properties at test time, not when a user runs `deploy`.
+
+---
+
 ## Best Practices
 
 1. **Simplicity first** — idiomatic Go is explicit and straightforward. Avoid unnecessary abstraction layers.
