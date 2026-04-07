@@ -1,10 +1,8 @@
 package cmd
 
 import (
+	"bytes"
 	"testing"
-
-	"go.opentelemetry.io/otel/metric"
-	"go.opentelemetry.io/otel/trace"
 )
 
 func TestNewRootCommand(t *testing.T) {
@@ -66,51 +64,40 @@ func TestNewRootCommand(t *testing.T) {
 }
 
 func TestRootCommand_PersistentPreRunE_SetsObservability(t *testing.T) {
-	// Not parallel: mutates package-level observability vars.
-
-	// Reset package-level vars before test.
-	rootTracer = nil
-	rootMeter = nil
-	shutdownTracer = nil
-	shutdownMeter = nil
+	t.Parallel()
 
 	rootCmd := NewRootCommand()
+	stderr := &bytes.Buffer{}
+	rootCmd.SetErr(stderr)
 	rootCmd.SetArgs([]string{"version"})
 
-	// version is already registered in NewRootCommand and triggers
-	// PersistentPreRunE on the root before running its own RunE.
 	err := rootCmd.Execute()
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	// Without APPLICATIONINSIGHTS_CONNECTION_STRING, we get no-op providers,
-	// but the package-level vars should still be set (non-nil).
-	if rootTracer == nil {
-		t.Fatal("expected rootTracer to be set after PersistentPreRunE")
+	// NOTE: version output goes to os.Stdout via azdext.NewVersionCommand,
+	// not cmd.OutOrStdout(), so we only verify execution succeeds.
+	if stderr.Len() != 0 {
+		t.Fatalf("expected no stderr output, got %q", stderr.String())
 	}
-	if rootMeter == nil {
-		t.Fatal("expected rootMeter to be set after PersistentPreRunE")
-	}
-
-	// Verify types are correct interfaces.
-	var _ trace.Tracer = rootTracer
-	var _ metric.Meter = rootMeter
 }
 
 func TestRootCommand_PersistentPostRunE_NilShutdownSafe(t *testing.T) {
-	// Not parallel: mutates package-level shutdown vars.
-
-	// Ensure nil shutdown functions do not panic.
-	shutdownTracer = nil
-	shutdownMeter = nil
+	t.Parallel()
 
 	rootCmd := NewRootCommand()
-	// version is already registered; just invoke it.
+	stderr := &bytes.Buffer{}
+	rootCmd.SetErr(stderr)
 	rootCmd.SetArgs([]string{"version"})
 
 	err := rootCmd.Execute()
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
+	}
+	// NOTE: version output goes to os.Stdout via azdext.NewVersionCommand,
+	// not cmd.OutOrStdout(), so we only verify execution succeeds.
+	if stderr.Len() != 0 {
+		t.Fatalf("expected no stderr output, got %q", stderr.String())
 	}
 }

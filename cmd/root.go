@@ -18,16 +18,13 @@ const (
 
 var extensionVersion = "dev"
 
-// Package-level observability handles initialised in PersistentPreRunE
-// and shut down in PersistentPostRunE. Both degrade to no-ops when
-// APPLICATIONINSIGHTS_CONNECTION_STRING is absent.
-var (
-	rootTracer       trace.Tracer
-	rootMeter        metric.Meter
+type rootState struct {
+	tracer           trace.Tracer
+	meter            metric.Meter
 	shutdownTracer   func(context.Context) error
 	shutdownMeter    func(context.Context) error
 	commandStartTime time.Time
-)
+}
 
 func SetVersion(version string) {
 	extensionVersion = version
@@ -35,6 +32,7 @@ func SetVersion(version string) {
 
 func NewRootCommand() *cobra.Command {
 	var outputFormat string
+	state := &rootState{}
 
 	rootCmd := &cobra.Command{
 		Use:           "azd drasi <command> [options]",
@@ -42,23 +40,28 @@ func NewRootCommand() *cobra.Command {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-			commandStartTime = time.Now()
+			state.tracer = nil
+			state.meter = nil
+			state.shutdownTracer = nil
+			state.shutdownMeter = nil
+			state.commandStartTime = time.Now()
+
 			ctx := cmd.Context()
 
 			t, tShutdown, err := observability.NewTracer(ctx)
 			if err != nil {
 				slog.WarnContext(ctx, "tracer init failed, continuing with no-op", slog.Any("error", err))
 			} else {
-				rootTracer = t
-				shutdownTracer = tShutdown
+				state.tracer = t
+				state.shutdownTracer = tShutdown
 			}
 
 			m, mShutdown, err := observability.NewMeter(ctx)
 			if err != nil {
 				slog.WarnContext(ctx, "meter init failed, continuing with no-op", slog.Any("error", err))
 			} else {
-				rootMeter = m
-				shutdownMeter = mShutdown
+				state.meter = m
+				state.shutdownMeter = mShutdown
 			}
 
 			return nil
@@ -68,19 +71,19 @@ func NewRootCommand() *cobra.Command {
 
 			// Record command success metrics before shutting down the meter.
 			// PersistentPostRunE only runs when RunE succeeds (Cobra behavior).
-			if rootMeter != nil {
-				elapsed := time.Since(commandStartTime)
-				observability.RecordCommandExecution(ctx, rootMeter, cmd.Name(), elapsed, nil)
+			if state.meter != nil {
+				elapsed := time.Since(state.commandStartTime)
+				observability.RecordCommandExecution(ctx, state.meter, cmd.Name(), elapsed, nil)
 			}
 
-			if shutdownTracer != nil {
-				if err := shutdownTracer(ctx); err != nil {
+			if state.shutdownTracer != nil {
+				if err := state.shutdownTracer(ctx); err != nil {
 					slog.WarnContext(ctx, "tracer shutdown error", slog.Any("error", err))
 				}
 			}
 
-			if shutdownMeter != nil {
-				if err := shutdownMeter(ctx); err != nil {
+			if state.shutdownMeter != nil {
+				if err := state.shutdownMeter(ctx); err != nil {
 					slog.WarnContext(ctx, "meter shutdown error", slog.Any("error", err))
 				}
 			}
