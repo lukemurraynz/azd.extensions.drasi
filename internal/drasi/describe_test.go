@@ -107,3 +107,11 @@ func TestDescribeComponentInContext_UnknownContextFlag_FallsBackWithoutContext(t
 	assert.Equal(t, []string{"--context", "aks-dev", "describe", "query", "alerts"}, runner.args[0])
 	assert.Equal(t, []string{"describe", "query", "alerts"}, runner.args[1])
 }
+
+func TestComponentNotFoundError_Error(t *testing.T) {
+	t.Parallel()
+
+	err := (&ComponentNotFoundError{Kind: "query", ID: "alerts"}).Error()
+
+	assert.Equal(t, "component not found: query alerts", err)
+}
