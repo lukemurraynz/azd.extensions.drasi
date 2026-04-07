@@ -51,6 +51,7 @@ jobs:
             **/*.md
             !.github/**/*.md
             !memories/**/*.md
+            !.agents/**/*.md
 
   validate-yaml:
     name: Validate YAML
@@ -66,15 +67,7 @@ jobs:
         uses: ibiqlik/action-yamllint@2576378a8e339169678f9939646ee3ee325e845c # v3
         with:
           file_or_dir: .
-          config_data: |
-            extends: default
-            rules:
-              line-length:
-                max: 200
-                level: warning
-              truthy:
-                allowed-values: ['true', 'false', 'on', 'off']
-              document-start: disable
+          config_file: .yamllint.yml
 
   validate-actions:
     name: Validate GitHub Actions Workflows

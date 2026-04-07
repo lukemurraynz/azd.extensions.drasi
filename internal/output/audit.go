@@ -26,6 +26,8 @@ func FormatAuditEvent(event AuditEvent, fmt OutputFormat) string {
 			return ""
 		}
 		return string(b)
+	case FormatTable:
+		fallthrough
 	default:
 		duration := event.EndedAtUtc.Sub(event.StartedAtUtc).Round(time.Millisecond)
 		return fmtpkg.Sprintf("[%s] %s on %s — %s (%s)",

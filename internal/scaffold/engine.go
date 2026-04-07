@@ -56,7 +56,7 @@ func Scaffold(templateName, targetDir string, force bool) ([]string, error) {
 		}
 
 		// Ensure parent directories exist.
-		if mkErr := os.MkdirAll(filepath.Dir(outputPath), 0755); mkErr != nil {
+		if mkErr := os.MkdirAll(filepath.Dir(outputPath), 0750); mkErr != nil {
 			return fmt.Errorf("creating directory for %s: %w", outputPath, mkErr)
 		}
 
@@ -64,7 +64,7 @@ func Scaffold(templateName, targetDir string, force bool) ([]string, error) {
 		if readErr != nil {
 			return fmt.Errorf("reading template file %s: %w", path, readErr)
 		}
-		if writeErr := os.WriteFile(outputPath, data, 0644); writeErr != nil {
+		if writeErr := os.WriteFile(outputPath, data, 0600); writeErr != nil {
 			return fmt.Errorf("writing %s: %w", outputPath, writeErr)
 		}
 

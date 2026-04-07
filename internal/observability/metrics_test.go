@@ -39,9 +39,8 @@ func TestNewMeter_CounterNames(t *testing.T) {
 	require.NotNil(t, meter)
 
 	// drasi.components.deployed
-	deployedCounter, err := meter.Int64Counter("drasi.components.deployed",
-		// intentionally no unit/description — just verify name is accepted
-	)
+	deployedCounter, err := meter.Int64Counter("drasi.components.deployed") // intentionally no unit/description — just verify name is accepted
+
 	require.NoError(t, err, "drasi.components.deployed counter must be creatable")
 	assert.NotNil(t, deployedCounter)
 

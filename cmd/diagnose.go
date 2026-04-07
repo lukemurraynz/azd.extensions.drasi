@@ -239,7 +239,7 @@ var isDaprReady = func(ctx context.Context, kubeContext string) (bool, string, e
 
 // azKeyVaultCheck shells out to az CLI to verify Key Vault accessibility.
 var azKeyVaultCheck = func(ctx context.Context, vaultName string) (string, string, error) {
-	out, err := exec.CommandContext(ctx, "az", "keyvault", "show", "--name", vaultName).CombinedOutput()
+	out, err := exec.CommandContext(ctx, "az", "keyvault", "show", "--name", vaultName).CombinedOutput() //nolint:gosec // az CLI with validated vault name
 	if err != nil {
 		return "failed", strings.TrimSpace(string(out)), err
 	}
@@ -248,7 +248,7 @@ var azKeyVaultCheck = func(ctx context.Context, vaultName string) (string, strin
 
 // azLogAnalyticsCheck shells out to az CLI to verify Log Analytics workspace accessibility.
 var azLogAnalyticsCheck = func(ctx context.Context, resourceGroup, workspaceName string) (string, string, error) {
-	out, err := exec.CommandContext(ctx, "az", "monitor", "log-analytics", "workspace", "show",
+	out, err := exec.CommandContext(ctx, "az", "monitor", "log-analytics", "workspace", "show", //nolint:gosec // az CLI with validated parameters
 		"--resource-group", resourceGroup,
 		"--workspace-name", workspaceName).CombinedOutput()
 	if err != nil {

@@ -61,6 +61,22 @@ Before you consider a task complete, ensure:
 - Generated files (for example ORM migration designer snapshots) must be clearly separated and excluded from complexity/maintainability gates where those gates are not actionable.
 - For non-generated production code, enforce maintainability budgets in CI (for example: cyclomatic complexity, function length, duplicate code, and lint severity thresholds).
 
+## Project linter checklist
+
+This project enforces the following linters in CI. Run all of them locally before pushing changes. A PR will not merge if any linter reports errors.
+
+| Linter | What it checks | Local command | Config |
+|--------|----------------|---------------|--------|
+| golangci-lint | Go static analysis and formatting | `golangci-lint run ./...` | `.golangci.yml` |
+| golangci-lint fmt | Go code formatting (gofmt) | `golangci-lint fmt ./...` | `.golangci.yml` |
+| markdownlint-cli2 | Markdown style and structure | `npx markdownlint-cli2 "**/*.md" "!.github/**/*.md" "!memories/**/*.md" "!.agents/**/*.md"` | `.markdownlint.json`, `.markdownlintignore` |
+| yamllint | YAML syntax and style | `yamllint -c .yamllint.yml .` | `.yamllint.yml`, `.yamllintignore` |
+| actionlint | GitHub Actions workflow syntax | `actionlint` | Default |
+| go test -race | Go tests with race detector | `go test -race ./... -timeout 300s` | N/A |
+| gitleaks | Secret scanning | Runs in CI only | Default |
+
+Language-specific details (which rules are enabled, common violations, suppression patterns) are in the corresponding instruction files under `.github/instructions/coding-standards/`.
+
 ## Documentation Standards
 
 - Update README or module-level docs when behavior, interfaces, flags, or environment variables change

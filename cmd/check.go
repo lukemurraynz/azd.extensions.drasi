@@ -32,7 +32,7 @@ var (
 
 	checkLookPath   = exec.LookPath
 	checkRunCommand = func(ctx context.Context, path string, args ...string) (string, string, error) {
-		cmd := exec.CommandContext(ctx, path, args...)
+		cmd := exec.CommandContext(ctx, path, args...) //nolint:gosec // path is from exec.LookPath on known binary names
 		var stdoutBuf bytes.Buffer
 		var stderrBuf bytes.Buffer
 		cmd.Stdout = &stdoutBuf

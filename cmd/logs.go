@@ -25,7 +25,7 @@ var newLogsDrasiClient = func() logsDrasiClient {
 // kubectlLogsFunc shells out to kubectl for non-query kind log retrieval.
 // Replaceable in tests to avoid requiring a real kubectl binary.
 var kubectlLogsFunc = func(ctx context.Context, args ...string) (string, error) {
-	out, err := exec.CommandContext(ctx, "kubectl", args...).CombinedOutput()
+	out, err := exec.CommandContext(ctx, "kubectl", args...).CombinedOutput() //nolint:gosec // kubectl CLI with caller-controlled arguments
 	if err != nil {
 		return "", fmt.Errorf("kubectl %s: %w\noutput: %s", strings.Join(args, " "), err, strings.TrimSpace(string(out)))
 	}

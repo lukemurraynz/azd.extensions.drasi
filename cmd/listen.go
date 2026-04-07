@@ -4,12 +4,11 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"path/filepath"
 	"time"
 
+	"github.com/azure/azure-dev/cli/azd/pkg/azdext"
 	"github.com/lukemurraynz/azd.extensions.drasi/internal/drasi"
 	"github.com/lukemurraynz/azd.extensions.drasi/internal/validation"
-	"github.com/azure/azure-dev/cli/azd/pkg/azdext"
 	"github.com/spf13/cobra"
 )
 
@@ -18,9 +17,7 @@ var drasiCheckFunc = func(ctx context.Context) error {
 	return client.CheckVersion(ctx)
 }
 
-var preDeployValidateFunc = func(dir, file, env string) (*validation.ValidationResult, error) {
-	return validation.Validate(dir, file, env)
-}
+var preDeployValidateFunc = validation.Validate
 
 var (
 	postProvisionTimeout  = 60 * time.Second
@@ -62,7 +59,7 @@ func handlePreDeploy(ctx context.Context, args *azdext.ProjectEventArgs) error {
 	}
 	slog.InfoContext(ctx, "drasi: pre-deploy hook fired — validating manifest", slog.String("project", projectName))
 
-	result, err := preDeployValidateFunc(filepath.Join("drasi"), "drasi.yaml", "")
+	result, err := preDeployValidateFunc("drasi", "drasi.yaml", "")
 	if err != nil {
 		slog.ErrorContext(ctx, "drasi: pre-deploy validation failed to load manifest",
 			slog.String("project", projectName),

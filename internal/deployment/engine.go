@@ -150,20 +150,20 @@ func (e *Engine) applyComponent(ctx context.Context, action ComponentAction, man
 	if err != nil {
 		return fmt.Errorf("creating temp file for %s/%s: %w", action.Kind, action.ID, err)
 	}
-	defer os.Remove(tmpFile.Name())
+	defer func() { _ = os.Remove(tmpFile.Name()) }()
 
 	// SECURITY: Restrict temp file to owner-only read/write. Temp files may contain
 	// resolved configuration values; prevent other local users from reading them.
 	if err := os.Chmod(tmpFile.Name(), 0600); err != nil {
-		tmpFile.Close()
+		_ = tmpFile.Close()
 		return fmt.Errorf("securing temp file for %s/%s: %w", action.Kind, action.ID, err)
 	}
 
 	if _, err = tmpFile.Write(raw); err != nil {
-		tmpFile.Close()
+		_ = tmpFile.Close()
 		return fmt.Errorf("writing temp file for %s/%s: %w", action.Kind, action.ID, err)
 	}
-	tmpFile.Close()
+	_ = tmpFile.Close()
 
 	return e.drasiClient.RunCommand(ctx, "apply", "-f", tmpFile.Name())
 }

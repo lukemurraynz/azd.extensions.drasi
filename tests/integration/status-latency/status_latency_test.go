@@ -37,11 +37,11 @@ const maxStatusLatency = 30 * time.Second
 
 // latencyResult captures a single timing measurement for artifact publication.
 type latencyResult struct {
-	Test      string        `json:"test"`
-	ElapsedMs int64         `json:"elapsed_ms"`
-	SLAMs     int64         `json:"sla_ms"`
-	Passed    bool          `json:"passed"`
-	Error     string        `json:"error,omitempty"`
+	Test      string `json:"test"`
+	ElapsedMs int64  `json:"elapsed_ms"`
+	SLAMs     int64  `json:"sla_ms"`
+	Passed    bool   `json:"passed"`
+	Error     string `json:"error,omitempty"`
 }
 
 // TestStatusCommand_RespondsWithinSLA verifies that the status command (at any

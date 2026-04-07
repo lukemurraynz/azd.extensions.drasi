@@ -3,6 +3,7 @@ package scaffold_test
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/lukemurraynz/azd.extensions.drasi/internal/scaffold"
@@ -176,7 +177,7 @@ func TestScaffold_CosmosFeed_DaprComponentPath_IsUnderDrasiComponents(t *testing
 
 	hasDaprComponent := false
 	for _, f := range files {
-		if filepath.HasPrefix(filepath.ToSlash(f), "drasi/components/dapr/") {
+		if strings.HasPrefix(filepath.ToSlash(f), "drasi/components/dapr/") {
 			hasDaprComponent = true
 			break
 		}

@@ -290,7 +290,14 @@ linters:
   exclusions:
     presets:
       - common-false-positives
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
 ```
+
+golangci-lint v2 separates formatting tools (`gofmt`, `goimports`, `gofumpt`) from analysis linters. Formatters belong under the `formatters:` key, not under `linters.enable:`. Adding a formatter to `linters.enable:` in v2 produces an "unknown linter" error at runtime.
 
 Add explicit linters only when the standard set is insufficient for your use case (e.g. `gosec` for security-sensitive packages).
 
@@ -693,6 +700,232 @@ func TestTemplates_ValidYAML(t *testing.T) {
 ```
 
 **Rule:** Write tests that walk `embed.FS` templates and validate required fields. Catch missing properties at test time, not when a user runs `deploy`.
+
+---
+
+### Pattern 13: Package-level mutable state races in parallel tests
+
+Package-level variables written in `PersistentPreRunE` and read in `PersistentPostRunE` work fine in production where there is one process. In tests, every call to `NewRootCommand().Execute()` runs on its own goroutine when `t.Parallel()` is used, and they all write to the same global variables concurrently.
+
+**❌ WRONG: Package-level state written by cobra lifecycle hooks**
+
+```go
+// Package-level vars written in PersistentPreRunE, read in PersistentPostRunE.
+// Safe in a single-process binary, but a data race under t.Parallel().
+var (
+    rootTracer       trace.Tracer
+    rootMeter        metric.Meter
+    shutdownTracer   func(context.Context) error
+    shutdownMeter    func(context.Context) error
+    commandStartTime time.Time
+)
+
+func NewRootCommand() *cobra.Command {
+    cmd := &cobra.Command{}
+    cmd.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {
+        rootTracer = otel.Tracer("drasi")   // ← writes global
+        commandStartTime = time.Now()        // ← writes global
+        return nil
+    }
+    cmd.PersistentPostRunE = func(cmd *cobra.Command, args []string) error {
+        _ = rootTracer                       // ← reads global; races with another goroutine
+        return shutdownTracer(cmd.Context())
+    }
+    return cmd
+}
+```
+
+**✅ CORRECT: Per-instance state struct closed over by the lifecycle hooks**
+
+```go
+type rootState struct {
+    tracer       trace.Tracer
+    meter        metric.Meter
+    shutdownFns  []func(context.Context) error
+    startTime    time.Time
+}
+
+func NewRootCommand() *cobra.Command {
+    state := &rootState{}   // allocated once per NewRootCommand() call
+
+    cmd := &cobra.Command{}
+    cmd.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {
+        state.tracer    = otel.Tracer("drasi")   // ← writes instance field
+        state.startTime = time.Now()
+        return nil
+    }
+    cmd.PersistentPostRunE = func(cmd *cobra.Command, args []string) error {
+        for _, fn := range state.shutdownFns {   // ← reads instance field; no race
+            if err := fn(cmd.Context()); err != nil {
+                return err
+            }
+        }
+        return nil
+    }
+    return cmd
+}
+```
+
+**Rule:** Never use package-level variables to pass state between `PersistentPreRunE` and `PersistentPostRunE`. Allocate a state struct inside the constructor function and close over it in both hooks. Run `go test -race ./...` after adding parallel tests.
+
+---
+
+### Pattern 14: Shared `io.Writer` race with background goroutines
+
+Spinner and progress libraries (e.g. yacspin) spawn a background goroutine that writes to a shared `io.Writer` on a tick. If production error-reporting code also writes to the same writer from the main goroutine while the spinner is running, the two goroutines race. The race only surfaces under `-race` and in tests where multiple goroutines share a `bytes.Buffer`.
+
+**❌ WRONG: Unprotected writer shared between spinner and main goroutine**
+
+```go
+// cfg.Writer and the fmt.Fprintln call share cmd.ErrOrStderr() with no synchronisation.
+// The spinner's background goroutine and writeCommandError() both write concurrently.
+cfg := yacspin.Config{Writer: cmd.ErrOrStderr()}
+spinner, _ := yacspin.New(cfg)
+spinner.Start()
+
+// ... later, on the main goroutine:
+fmt.Fprintln(cmd.ErrOrStderr(), "error: something went wrong")   // ← race
+```
+
+**✅ CORRECT: Wrap the writer in a mutex before handing it to the spinner**
+
+```go
+// syncWriter serialises all writes through a single mutex.
+type syncWriter struct {
+    mu sync.Mutex
+    w  io.Writer
+}
+
+func (sw *syncWriter) Write(p []byte) (int, error) {
+    sw.mu.Lock()
+    defer sw.mu.Unlock()
+    return sw.w.Write(p)
+}
+
+func newSpinnerCommand(cmd *cobra.Command) (*yacspin.Spinner, error) {
+    sw := &syncWriter{w: cmd.ErrOrStderr()}
+    cmd.SetErr(sw)   // redirect the command's stderr to the protected writer
+
+    cfg := yacspin.Config{Writer: sw}
+    return yacspin.New(cfg)
+}
+
+// Now both the spinner goroutine and any fmt.Fprintln(cmd.ErrOrStderr(), ...) call
+// go through the same mutex and cannot race.
+```
+
+**Rule:** Whenever a library takes an `io.Writer` and writes to it from a background goroutine, wrap the writer with a `sync.Mutex` before passing it in. Redirect the command's own stderr (`cmd.SetErr`) to the same protected writer so that all writes are serialised.
+
+---
+
+### Pattern 15: Scoping `PersistentPreRunE` / `PersistentPostRunE` state to the command instance
+
+This pattern is a focused application of Pattern 13 to the cobra `PersistentPreRunE` / `PersistentPostRunE` lifecycle. It is worth stating separately because the symptom is subtle: tests pass individually, pass with `-count=1`, and only fail under `t.Parallel()` or `-count=2` with `-race`. The root cause is always the same: state that crosses the Pre/Post boundary lives in package scope rather than on the command instance.
+
+**❌ WRONG: Globals act as the bridge between Pre and Post**
+
+```go
+var activeSpinner *yacspin.Spinner   // written by PreRunE, stopped by PostRunE
+
+func NewRootCommand() *cobra.Command {
+    cmd := &cobra.Command{}
+    cmd.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {
+        s, _ := yacspin.New(yacspin.Config{Writer: cmd.ErrOrStderr()})
+        activeSpinner = s   // ← writes global; races under t.Parallel()
+        return s.Start()
+    }
+    cmd.PersistentPostRunE = func(cmd *cobra.Command, args []string) error {
+        return activeSpinner.Stop()   // ← reads global; races
+    }
+    return cmd
+}
+```
+
+**✅ CORRECT: State lives on a struct that both hooks close over**
+
+```go
+type rootState struct {
+    spinner *yacspin.Spinner
+    sw      *syncWriter
+}
+
+func NewRootCommand() *cobra.Command {
+    state := &rootState{}
+
+    cmd := &cobra.Command{}
+    cmd.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {
+        state.sw = &syncWriter{w: cmd.ErrOrStderr()}
+        cmd.SetErr(state.sw)
+        s, err := yacspin.New(yacspin.Config{Writer: state.sw})
+        if err != nil {
+            return err
+        }
+        state.spinner = s
+        return s.Start()
+    }
+    cmd.PersistentPostRunE = func(cmd *cobra.Command, args []string) error {
+        if state.spinner != nil {
+            return state.spinner.Stop()   // ← safe: reads instance field
+        }
+        return nil
+    }
+    return cmd
+}
+```
+
+**Rule:** Every value initialised in `PersistentPreRunE` and consumed in `PersistentPostRunE` must live on a struct allocated in the constructor, not in a package-level variable. If you see a package-level `var` that is set inside a cobra hook, move it into an instance state struct.
+
+---
+
+## CI linter compliance
+
+This project's `.golangci.yml` enables the following linters: errcheck, govet, staticcheck, gosec, exhaustive, gocritic. It also enables gofmt as a formatter.
+
+Two exclusions are active by default:
+
+- gosec is skipped entirely for `_test.go` files.
+- G304 (file path constructed from variable) is globally excluded.
+
+All other gosec rules apply to non-test code.
+
+### gosec and exec.CommandContext (G204)
+
+The gosec linter flags every `exec.Command` and `exec.CommandContext` call with G204 ("subprocess launched with variable"). This fires even when the command path is a hardcoded string literal, because gosec cannot prove the value is not user-controlled.
+
+When the CLI path is genuinely hardcoded (not derived from user input or environment variables), suppress the finding with an inline `//nolint` directive that includes a justification comment:
+
+```go
+cmd := exec.CommandContext(ctx, "kubectl", args...) //nolint:gosec // G204: CLI path is not user-controlled
+```
+
+```go
+cmd := exec.CommandContext(ctx, "drasi", args...) //nolint:gosec // G204: CLI path is not user-controlled
+```
+
+The comment after `//` is required. It records the rule ID and the reason so reviewers can verify the suppression is legitimate.
+
+Do not suppress G204 when:
+
+- the command name comes from a flag, environment variable, or any input the user provides.
+- the arguments include unsanitized user-controlled data.
+
+In those cases, validate the input or restructure the code to avoid shelling out with dynamic paths.
+
+### Running linters locally
+
+Run the full lint suite before pushing:
+
+```bash
+golangci-lint run ./...
+```
+
+Run the formatter to fix gofmt violations:
+
+```bash
+golangci-lint fmt ./...
+```
+
+The CI workflow runs both as part of the lint job. A PR will not merge if either command reports errors or formatting differences.
 
 ---
 

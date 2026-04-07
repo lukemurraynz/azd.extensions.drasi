@@ -9,9 +9,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/lukemurraynz/azd.extensions.drasi/internal/output"
 	"github.com/azure/azure-dev/cli/azd/pkg/azdext"
 	"github.com/google/uuid"
+	"github.com/lukemurraynz/azd.extensions.drasi/internal/output"
 	"github.com/spf13/cobra"
 )
 
@@ -214,11 +214,11 @@ func switchKubectlContext(ctx context.Context, contextName string) error {
 		return fmt.Errorf("kubectl not found on PATH: %w", err)
 	}
 	// Check current context first to avoid a no-op switch.
-	cur, err := exec.CommandContext(ctx, kubectlPath, "config", "current-context").Output()
+	cur, err := exec.CommandContext(ctx, kubectlPath, "config", "current-context").Output() //nolint:gosec // kubectl path resolved via LookPath
 	if err == nil && strings.TrimSpace(string(cur)) == contextName {
 		return nil // already on the right context
 	}
-	cmd := exec.CommandContext(ctx, kubectlPath, "config", "use-context", contextName)
+	cmd := exec.CommandContext(ctx, kubectlPath, "config", "use-context", contextName) //nolint:gosec // kubectl path resolved via LookPath
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("kubectl config use-context %s: %w\n%s", contextName, err, out)
 	}
@@ -230,7 +230,7 @@ func runDrasiCommand(ctx context.Context, args ...string) error {
 	if err != nil {
 		return fmt.Errorf("%s: drasi binary not found on PATH: %w", output.ERR_DRASI_CLI_NOT_FOUND, err)
 	}
-	cmd := exec.CommandContext(ctx, drasiPath, args...)
+	cmd := exec.CommandContext(ctx, drasiPath, args...) //nolint:gosec // drasi path resolved via LookPath
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("%s: %w\n%s", output.ERR_DRASI_CLI_ERROR, err, string(out))
 	}
@@ -262,7 +262,7 @@ func warnUnmanagedResources(cmd *cobra.Command, ctx context.Context, azdClient *
 	}
 
 	query := `[?tags."managed-by" != 'azd'].{name:name, type:type, id:id}`
-	azCmd := exec.CommandContext(ctx, azPath,
+	azCmd := exec.CommandContext(ctx, azPath, //nolint:gosec // az CLI path resolved via LookPath
 		"resource", "list",
 		"--resource-group", rgName,
 		"--query", query,
@@ -353,7 +353,7 @@ func applyDrasiNetworkPolicies(ctx context.Context, aksContext string) error {
 	if err != nil {
 		return fmt.Errorf("kubectl not found on PATH: %w", err)
 	}
-	cmd := exec.CommandContext(ctx, kubectlPath, "apply", "-f", "-")
+	cmd := exec.CommandContext(ctx, kubectlPath, "apply", "-f", "-") //nolint:gosec // kubectl path resolved via LookPath
 	cmd.Stdin = strings.NewReader(drasiNetworkPoliciesYAML)
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("kubectl apply NetworkPolicies: %w\n%s", err, out)

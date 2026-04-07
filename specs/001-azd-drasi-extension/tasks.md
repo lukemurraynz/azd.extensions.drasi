@@ -36,14 +36,14 @@ client shell. All user stories depend on this phase completing first.
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete.
 
-### Tests (write before implementation)
+### Foundational tests (write before implementation)
 
 - [ ] T008 [TEST] Write formatter test covering table mode, JSON mode, nil/empty data — `internal/output/formatter_test.go`
 - [ ] T009 [TEST] [P] Write errors and audit output tests covering all ERR\_\* constants (including `ERR_DRASI_CLI_ERROR`), exit code mapping, `FormatError` JSON shape, and structured audit event schema for mutating commands — `internal/output/errors_test.go`, `internal/output/formatter_test.go`
 - [ ] T010 [TEST] Write root command test covering global flag registration, --output propagation, --debug flag, version string — `cmd/root_test.go`
 - [ ] T113 [TEST] [P] Write structured audit event formatting tests for mutating command operations (`provision`, `deploy`, `teardown`) in table and JSON output modes — `internal/output/audit_test.go`
 
-### Implementation
+### Foundational implementation
 
 - [ ] T011 Create `internal/output/formatter.go` — `Format(data any, fmt OutputFormat) string`; table renderer with aligned columns; JSON marshaller; `OutputFormat` type (table/json); add a reusable structured audit-event formatter used by mutating commands in both human and JSON modes — `internal/output/formatter.go`
 - [ ] T012 [P] Create `internal/output/errors.go` — `FormatError(code, msg, remediation string) string`; all ERR\_\* string constants (ERR_NO_AUTH, ERR_DRASI_CLI_NOT_FOUND, ERR_DRASI_CLI_VERSION, ERR_DRASI_CLI_ERROR, ERR_COMPONENT_TIMEOUT, ERR_TOTAL_TIMEOUT, ERR_VALIDATION_FAILED, ERR_MISSING_REFERENCE, ERR_CIRCULAR_DEPENDENCY, ERR_MISSING_QUERY_LANGUAGE, ERR_KV_AUTH_FAILED, ERR_AKS_CONTEXT_NOT_FOUND, ERR_FORCE_REQUIRED, ERR_NO_MANIFEST, ERR_NOT_IMPLEMENTED, ERR_DEPLOY_IN_PROGRESS, ERR_DAPR_NOT_READY); exit code map — `internal/output/errors.go` > **ERR_NOT_IMPLEMENTED note**: This constant is intentional (not a TODO) — it supports the FR-010 `azd drasi upgrade` stub command. Do NOT remove it during lint/dead-code cleanup. Each call site should include `// intentional stub — FR-010` to prevent future automated removal.
@@ -66,7 +66,7 @@ dependencies entirely offline, with file path + line number on every error.
 `azd drasi validate`. Confirm exit 1, error identifies the file, line, and broken reference.
 Fix and re-run; confirm exit 0.
 
-### Tests (write before implementation)
+### Validate tests (write before implementation)
 
 - [ ] T016 [TEST] [US5] Write config loader test: single file load, multi-file glob expansion, missing file error, malformed YAML error — `internal/config/loader_test.go`
 - [ ] T017 [TEST] [P] [US5] Write config resolver test: dev overlay merges into base, prod param overrides base, deterministic sort produces identical output across runs — `internal/config/resolver_test.go`
@@ -77,7 +77,7 @@ Fix and re-run; confirm exit 0.
 - [ ] T022 [TEST] [US5] Write validate command test: exit 0 on valid fixture, exit 1 on error fixture, exit 2 on missing drasi.yaml, --strict promotes warnings to errors, undeclared overlay parameters produce warnings (not errors) and are surfaced in `--output json`, `--environment <name>` is accepted and passed through, --output json valid schema — `cmd/validate_test.go`
 - [ ] T115 [TEST] [P] [US5] Write overlay warning test: undeclared overlay parameter keys emit warnings (not errors), include file path and key name, and are serialized in JSON validation output — `internal/validation/validator_test.go`
 
-### Implementation
+### Validate implementation
 
 - [ ] T023 [US5] Create config loader: glob resolution from `drasi.yaml` includes patterns, per-file YAML decode, accumulate into raw slices by kind — `internal/config/loader.go`
 - [ ] T024 [P] [US5] Create config resolver: merge environment overlay parameters into base config, deterministic sort by ID on all slices, produce `ResolvedManifest` — `internal/config/resolver.go`
@@ -106,13 +106,13 @@ all YAML files parse, and `infra/main.bicep` compiles (`bicep build`). Run again
 modified (idempotent). Run `azd drasi validate` on the output; exit 0 with no errors. No
 Azure subscription needed.
 
-### Tests (write before implementation)
+### Scaffold tests (write before implementation)
 
 - [ ] T032 [TEST] [US1] Write scaffold engine test: blank template creates expected scaffold tree (`azure.yaml`, `infra/`, `drasi/`, `docker-compose.yml`, `.vscode/launch.json`), conflict on re-run without --force, --force overwrites, returned file list matches actual FS — `internal/scaffold/engine_test.go`
 - [ ] T033 [TEST] [P] [US1] Write init command test: --template flag accepted (blank/cosmos-change-feed/event-hub-routing/query-subscription), --force flag, `--environment <name>` flag accepted, --output json emits file list only, idempotent re-run exits 0 with no-changes message — `cmd/init_test.go`
 - [ ] T104 [TEST] [US1] Write scaffold template test for FR-031: when `dapr-pubsub` reaction template is selected, Dapr pub/sub component YAML is generated and references the same topic/broker metadata expected by the reaction config — `internal/scaffold/engine_test.go`
 
-### Implementation
+### Scaffold implementation
 
 - [ ] T034 [US1] Create blank template files — `internal/scaffold/templates/blank/`:
   - `azure.yaml` (required by spec US1): minimal valid azd project file referencing `infra/` for provisioning; must be usable in a freshly scaffolded directory
@@ -143,7 +143,7 @@ and installs the Drasi runtime. Re-running converges without duplicating resourc
 from a validated `drasi/environments/dev.yaml`. Confirm all resources exist with required tags,
 all role assignments are present, no secrets in any deployment output, exit 0.
 
-### Tests (write before implementation)
+### Provision tests (write before implementation)
 
 - [ ] T041 [TEST] [US2] Write provision command test: --environment flag wires to azd lifecycle, DRASI_PROVISIONED written on success, ERR_NO_AUTH on missing credentials, unmanaged resource warning list is emitted (and no unmanaged resource is modified), structured audit events are emitted, --output json emits resource IDs — `cmd/provision_test.go`
 - [ ] T117 [TEST] [P] [US2] Write Workload Identity test coverage for FR-045 steps 3 and 4: generated Kubernetes manifests include ServiceAccount annotation `azure.workload.identity/client-id` and runtime pod label `azure.workload.identity/use: "true"` — `infra/modules/**`, `tests/integration/provision/**`
@@ -182,7 +182,7 @@ applies sources → queries → middleware → reactions to the Drasi runtime on
 Confirm all components Online. Re-run without changes — no-op (all hashes match). Change one
 query file, re-run — only that query is deleted and re-applied.
 
-### Tests (write before implementation)
+### Deploy tests (write before implementation)
 
 - [ ] T054 [TEST] [US3] Write Drasi CLI client test: version check passes at the minimum required version from FR-046, fails on 0.9.2 with ERR_DRASI_CLI_VERSION, ERR_DRASI_CLI_NOT_FOUND when binary absent, and non-zero `drasi` subcommand exits map to `ERR_DRASI_CLI_ERROR` with no automatic retry attempts — `internal/drasi/client_test.go`
 - [ ] T055 [TEST] [P] [US3] Write apply test: success stdout captured, failed apply propagates stderr as error, context cancellation on timeout — `internal/drasi/apply_test.go`
@@ -203,7 +203,7 @@ query file, re-run — only that query is deleted and re-applied.
 - [ ] T102 [TEST] [US3] Write deploy concurrency test for edge case G1: when a second deploy starts while a lock is held by an active deploy, command returns `ERR_DEPLOY_IN_PROGRESS` (or waits when configured), and no state/hash corruption occurs — `internal/deployment/engine_test.go`, `cmd/deploy_test.go`
 - [ ] T123 [TEST] [P] [US3] Write audit emission tests for deploy and teardown: each mutation attempt emits structured audit events with correlation IDs and result state in table and JSON modes — `cmd/deploy_test.go`, `cmd/teardown_test.go`
 
-### Implementation
+### Deploy implementation
 
 - [ ] T068 [US3] Create Drasi CLI client: `Client` struct; `CheckVersion()` using semver parse, ERR_DRASI_CLI_NOT_FOUND when binary not on PATH; `RunCommand(ctx, args...)` subprocess wrapper capturing stdout/stderr; wrap non-zero subcommand exits as ERR_DRASI_CLI_ERROR and do not perform automatic retries — `internal/drasi/client.go`
 - [ ] T069 [P] [US3] Create apply wrapper: `ApplyFile(ctx context.Context, path string) error` → `drasi apply -f <path>` — `internal/drasi/apply.go`
@@ -243,9 +243,9 @@ components — per-component health, streaming logs, and 5-check diagnostics.
 connection string KV secret. Run `azd drasi status` — confirm the query depending on that source
 shows Failed with error reason; exit code 1. Run `azd drasi diagnose` — Secrets Store CSI sync check FAIL.
 
-### Tests (write before implementation)
+### Operate tests (write before implementation)
 
-- [ ] T083 [TEST] [US4] Write status command test: all Online returns exit 0 health table; one Failed returns exit 1 with error reason + remediation hint; `--environment <name>` accepted; empty deployment set returns exit 0 with exact FR-039 message (`No components deployed. Run \`azd drasi deploy\` to deploy Drasi components.`); --output json valid schema — `cmd/status_test.go`
+- [ ] T083 [TEST] [US4] Write status command test: all Online returns exit 0 health table; one Failed returns exit 1 with error reason + remediation hint; `--environment <name>` accepted; empty deployment set returns exit 0 with exact FR-039 message ("No components deployed. Run `azd drasi deploy` to deploy Drasi components."); --output json valid schema — `cmd/status_test.go`
 - [ ] T084 [TEST] [P] [US4] Write logs command test: --component filter accepted, --kind filter accepted, --tail n flag wired, streaming is default live-tail behavior when `--tail` is omitted, optional `--follow` compatibility alias does not change behavior, `--environment <name>` accepted, `--output json` emits NDJSON with no mixed human text, pod not found exits 1 — `cmd/logs_test.go`
 - [ ] T085 [TEST] [P] [US4] Write diagnose command test: all PASS exits 0; single FAIL exits 1; `--environment <name>` accepted; JSON output lists all 5 checks with PASS/FAIL; --output json valid schema — `cmd/diagnose_test.go`
 - [ ] T086 [TEST] [P] [US4] Write tracer and metrics provider tests:
@@ -253,7 +253,7 @@ shows Failed with error reason; exit code 1. Run `azd drasi diagnose` — Secret
   - `internal/observability/metrics_test.go`: no-op meter when env var absent; meter with correct instrument names when present; counter names match spec (`drasi.components.deployed`, `drasi.deploy.errors`, `drasi.deploy.duration_seconds`)
     > **[TEST] coverage**: both `tracer.go` and `metrics.go` (T090, T091) must have test coverage before implementation per TDD requirement
 
-### Implementation
+### Operate implementation
 
 - [ ] T087 [US4] Implement `cmd/status.go`: call `drasi list` for each kind (source, continuousquery, reaction), call `drasi describe` for each; support `--environment <name>`; format health table (kind, id, status, age, error reason); emit remediation hint for Failed/Pending components; exit 1 if any component non-Online — `cmd/status.go`
 - [ ] T088 [P] [US4] Implement `cmd/logs.go`: shell out to `kubectl logs` for Drasi pods in drasiNamespace; support `--environment <name>` context resolution; filter by `--component` (pod label match) or `--kind`; `--tail n` passes to kubectl; default behavior is live streaming; optional `--follow` is accepted as a compatibility alias with no behavior change; `--output json` emits NDJSON (one JSON log object per line) without human formatting — `cmd/logs.go`
@@ -300,7 +300,7 @@ shows Failed with error reason; exit code 1. Run `azd drasi diagnose` — Secret
 
 ### Phase Dependencies
 
-```
+```text
 Phase 1 (Setup) — no dependencies; start immediately
     │
     ▼

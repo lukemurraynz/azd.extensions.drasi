@@ -1,0 +1,32 @@
+extends: default
+
+ignore-from-file: .yamllintignore
+
+rules:
+  line-length:
+    max: 200
+    level: warning
+  truthy:
+    allowed-values:
+      - 'YES'
+      - 'Yes'
+      - 'yes'
+      - 'NO'
+      - 'No'
+      - 'no'
+      - 'TRUE'
+      - 'True'
+      - 'true'
+      - 'FALSE'
+      - 'False'
+      - 'false'
+      - 'ON'
+      - 'On'
+      - 'on'
+      - 'OFF'
+      - 'Off'
+      - 'off'
+    check-keys: false
+  document-start: disable
+  indentation:
+    indent-sequences: whatever

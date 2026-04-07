@@ -6,11 +6,11 @@ import (
 	"os/exec"
 	"path/filepath"
 
+	"github.com/azure/azure-dev/cli/azd/pkg/azdext"
 	"github.com/lukemurraynz/azd.extensions.drasi/internal/config"
 	"github.com/lukemurraynz/azd.extensions.drasi/internal/deployment"
 	"github.com/lukemurraynz/azd.extensions.drasi/internal/drasi"
 	"github.com/lukemurraynz/azd.extensions.drasi/internal/output"
-	"github.com/azure/azure-dev/cli/azd/pkg/azdext"
 	"github.com/spf13/cobra"
 )
 
@@ -205,7 +205,7 @@ func runAzGroupDelete(ctx context.Context, resourceGroup string) error {
 	if err != nil {
 		return err
 	}
-	cmd := exec.CommandContext(ctx, azPath, "group", "delete", "--name", resourceGroup, "--yes", "--no-wait")
+	cmd := exec.CommandContext(ctx, azPath, "group", "delete", "--name", resourceGroup, "--yes", "--no-wait") //nolint:gosec // az CLI path resolved via LookPath
 	if output, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("%w: %s", err, string(output))
 	}

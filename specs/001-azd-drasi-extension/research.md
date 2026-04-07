@@ -76,7 +76,7 @@ and `--id` do not exist in the Drasi CLI; the CLI uses positional args consisten
 
 **Verified command signatures** (source: drasi-platform GitHub source, CLI cmd/ directory):
 
-```
+```bash
 drasi apply -f <manifest-file>
 drasi wait <kind> <name> --timeout <seconds>
 drasi delete <kind> <name>
@@ -118,8 +118,9 @@ Kubernetes ServiceAccount.
 - Bicep parameter `drasiNamespace` (default `drasi-system`) for custom namespace support
 
 **RBAC roles required** (principle of least privilege per Principle IV):
+
 | Role | Scope | Purpose |
-|------|-------|---------|
+| ---- | ----- | ------- |
 | `Key Vault Secrets User` (`4633458b-17de-408a-b874-0445c86b69e6`) | Key Vault resource | Read secrets for KV→K8s Secret translation |
 | `Monitoring Metrics Publisher` (`3913510d-42f4-4e42-8a64-420c390055eb`) | Log Analytics workspace | Export OpenTelemetry metrics |
 | `AcrPull` (`7f951dda-4ed3-4680-a7ca-43fe172d538d`) | ACR resource | Pull Drasi images (conditional on `usePrivateAcr=true`) |

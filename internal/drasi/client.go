@@ -29,7 +29,7 @@ func (r *realRunner) Run(ctx context.Context, args ...string) (string, string, i
 		return "", "", -1, err
 	}
 
-	cmd := exec.CommandContext(ctx, path, args...)
+	cmd := exec.CommandContext(ctx, path, args...) //nolint:gosec // drasi CLI path resolved via LookPath
 	var stdoutBuf, stderrBuf bytes.Buffer
 	cmd.Stdout = &stdoutBuf
 	cmd.Stderr = &stderrBuf

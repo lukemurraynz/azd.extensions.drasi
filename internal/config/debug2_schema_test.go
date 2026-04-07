@@ -3,9 +3,9 @@ package config_test
 import (
 	"encoding/json"
 	"fmt"
-	"testing"
 	"github.com/lukemurraynz/azd.extensions.drasi/internal/config"
 	"github.com/lukemurraynz/azd.extensions.drasi/internal/validation"
+	"testing"
 )
 
 func TestDebugSchema2(t *testing.T) {

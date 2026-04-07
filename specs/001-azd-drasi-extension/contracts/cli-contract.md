@@ -11,7 +11,7 @@ It is the contract between the extension binary and its consumers (developers, C
 
 ## CLI Grammar
 
-```
+```bash
 azd drasi <command> [flags]
 ```
 
@@ -26,7 +26,7 @@ All commands are registered under the `drasi` namespace (matching `extension.yam
 
 Scaffold a new Drasi project in the current directory.
 
-```
+```bash
 azd drasi init [--template <name>] [--force] [--output <format>]
 ```
 
@@ -45,7 +45,7 @@ azd drasi init [--template <name>] [--force] [--output <format>]
 
 **Success output (table):**
 
-```
+```text
 Initialized Drasi project in drasi/
   Created drasi/drasi.yaml
   Created drasi/sources/my-source.yaml
@@ -69,7 +69,7 @@ Initialized Drasi project in drasi/
 Run offline schema and cross-reference validation against all Drasi YAML files.
 No network or cluster access. Returns structured findings.
 
-```
+```bash
 azd drasi validate [--config <path>] [--strict] [--output <format>]
 ```
 
@@ -89,7 +89,7 @@ azd drasi validate [--config <path>] [--strict] [--output <format>]
 
 **Success output:**
 
-```
+```text
 ✓ drasi/drasi.yaml    — valid
 ✓ drasi/sources/postgres.yaml — valid
 ✗ drasi/queries/sales-report.yaml:14 ERR_MISSING_QUERY_LANGUAGE
@@ -121,7 +121,7 @@ azd drasi validate [--config <path>] [--strict] [--output <format>]
 
 Provision Azure infrastructure (AKS, Key Vault, UAMI) and install the Drasi runtime via `drasi init`.
 
-```
+```bash
 azd drasi provision [--environment <name>] [--output <format>]
 ```
 
@@ -150,7 +150,7 @@ azd drasi provision [--environment <name>] [--output <format>]
 
 Deploy Drasi components (sources, queries, reactions) from the project configuration.
 
-```
+```bash
 azd drasi deploy [--config <path>] [--environment <name>] [--dry-run] [--output <format>]
 ```
 
@@ -171,7 +171,7 @@ azd drasi deploy [--config <path>] [--environment <name>] [--dry-run] [--output 
 
 **Dry-run output (table):**
 
-```
+```text
 Deployment Plan (--dry-run, no changes will be made):
   SOURCE        postgres-source    create
   CONTINUOUSQUERY  sales-report    create
@@ -212,7 +212,7 @@ Deployment Plan (--dry-run, no changes will be made):
 
 Show the current health status of all deployed Drasi components.
 
-```
+```bash
 azd drasi status [--environment <name>] [--output <format>]
 ```
 
@@ -224,7 +224,7 @@ azd drasi status [--environment <name>] [--output <format>]
 
 **Table output:**
 
-```
+```text
 Component Status — environment: dev
 
 KIND              ID                  STATUS    AGE
@@ -239,7 +239,7 @@ Reaction          pubsub-reaction     Pending   5m
 
 Stream or print logs from Drasi runtime pods.
 
-```
+```bash
 azd drasi logs [--component <id>] [--kind <kind>] [--tail <n>] [--follow] [--environment <name>]
 ```
 
@@ -264,7 +264,7 @@ azd drasi logs [--component <id>] [--kind <kind>] [--tail <n>] [--follow] [--env
 
 Run a diagnostic health check across 5 domains and report findings.
 
-```
+```bash
 azd drasi diagnose [--environment <name>] [--output <format>]
 ```
 
@@ -289,7 +289,7 @@ azd drasi diagnose [--environment <name>] [--output <format>]
 
 Remove all deployed Drasi components and optionally the Azure infrastructure.
 
-```
+```bash
 azd drasi teardown --force [--infrastructure] [--environment <name>] [--output <format>]
 ```
 

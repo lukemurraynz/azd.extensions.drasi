@@ -13,11 +13,11 @@ func TestWaitOnline_ImmediatelyOnline(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name   string
-		kind   string
-		id     string
+		name    string
+		kind    string
+		id      string
 		timeout int
-		stdout string
+		stdout  string
 	}{
 		{name: "component already online", kind: "query", id: "alerts", timeout: 5, stdout: "STATUS: Online"},
 	}
@@ -41,10 +41,10 @@ func TestWaitOnline_OnlineAfterPolls(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name     string
-		kind     string
-		id       string
-		timeout  int
+		name      string
+		kind      string
+		id        string
+		timeout   int
 		responses []runnerResponse
 	}{
 		{
@@ -79,12 +79,12 @@ func TestWaitOnline_ExceedsTimeout(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name     string
-		kind     string
-		id       string
-		timeout  int
+		name      string
+		kind      string
+		id        string
+		timeout   int
 		responses []runnerResponse
-		want     string
+		want      string
 	}{
 		{
 			name:    "timeout returns component timeout error",

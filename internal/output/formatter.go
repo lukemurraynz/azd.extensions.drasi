@@ -41,7 +41,7 @@ func Format(data any, fmt OutputFormat) string {
 		value = value.Elem()
 	}
 
-	switch value.Kind() {
+	switch value.Kind() { //nolint:exhaustive // Only slice/array/struct/map get table formatting; all other kinds use Sprint.
 	case reflect.Slice, reflect.Array:
 		return formatSliceAsTable(value)
 	case reflect.Struct:

@@ -25,12 +25,12 @@ Drasi requires coordinating several Azure resources (AKS, Key Vault, managed ide
 These tools are needed to use the extension after installation.
 
 | Tool | Version | Install |
-|------|---------|---------|
-| Azure Developer CLI (`azd`) | >= 1.10.0 | https://aka.ms/azd |
-| Drasi CLI | >= 0.10.0 | https://drasi.io/docs/getting-started |
-| Azure CLI | >= 2.60.0 | https://aka.ms/azcli |
-| Docker | >= 24.0 | https://www.docker.com |
-| kubectl | >= 1.28 | https://kubernetes.io/docs/tasks/tools/ |
+| ------ | --------- | --------- |
+| Azure Developer CLI (`azd`) | >= 1.10.0 | <https://aka.ms/azd> |
+| Drasi CLI | >= 0.10.0 | <https://drasi.io/docs/getting-started> |
+| Azure CLI | >= 2.60.0 | <https://aka.ms/azcli> |
+| Docker | >= 24.0 | <https://www.docker.com> |
+| kubectl | >= 1.28 | <https://kubernetes.io/docs/tasks/tools/> |
 
 Go is only needed if you are building the extension from source. See [Contributing](#contributing).
 

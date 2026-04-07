@@ -9,12 +9,12 @@
 
 | Tool                        | Version  | Install                                 |
 | --------------------------- | -------- | --------------------------------------- |
-| Azure Developer CLI (`azd`) | ≥ 1.10.0 | https://aka.ms/azd                      |
-| Drasi CLI                   | ≥ 0.10.0 | https://drasi.io/docs/getting-started   |
-| Azure CLI                   | ≥ 2.60.0 | https://aka.ms/azcli                    |
-| Go                          | ≥ 1.22   | https://go.dev                          |
-| Docker                      | ≥ 24.0   | https://www.docker.com                  |
-| kubectl                     | ≥ 1.28   | https://kubernetes.io/docs/tasks/tools/ |
+| Azure Developer CLI (`azd`) | ≥ 1.10.0 | <https://aka.ms/azd>                      |
+| Drasi CLI                   | ≥ 0.10.0 | <https://drasi.io/docs/getting-started>   |
+| Azure CLI                   | ≥ 2.60.0 | <https://aka.ms/azcli>                    |
+| Go                          | ≥ 1.22   | <https://go.dev>                          |
+| Docker                      | ≥ 24.0   | <https://www.docker.com>                  |
+| kubectl                     | ≥ 1.28   | <https://kubernetes.io/docs/tasks/tools/> |
 
 ---
 
@@ -42,7 +42,7 @@ azd drasi init --template cosmos-change-feed
 
 This creates:
 
-```
+```text
 my-drasi-app/
 ├── azure.yaml
 ├── drasi/
@@ -125,7 +125,7 @@ azd drasi status
 
 Expected output:
 
-```
+```text
 Component Status — environment: dev
 
 KIND              ID                  STATUS    AGE

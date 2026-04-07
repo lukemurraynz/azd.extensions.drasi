@@ -251,7 +251,7 @@ azd.extensions.drasi/
 
 > **Note**: tests are written BEFORE implementation code in each phase (TDD — Constitution Principle VIII).
 > Each phase ends with `go test ./...` green + `golangci-lint` clean before moving on.
-
+>
 > **Phase numbering**: plan.md uses Phase 0 as research pre-work and Phase 1 as completed design artifacts. Implementation in this plan continues through Phase 10. `tasks.md` intentionally condenses plan Phases 8-10 into a single Polish phase.
 > Mapping: `plan.md Phase 0` → pre-work complete | `plan.md Phase 1` → design artifacts complete | `tasks.md Phase 1` → Setup | `tasks.md Phase 2` → Foundational | `tasks.md Phases 3-7` → User Stories (US5, US1, US2, US3, US4) | `tasks.md Phase 8` → plan.md Phases 8-10 (Observability + CI/CD + Documentation)
 
@@ -535,7 +535,7 @@ Every semver tag produces cross-compiled binaries and a GitHub Release.
 
 ## Dependency Map
 
-```
+```text
 Phase 2 (scaffold + stubs)
       │
       ▼

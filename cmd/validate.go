@@ -79,7 +79,7 @@ func renderValidationOutput(cmd *cobra.Command, result *validation.ValidationRes
 		}
 		payload := map[string]any{
 			"status": status,
-			"issues":  result.Issues,
+			"issues": result.Issues,
 		}
 		data, err := json.MarshalIndent(payload, "", "  ")
 		if err == nil {

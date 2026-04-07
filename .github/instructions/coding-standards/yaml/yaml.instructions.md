@@ -460,6 +460,53 @@ gh api repos/actions/checkout/git/ref/tags/v4.1.1 --jq '.object.sha'
 
 ---
 
+## yamllint compliance
+
+The CI pipeline runs yamllint on all YAML files. Violations fail the pull request check. Write YAML that passes this linter from the start.
+
+### CI configuration
+
+The project stores yamllint configuration in `.yamllint.yml` at the repository root. CI runs yamllint in `.github/workflows/pr-checks.yml` using the `ibiqlik/action-yamllint` action with `config_file: .yamllint.yml`.
+
+Key rules in the config:
+
+- `extends: default` means all standard yamllint rules apply unless overridden
+- `line-length: max: 200, level: warning` (warnings, not errors)
+- `indentation: indent-sequences: whatever` (accepts both indented and Kubernetes-style unindented sequences)
+- `document-start: disable` (no `---` required at the start of files)
+- `ignore-from-file: .yamllintignore` excludes `.agents/` and `.sisyphus/` directories
+
+All other default rule violations are errors.
+
+### Common rule violations
+
+These are the rules that most often cause CI failures in this project.
+
+| Rule | Description | Fix |
+|------|-------------|-----|
+| indentation | Inconsistent indentation | Use 2-space indentation consistently throughout YAML files |
+| new-lines | Wrong line ending character | Use LF line endings, not CRLF (configure your editor for YAML files) |
+| comments | Missing space after `#` | Always add a space after `#` in comments: `# comment` not `#comment` |
+| truthy | Unquoted boolean-like values | Quote boolean values or use only `true`, `false`, `on`, `off` |
+
+The most common source of failures on Windows is CRLF line endings. Configure your editor to write LF for YAML files, or set `core.autocrlf = input` in your git config.
+
+### Running locally
+
+Run yamllint with the project config before pushing:
+
+```bash
+yamllint -c .yamllint.yml .
+```
+
+This uses the same configuration as CI. Fix any errors before opening a pull request.
+
+### File exclusions
+
+The `.yamllintignore` file excludes `.agents/` and `.sisyphus/` directories from linting. Those files are not your concern when writing project YAML. Focus on ensuring project YAML files under `cmd/`, `.github/workflows/`, `internal/`, and root config files pass yamllint.
+
+---
+
 ## Best Practices
 
 ### General YAML

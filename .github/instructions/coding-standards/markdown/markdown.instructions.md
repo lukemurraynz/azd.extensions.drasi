@@ -446,6 +446,64 @@ Use sparingly and only when the callout adds clarity.
 
 ---
 
+## markdownlint compliance
+
+The CI pipeline runs `markdownlint-cli2` on all Markdown files. Violations fail the pull request check. Write Markdown that passes this linter from the start.
+
+### Configuration
+
+The project uses three markdownlint-related files:
+
+- `.markdownlint.json` disables three rules project-wide: MD013 (line length), MD036 (emphasis used as a heading), and MD041 (first line must be a top-level heading).
+- `.markdownlintignore` excludes agent and instruction files from linting: `.github/agents/**`, `.github/instructions/**`, and `.agents/**`. Files outside those paths are checked.
+- CI runs via `DavidAnson/markdownlint-cli2-action` in `.github/workflows/pr-checks.yml` against all `*.md` files not excluded by the ignore file.
+
+### Common rule violations
+
+These are the rules that most often cause CI failures in this project.
+
+| Rule | Description | Fix |
+|------|-------------|-----|
+| MD034 | Bare URLs in text | Wrap in angle brackets `<https://example.com>` or use `[text](url)` |
+| MD040 | Fenced code blocks without language | Add a language identifier after the opening triple backticks |
+| MD060 | Table column style inconsistency | Ensure the separator row matches column alignment consistently |
+
+**MD034 example:**
+
+```markdown
+# Wrong
+See https://example.com for details.
+
+# Right
+See <https://example.com> for details.
+```
+
+**MD040 example:**
+
+````markdown
+# Wrong
+```
+npm install
+```
+
+# Right
+```bash
+npm install
+```
+````
+
+### Running locally
+
+To run the linter before pushing:
+
+```bash
+npx markdownlint-cli2 "**/*.md" "!.github/**/*.md" "!memories/**/*.md" "!.agents/**/*.md"
+```
+
+This mirrors the CI glob pattern. Fix any violations before opening a pull request.
+
+---
+
 ## Quality Bar Before Merging
 
 Before finalizing documentation, confirm:

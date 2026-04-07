@@ -4,8 +4,8 @@ import (
 	"log/slog"
 	"os"
 
-	"github.com/lukemurraynz/azd.extensions.drasi/cmd"
 	"github.com/azure/azure-dev/cli/azd/pkg/azdext"
+	"github.com/lukemurraynz/azd.extensions.drasi/cmd"
 )
 
 var version = "dev"

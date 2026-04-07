@@ -3,3 +3,6 @@
 # markdown style guides (no blank lines around headings/lists/fences).
 .github/agents/**
 .github/instructions/**
+.agents/**
+# Exclude working notes from linting (internal planning artifacts).
+.sisyphus/**

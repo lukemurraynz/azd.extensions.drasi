@@ -16,7 +16,7 @@ Scaffolds a Drasi project that watches an Azure Database for PostgreSQL Flexible
 ## Prerequisites
 
 | Tool | Version |
-|------|---------|
+| ----- | --------- |
 | Azure Developer CLI (`azd`) | >= 1.10.0 |
 | Drasi CLI | >= 0.10.0 |
 | Azure CLI | >= 2.60.0 |
