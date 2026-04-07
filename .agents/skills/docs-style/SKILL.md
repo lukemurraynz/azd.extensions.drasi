@@ -33,7 +33,7 @@ For asides, use parentheses. For natural pauses between clauses, use a comma. Fo
 
 Do not introduce inline lists with a colon in the middle of a sentence.
 
-```
+```text
 # Wrong
 Azure provides two options: Flux and Argo CD.
 
@@ -43,7 +43,7 @@ Azure provides two managed extensions. Flux handles GitOps workflows. Argo CD pr
 
 ### Bold labels as pseudo-headings: don't
 
-```
+```text
 # Wrong
 **ContainerLog migration:** All existing clusters must...
 
@@ -84,7 +84,7 @@ These are fingerprints of AI-generated text. Reject them:
 
 Documentation explains behavior. It does not sell.
 
-```
+```text
 # Wrong
 This extension wraps that complexity in a powerful set of familiar azd commands.
 
@@ -98,7 +98,7 @@ This extension wraps that complexity in familiar azd commands.
 
 ### Sentence case for headings
 
-```
+```text
 # Wrong
 ## Command Reference
 
@@ -108,7 +108,7 @@ This extension wraps that complexity in familiar azd commands.
 
 ### No punctuation at the end of headings
 
-```
+```text
 # Wrong
 ## Quick start guide:
 
@@ -117,6 +117,31 @@ This extension wraps that complexity in familiar azd commands.
 ```
 
 ### One H1 per document
+
+### Fenced code blocks must have a language identifier
+
+Every fenced code block (triple backticks) must include a language tag. Bare code fences fail the markdownlint MD040 rule.
+
+Common language tags: `bash`, `powershell`, `json`, `yaml`, `bicep`, `go`, `csharp`, `typescript`, `python`, `markdown`, `text`.
+
+Use `text` for plain output, logs, or content that has no specific language.
+
+```text
+# Wrong
+\`\`\`
+npm install
+\`\`\`
+
+# Right
+\`\`\`bash
+npm install
+\`\`\`
+
+# Right (for plain text or log output)
+\`\`\`text
+Error: connection refused
+\`\`\`
+```
 
 ---
 

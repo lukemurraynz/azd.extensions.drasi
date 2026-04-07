@@ -103,6 +103,14 @@ Do not modify the command or add additional flags.
 
 ## Avoid Common Anti-Patterns
 
+### Always Tag Fenced Code Blocks
+
+Every fenced code block must include a language identifier after the opening triple backticks. Bare code fences fail the markdownlint MD040 rule and reduce syntax highlighting for agents and humans.
+
+Common tags: `bash`, `powershell`, `json`, `yaml`, `bicep`, `go`, `csharp`, `typescript`, `python`, `markdown`, `text`.
+
+Use `text` for plain output, logs, or content with no specific language.
+
 ### Don't Offer Too Many Options
 
 **Bad:**

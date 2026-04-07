@@ -454,7 +454,7 @@ The CI pipeline runs `markdownlint-cli2` on all Markdown files. Violations fail 
 
 The project uses three markdownlint-related files:
 
-- `.markdownlint.json` disables three rules project-wide: MD013 (line length), MD036 (emphasis used as a heading), and MD041 (first line must be a top-level heading).
+- `.markdownlint.json` disables four rules project-wide: MD013 (line length), MD029 (ordered list item prefix), MD036 (emphasis used as a heading), and MD041 (first line must be a top-level heading).
 - `.markdownlintignore` excludes agent and instruction files from linting: `.github/agents/**`, `.github/instructions/**`, and `.agents/**`. Files outside those paths are checked.
 - CI runs via `DavidAnson/markdownlint-cli2-action` in `.github/workflows/pr-checks.yml` against all `*.md` files not excluded by the ignore file.
 
