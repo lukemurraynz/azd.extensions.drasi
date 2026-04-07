@@ -163,7 +163,7 @@ func TestTeardownCommand_UserDeclinesConfirmation_PrintsAbortedMessage(t *testin
 
 func TestTeardownCommand_runAzGroupDelete_Succeeds(t *testing.T) {
 	installFakeCommands(t, map[string]string{
-		"az": "exit /b 0",
+		"az": fakeScript("exit /b 0", "exit 0"),
 	})
 
 	err := runAzGroupDelete(context.Background(), "rg-test")
@@ -173,7 +173,7 @@ func TestTeardownCommand_runAzGroupDelete_Succeeds(t *testing.T) {
 
 func TestTeardownCommand_runAzGroupDelete_FailureWrapsCLIOutput(t *testing.T) {
 	installFakeCommands(t, map[string]string{
-		"az": "echo delete failed 1>&2\r\nexit /b 1",
+		"az": fakeScript("echo delete failed 1>&2\r\nexit /b 1", "echo \"delete failed\" >&2\nexit 1"),
 	})
 
 	err := runAzGroupDelete(context.Background(), "rg-test")
@@ -206,17 +206,25 @@ func scaffoldTeardownTestProject(t *testing.T) string {
 }
 
 func successfulDrasiScript() string {
-	return `if "%1"=="version" (
+	return fakeScript(`if "%1"=="version" (
 echo v0.10.0
 exit /b 0
 )
-exit /b 0`
+exit /b 0`, `if [ "$1" = "version" ]; then
+echo v0.10.0
+exit 0
+fi
+exit 0`)
 }
 
 func invalidVersionDrasiScript() string {
-	return `if "%1"=="version" (
+	return fakeScript(`if "%1"=="version" (
 echo definitely-not-semver
 exit /b 0
 )
-exit /b 0`
+exit /b 0`, `if [ "$1" = "version" ]; then
+echo definitely-not-semver
+exit 0
+fi
+exit 0`)
 }

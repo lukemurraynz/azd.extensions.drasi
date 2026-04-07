@@ -5,6 +5,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -85,15 +86,30 @@ func installFakeCommands(t *testing.T, scripts map[string]string) string {
 	t.Helper()
 
 	dir := t.TempDir()
-	for name, script := range scripts {
-		path := filepath.Join(dir, name+".cmd")
-		content := "@echo off\r\n" + script + "\r\n"
-		require.NoError(t, os.WriteFile(path, []byte(content), 0o600))
+	for name, body := range scripts {
+		var path, content string
+		if runtime.GOOS == "windows" {
+			path = filepath.Join(dir, name+".cmd")
+			content = "@echo off\r\n" + body + "\r\n"
+		} else {
+			path = filepath.Join(dir, name)
+			content = "#!/bin/sh\n" + body + "\n"
+		}
+		require.NoError(t, os.WriteFile(path, []byte(content), 0o755))
 	}
 
 	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
 
 	return dir
+}
+
+// fakeScript returns a platform-appropriate fake command script body.
+// winBody uses Windows batch syntax; unixBody uses POSIX shell syntax.
+func fakeScript(winBody, unixBody string) string {
+	if runtime.GOOS == "windows" {
+		return winBody
+	}
+	return unixBody
 }
 
 func readNonEmptyLines(t *testing.T, path string) []string {

@@ -274,7 +274,7 @@ func TestSwitchKubectlContext_KubectlMissingReturnsError(t *testing.T) {
 func TestSwitchKubectlContext_CurrentContextAlreadyMatches(t *testing.T) {
 	logFile := filepath.Join(t.TempDir(), "kubectl.log")
 	installFakeCommands(t, map[string]string{
-		"kubectl": fmt.Sprintf(`
+		"kubectl": fakeScript(fmt.Sprintf(`
 echo %%*>>"%s"
 if "%%1 %%2"=="config current-context" (
   echo desired-context
@@ -284,7 +284,17 @@ if "%%1 %%2"=="config use-context" (
   exit /b 99
 )
 exit /b 1
-`, logFile),
+`, logFile), fmt.Sprintf(`
+echo "$@" >> "%s"
+if [ "$1 $2" = "config current-context" ]; then
+  echo desired-context
+  exit 0
+fi
+if [ "$1 $2" = "config use-context" ]; then
+  exit 99
+fi
+exit 1
+`, logFile)),
 	})
 
 	err := switchKubectlContext(context.Background(), "desired-context")
@@ -296,7 +306,7 @@ exit /b 1
 func TestSwitchKubectlContext_ContextSwitchSucceeds(t *testing.T) {
 	logFile := filepath.Join(t.TempDir(), "kubectl.log")
 	installFakeCommands(t, map[string]string{
-		"kubectl": fmt.Sprintf(`
+		"kubectl": fakeScript(fmt.Sprintf(`
 echo %%*>>"%s"
 if "%%1 %%2"=="config current-context" (
   echo other-context
@@ -306,7 +316,17 @@ if "%%1 %%2"=="config use-context" (
   exit /b 0
 )
 exit /b 1
-`, logFile),
+`, logFile), fmt.Sprintf(`
+echo "$@" >> "%s"
+if [ "$1 $2" = "config current-context" ]; then
+  echo other-context
+  exit 0
+fi
+if [ "$1 $2" = "config use-context" ]; then
+  exit 0
+fi
+exit 1
+`, logFile)),
 	})
 
 	err := switchKubectlContext(context.Background(), "desired-context")
@@ -318,7 +338,7 @@ exit /b 1
 func TestSwitchKubectlContext_ContextSwitchFails(t *testing.T) {
 	logFile := filepath.Join(t.TempDir(), "kubectl.log")
 	installFakeCommands(t, map[string]string{
-		"kubectl": fmt.Sprintf(`
+		"kubectl": fakeScript(fmt.Sprintf(`
 echo %%*>>"%s"
 if "%%1 %%2"=="config current-context" (
   echo other-context
@@ -329,7 +349,18 @@ if "%%1 %%2"=="config use-context" (
   exit /b 1
 )
 exit /b 1
-`, logFile),
+`, logFile), fmt.Sprintf(`
+echo "$@" >> "%s"
+if [ "$1 $2" = "config current-context" ]; then
+  echo other-context
+  exit 0
+fi
+if [ "$1 $2" = "config use-context" ]; then
+  echo "failed to switch" >&2
+  exit 1
+fi
+exit 1
+`, logFile)),
 	})
 
 	err := switchKubectlContext(context.Background(), "desired-context")
@@ -351,12 +382,17 @@ func TestRunDrasiInit_DrasiMissingReturnsError(t *testing.T) {
 func TestRunDrasiInit_DrasiEnvAndInitSucceed(t *testing.T) {
 	logFile := filepath.Join(t.TempDir(), "drasi.log")
 	installFakeCommands(t, map[string]string{
-		"drasi": fmt.Sprintf(`
+		"drasi": fakeScript(fmt.Sprintf(`
 echo %%*>>"%s"
 if "%%1 %%2"=="env kube" exit /b 0
 if "%%1"=="init" exit /b 0
 exit /b 1
-`, logFile),
+`, logFile), fmt.Sprintf(`
+echo "$@" >> "%s"
+if [ "$1 $2" = "env kube" ]; then exit 0; fi
+if [ "$1" = "init" ]; then exit 0; fi
+exit 1
+`, logFile)),
 	})
 
 	err := runDrasiInit(context.Background(), "", false, "")
@@ -368,12 +404,17 @@ exit /b 1
 func TestRunDrasiInit_PrivateAcrPassesRegistryFlag(t *testing.T) {
 	logFile := filepath.Join(t.TempDir(), "drasi.log")
 	installFakeCommands(t, map[string]string{
-		"drasi": fmt.Sprintf(`
+		"drasi": fakeScript(fmt.Sprintf(`
 echo %%*>>"%s"
 if "%%1 %%2"=="env kube" exit /b 0
 if "%%1"=="init" exit /b 0
 exit /b 1
-`, logFile),
+`, logFile), fmt.Sprintf(`
+echo "$@" >> "%s"
+if [ "$1 $2" = "env kube" ]; then exit 0; fi
+if [ "$1" = "init" ]; then exit 0; fi
+exit 1
+`, logFile)),
 	})
 
 	err := runDrasiInit(context.Background(), "", true, "example.azurecr.io")
@@ -394,7 +435,7 @@ func TestApplyDrasiNetworkPolicies_KubectlMissingReturnsError(t *testing.T) {
 func TestApplyDrasiNetworkPolicies_KubectlApplySucceeds(t *testing.T) {
 	logFile := filepath.Join(t.TempDir(), "kubectl.log")
 	installFakeCommands(t, map[string]string{
-		"kubectl": fmt.Sprintf(`
+		"kubectl": fakeScript(fmt.Sprintf(`
 echo %%*>>"%s"
 if "%%1 %%2"=="config current-context" (
   echo other-context
@@ -406,7 +447,19 @@ if "%%1"=="apply" (
   exit /b 0
 )
 exit /b 1
-`, logFile),
+`, logFile), fmt.Sprintf(`
+echo "$@" >> "%s"
+if [ "$1 $2" = "config current-context" ]; then
+  echo other-context
+  exit 0
+fi
+if [ "$1 $2" = "config use-context" ]; then exit 0; fi
+if [ "$1" = "apply" ]; then
+  cat > /dev/null
+  exit 0
+fi
+exit 1
+`, logFile)),
 	})
 
 	err := applyDrasiNetworkPolicies(context.Background(), "desired-context")
