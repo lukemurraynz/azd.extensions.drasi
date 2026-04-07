@@ -1,9 +1,0 @@
-# debug-reaction.yaml - Drasi Debug Reaction: logs query result changes to stdout
-# Requires no external infrastructure - ideal for E2E verification.
-apiVersion: v1
-kind: Reaction
-name: debug-reaction
-spec:
-  kind: Debug
-  queries:
-    k8s-pods-query: ""
