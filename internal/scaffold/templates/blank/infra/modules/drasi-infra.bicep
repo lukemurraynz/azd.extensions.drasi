@@ -174,7 +174,7 @@ module vnet 'br/public:avm/res/network/virtual-network:0.8.0' = {
 // 9. Network Contributor — control-plane UAMI on VNet scope
 // BCP120 fix: use static name inputs (vnetName + uami name) for guid().
 // ---------------------------------------------------------------------------
-resource vnetResource 'Microsoft.Network/virtualNetworks@2024-05-01' existing = {
+resource vnetResource 'Microsoft.Network/virtualNetworks@2024-10-01' existing = {
   name: vnetName
   dependsOn: [vnet]
 }

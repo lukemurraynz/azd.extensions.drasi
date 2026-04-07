@@ -189,7 +189,7 @@ module vnet 'br/public:avm/res/network/virtual-network:0.8.0' = {
 // a DeploymentActive conflict on the subnet sub-deployment).
 // guid() inputs use known var names so the name is calculable at deployment start.
 // ---------------------------------------------------------------------------
-resource vnetRef 'Microsoft.Network/virtualNetworks@2024-05-01' existing = {
+resource vnetRef 'Microsoft.Network/virtualNetworks@2024-10-01' existing = {
   name: vnetName
   dependsOn: [vnet]
 }
