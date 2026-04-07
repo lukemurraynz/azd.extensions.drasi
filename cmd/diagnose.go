@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"os"
 	"os/exec"
 	"strings"
 
@@ -161,19 +162,50 @@ func newDiagnoseCommand() *cobra.Command {
 				Remediation: "",
 			})
 
-			checks = append(checks, diagnosticCheck{
-				Name:        "key-vault-auth",
-				Status:      "skipped",
-				Detail:      "Key Vault auth requires a deployed secret reference; validated at provision/deploy time",
-				Remediation: "Deploy a component with a Key Vault secret reference to validate auth end-to-end.",
-			})
+			// Key Vault check
+			vaultName := os.Getenv("AZURE_KEYVAULT_NAME")
+			if strings.TrimSpace(vaultName) == "" {
+				checks = append(checks, diagnosticCheck{
+					Name:        "key-vault-auth",
+					Status:      "skipped",
+					Detail:      "AZURE_KEYVAULT_NAME not set; skipping Key Vault connectivity check",
+					Remediation: "Set AZURE_KEYVAULT_NAME in the azd environment to enable this check.",
+				})
+			} else {
+				kvStatus, kvDetail, kvErr := azKeyVaultCheck(ctx, vaultName)
+				if kvErr != nil {
+					kvStatus = "failed"
+					kvDetail = kvErr.Error()
+				}
+				remediation := ""
+				if kvStatus == "failed" {
+					remediation = "Ensure the Key Vault exists and the managed identity has 'Key Vault Secrets User' role."
+				}
+				checks = append(checks, diagnosticCheck{Name: "key-vault-auth", Status: kvStatus, Detail: kvDetail, Remediation: remediation})
+			}
 
-			checks = append(checks, diagnosticCheck{
-				Name:        "log-analytics",
-				Status:      "skipped",
-				Detail:      "Log Analytics workspace wiring is validated during provision and runtime observability checks",
-				Remediation: "Run `azd drasi provision` to validate Log Analytics workspace integration.",
-			})
+			// Log Analytics check
+			wsName := os.Getenv("AZURE_LOG_ANALYTICS_WORKSPACE_NAME")
+			rgName := os.Getenv("AZURE_RESOURCE_GROUP")
+			if strings.TrimSpace(wsName) == "" || strings.TrimSpace(rgName) == "" {
+				checks = append(checks, diagnosticCheck{
+					Name:        "log-analytics",
+					Status:      "skipped",
+					Detail:      "AZURE_LOG_ANALYTICS_WORKSPACE_NAME or AZURE_RESOURCE_GROUP not set; skipping Log Analytics check",
+					Remediation: "Set AZURE_LOG_ANALYTICS_WORKSPACE_NAME and AZURE_RESOURCE_GROUP to enable this check.",
+				})
+			} else {
+				laStatus, laDetail, laErr := azLogAnalyticsCheck(ctx, rgName, wsName)
+				if laErr != nil {
+					laStatus = "failed"
+					laDetail = laErr.Error()
+				}
+				remediation := ""
+				if laStatus == "failed" {
+					remediation = "Ensure the Log Analytics workspace exists and is accessible from the current subscription."
+				}
+				checks = append(checks, diagnosticCheck{Name: "log-analytics", Status: laStatus, Detail: laDetail, Remediation: remediation})
+			}
 
 			payload := map[string]any{"status": "ok", "checks": checks}
 			if format == output.FormatJSON {
@@ -203,4 +235,24 @@ var isDaprReady = func(ctx context.Context, kubeContext string) (bool, string, e
 		return false, "no Dapr operator pod found in dapr-system namespace", nil
 	}
 	return true, "Dapr operator pod is present", nil
+}
+
+// azKeyVaultCheck shells out to az CLI to verify Key Vault accessibility.
+var azKeyVaultCheck = func(ctx context.Context, vaultName string) (string, string, error) {
+	out, err := exec.CommandContext(ctx, "az", "keyvault", "show", "--name", vaultName).CombinedOutput()
+	if err != nil {
+		return "failed", strings.TrimSpace(string(out)), err
+	}
+	return "ok", fmt.Sprintf("Key Vault %s is accessible", vaultName), nil
+}
+
+// azLogAnalyticsCheck shells out to az CLI to verify Log Analytics workspace accessibility.
+var azLogAnalyticsCheck = func(ctx context.Context, resourceGroup, workspaceName string) (string, string, error) {
+	out, err := exec.CommandContext(ctx, "az", "monitor", "log-analytics", "workspace", "show",
+		"--resource-group", resourceGroup,
+		"--workspace-name", workspaceName).CombinedOutput()
+	if err != nil {
+		return "failed", strings.TrimSpace(string(out)), err
+	}
+	return "ok", fmt.Sprintf("Log Analytics workspace %s is accessible", workspaceName), nil
 }

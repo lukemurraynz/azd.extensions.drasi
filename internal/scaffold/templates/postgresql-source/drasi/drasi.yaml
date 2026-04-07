@@ -1,0 +1,18 @@
+# drasi.yaml - Drasi project manifest
+apiVersion: v1
+kind: DrasiProject
+includes:
+  - kind: sources
+    pattern: "sources/*.yaml"
+  - kind: queries
+    pattern: "queries/*.yaml"
+  - kind: reactions
+    pattern: "reactions/*.yaml"
+environments:
+  # staging:
+  #   components:
+  #     - kind: source
+  #       id: pg-source
+  #       properties:
+  #         connectionString: "postgresql://user:password@staging-host:5432/db"
+featureFlags: {}

@@ -2,6 +2,10 @@ package cmd_test
 
 import (
 	"bytes"
+	yaml "gopkg.in/yaml.v3"
+	"io"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/azure/azd.extensions.drasi/cmd"
@@ -56,4 +60,29 @@ func TestProvisionCommand_NoAuth_ExitsTwo(t *testing.T) {
 	err := root.Execute()
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "ERR_NO_AUTH", "provision must return ERR_NO_AUTH without AZD_SERVER")
+}
+
+// TestNetworkPolicyYAMLValid ensures the embedded network policy YAML is parseable
+// and contains at least one document.
+func TestNetworkPolicyYAMLValid(t *testing.T) {
+	t.Parallel()
+	path := filepath.Join("..", "cmd", "network_policies.yaml")
+	// Fallback to module-relative path if test runs from repo root
+	if _, err := os.Stat(path); err != nil {
+		path = filepath.Join("cmd", "network_policies.yaml")
+	}
+	data, err := os.ReadFile(path)
+	require.NoError(t, err, "reading network_policies.yaml should succeed")
+	dec := yaml.NewDecoder(bytes.NewReader(data))
+	var doc interface{}
+	count := 0
+	for {
+		if err := dec.Decode(&doc); err == io.EOF {
+			break
+		} else if err != nil {
+			t.Fatalf("failed to parse YAML document %d: %v", count+1, err)
+		}
+		count++
+	}
+	require.Equal(t, 8, count, "expected exactly 8 NetworkPolicy YAML documents in network_policies.yaml")
 }

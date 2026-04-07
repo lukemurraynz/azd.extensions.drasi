@@ -1,0 +1,16 @@
+# PostgreSQL source — connects Drasi to a PostgreSQL database via logical replication (CDC).
+# Replace the connectionString, database, and tables values for your environment.
+# For local dev, use the docker-compose.yml PostgreSQL container.
+apiVersion: v1
+kind: Source
+name: pg-source
+spec:
+  kind: PostgreSQL
+  properties:
+    connectionString:
+      kind: secret
+      vaultName: "$(AZURE_KEY_VAULT_NAME)"
+      secretName: pg-connection-string
+    database: drasidb
+    tables:
+      - public.orders

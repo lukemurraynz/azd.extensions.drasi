@@ -1,0 +1,6 @@
+=== RUN   TestNetworkPolicyYAMLValid
+=== PAUSE TestNetworkPolicyYAMLValid
+=== CONT  TestNetworkPolicyYAMLValid
+--- PASS: TestNetworkPolicyYAMLValid (0.00s)
+PASS
+ok  	github.com/azure/azd.extensions.drasi/cmd	1.614s

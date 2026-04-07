@@ -193,6 +193,87 @@ func TestEngine_Deploy_PropagatesRunCommandError(t *testing.T) {
 	assert.Contains(t, err.Error(), "drasi apply failed")
 }
 
+func TestDeployRollbackOnFailure(t *testing.T) {
+	t.Parallel()
+
+	h := newEngineHarness()
+	manifest := &config.ResolvedManifest{
+		Sources:   []config.Source{{ID: "source-one"}},
+		Queries:   []config.ContinuousQuery{{ID: "query-two"}},
+		Reactions: []config.Reaction{{ID: "reaction-three"}},
+	}
+
+	h.mockDrasi.runCommandFunc = func(ctx context.Context, args ...string) error {
+		if len(args) > 0 && args[0] == "wait" && len(args) > 2 && args[1] == "continuousquery" && args[2] == "query-two" {
+			return fmt.Errorf("query wait failed")
+		}
+		return nil
+	}
+
+	err := h.engine.Deploy(context.Background(), manifest, DeployOptions{Environment: "test-env"})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "query wait failed")
+
+	require.Len(t, h.mockDrasi.commandsCalled, 5)
+	assert.Equal(t, []string{"wait", "source", "source-one", "--timeout", "300"}, h.mockDrasi.commandsCalled[1])
+	assert.Equal(t, []string{"wait", "continuousquery", "query-two", "--timeout", "300"}, h.mockDrasi.commandsCalled[3])
+	assert.Equal(t, []string{"delete", "source", "source-one"}, h.mockDrasi.commandsCalled[4])
+	assert.Equal(t, "", h.mockState.store["DRASI_HASH_CONTINUOUSQUERY_query_two"])
+}
+
+func TestDeployNoRollback(t *testing.T) {
+	t.Parallel()
+
+	h := newEngineHarness()
+	manifest := &config.ResolvedManifest{
+		Sources: []config.Source{{ID: "source-one"}},
+		Queries: []config.ContinuousQuery{{ID: "query-two"}},
+	}
+
+	h.mockDrasi.runCommandFunc = func(ctx context.Context, args ...string) error {
+		if len(args) > 0 && args[0] == "wait" && len(args) > 2 && args[1] == "continuousquery" && args[2] == "query-two" {
+			return fmt.Errorf("query wait failed")
+		}
+		return nil
+	}
+
+	err := h.engine.Deploy(context.Background(), manifest, DeployOptions{Environment: "test-env", NoRollback: true})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "query wait failed")
+
+	for _, cmd := range h.mockDrasi.commandsCalled {
+		assert.NotEqual(t, []string{"delete", "source", "source-one"}, cmd)
+	}
+	assert.Len(t, h.mockDrasi.commandsCalled, 4)
+}
+
+func TestDeployRollbackFailure(t *testing.T) {
+	t.Parallel()
+
+	h := newEngineHarness()
+	manifest := &config.ResolvedManifest{
+		Sources: []config.Source{{ID: "source-one"}},
+		Queries: []config.ContinuousQuery{{ID: "query-two"}},
+	}
+
+	h.mockDrasi.runCommandFunc = func(ctx context.Context, args ...string) error {
+		if len(args) == 3 && args[0] == "delete" && args[1] == "source" && args[2] == "source-one" {
+			return fmt.Errorf("rollback delete failed")
+		}
+		if len(args) > 0 && args[0] == "wait" && len(args) > 2 && args[1] == "continuousquery" && args[2] == "query-two" {
+			return fmt.Errorf("query wait failed")
+		}
+		return nil
+	}
+
+	err := h.engine.Deploy(context.Background(), manifest, DeployOptions{Environment: "test-env"})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "query wait failed")
+	assert.NotContains(t, err.Error(), "rollback delete failed")
+	require.Len(t, h.mockDrasi.commandsCalled, 5)
+	assert.Equal(t, []string{"delete", "source", "source-one"}, h.mockDrasi.commandsCalled[4])
+}
+
 func TestEngine_Teardown_HappyPath(t *testing.T) {
 	t.Parallel()
 

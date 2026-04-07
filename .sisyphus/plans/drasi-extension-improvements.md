@@ -15,7 +15,7 @@
 > 
 > **Estimated Effort**: Large
 > **Parallel Execution**: YES — 5 waves
-> **Critical Path**: Task 1 (shared helpers) → Tasks 2-8 (core improvements) → Tasks 9-15 (DX + features) → Tasks 16-17 (integration) → Final Verification
+> **Critical Path**: Task 1 (observability wiring) → Task 5 (deploy lock) → Task 7 (rollback) → Task 12 (progress) → Task 15 (telemetry) → Final Verification
 
 ---
 
@@ -187,7 +187,7 @@ Max Concurrent: 5 (Wave 2)
 
 ## TODOs
 
-- [ ] 1. Shared Observability Wiring + Progress Helper
+- [x] 1. Shared Observability Wiring + Progress Helper
 
   **What to do**:
   - Wire `internal/observability/tracer.go:NewTracer()` and `internal/observability/metrics.go:NewMeter()` into `cmd/root.go` via a `PersistentPreRunE` hook on the root command
@@ -258,7 +258,7 @@ Max Concurrent: 5 (Wave 2)
   - Files: `internal/observability/*`, `cmd/root.go`, `cmd/progress.go`, `cmd/progress_test.go`
   - Pre-commit: `go test ./internal/observability/... ./cmd/... -race`
 
-- [ ] 2. Externalize NetworkPolicy YAML to Embedded File
+- [x] 2. Externalize NetworkPolicy YAML to Embedded File
 
   **What to do**:
   - Extract the `drasiNetworkPoliciesYAML` constant (cmd/provision.go lines 382-572, ~190 lines of YAML) into a new file `cmd/network_policies.yaml`
@@ -322,7 +322,7 @@ Max Concurrent: 5 (Wave 2)
   - Files: `cmd/provision.go`, `cmd/network_policies.yaml`, `cmd/provision_test.go`
   - Pre-commit: `go test ./cmd/... -race -run TestProvision`
 
-- [ ] 3. Remove applyDefaultProviders No-op + Clean --follow Flag
+- [x] 3. Remove applyDefaultProviders No-op + Clean --follow Flag
 
   **What to do**:
   - In `cmd/provision.go`: remove the `applyDefaultProviders` function (lines 222-232) and its call site (lines 121-130). The function is a documented no-op per the inline comment.
@@ -384,7 +384,7 @@ Max Concurrent: 5 (Wave 2)
   - Files: `cmd/provision.go`, `cmd/logs.go`, `cmd/provision_test.go`, `cmd/logs_test.go`
   - Pre-commit: `go test ./cmd/... -race`
 
-- [ ] 4. Environment Overlay Example in Templates
+- [x] 4. Environment Overlay Example in Templates
 
   **What to do**:
   - In every `drasi/drasi.yaml` across `internal/scaffold/templates/*/drasi/drasi.yaml` (5 templates: blank, blank-terraform, cosmos-change-feed, event-hub-routing, query-subscription) AND the root `drasi/drasi.yaml`:
@@ -472,7 +472,7 @@ Max Concurrent: 5 (Wave 2)
   - Files: `internal/scaffold/templates/*/drasi/drasi.yaml`, `drasi/drasi.yaml`
   - Pre-commit: `go test ./internal/scaffold/... -race`
 
-- [ ] 5. Crash-Safe Deploy Lock with Timestamp
+- [x] 5. Crash-Safe Deploy Lock with Timestamp
 
   **What to do**:
   - Create `internal/deployment/lock.go` with a `DeployLock` struct that wraps the state manager:
@@ -579,7 +579,7 @@ Max Concurrent: 5 (Wave 2)
   - Files: `internal/deployment/lock.go`, `internal/deployment/lock_test.go`, `cmd/deploy.go`
   - Pre-commit: `go test ./internal/deployment/... -race`
 
-- [ ] 6. Diagnose Real Key Vault and Log Analytics Health Checks
+- [x] 6. Diagnose Real Key Vault and Log Analytics Health Checks
 
   **What to do**:
   - In `cmd/diagnose.go`, replace the two stub checks (lines 164-176) that return `"skipped"` status:
@@ -678,7 +678,7 @@ Max Concurrent: 5 (Wave 2)
   - Files: `cmd/diagnose.go`, `cmd/diagnose_test.go`
   - Pre-commit: `go test ./cmd/... -race -run TestDiagnose`
 
-- [ ] 7. Deploy Rollback on Failure
+- [x] 7. Deploy Rollback on Failure
 
   **What to do**:
   - In `internal/deployment/engine.go`, modify the `Deploy()` function (lines 43-97):
@@ -780,7 +780,7 @@ Max Concurrent: 5 (Wave 2)
   - Files: `internal/deployment/engine.go`, `internal/deployment/engine_test.go`, `cmd/deploy.go`
   - Pre-commit: `go test ./internal/deployment/... -race`
 
-- [ ] 8. Add Describe Command for Single-Component Detail View
+- [x] 8. Add Describe Command for Single-Component Detail View
 
   **What to do**:
   - Create `cmd/describe.go` with a new `drasi describe` command:
@@ -878,7 +878,7 @@ Max Concurrent: 5 (Wave 2)
   - Files: `cmd/describe.go`, `cmd/describe_test.go`, `cmd/root.go`
   - Pre-commit: `go test ./cmd/... -race -run TestDescribe`
 
-- [ ] 9. Status Show All Component Kinds When No --kind Flag
+- [x] 9. Status Show All Component Kinds When No --kind Flag
 
   **What to do**:
   - In `cmd/status.go`, modify the behavior when `--kind` flag is empty (line 37-38):
@@ -968,7 +968,7 @@ Max Concurrent: 5 (Wave 2)
   - Files: `cmd/status.go`, `cmd/status_test.go`
   - Pre-commit: `go test ./cmd/... -race -run TestStatus`
 
-- [ ] 10. Extend Logs Command to Support All Component Kinds
+- [x] 10. Extend Logs Command to Support All Component Kinds
 
   **What to do**:
   - In `cmd/logs.go`, remove the restriction that rejects non-query kinds (lines 53-61):
@@ -1068,7 +1068,7 @@ Max Concurrent: 5 (Wave 2)
   - Files: `cmd/logs.go`, `cmd/logs_test.go`
   - Pre-commit: `go test ./cmd/... -race -run TestLogs`
 
-- [ ] 11. Interactive Confirmation Prompts for Destructive Operations
+- [x] 11. Interactive Confirmation Prompts for Destructive Operations
 
   **What to do**:
   - Create `cmd/confirm.go` with a reusable confirmation helper:
@@ -1176,6 +1176,517 @@ Max Concurrent: 5 (Wave 2)
   - Message: `feat(ux): add interactive confirmation prompts for destructive operations`
   - Files: `cmd/confirm.go`, `cmd/confirm_test.go`, `cmd/teardown.go`, `cmd/upgrade.go`, `cmd/teardown_test.go`, `cmd/upgrade_test.go`
   - Pre-commit: `go test ./cmd/... -race -run TestTeardown|TestUpgrade`
+
+- [x] 12. Add Progress Spinners to Long-Running Commands
+
+  **What to do**:
+  - Build on Task 1's `cmd/progress.go` helper (which wraps `yacspin`):
+    - Use the progress helper to add spinners to: `provision`, `deploy`, `teardown`, `upgrade`
+    - Each spinner should show the current operation phase (e.g., "Provisioning AKS cluster...", "Deploying sources...", "Tearing down reactions...")
+    - Spinner stops with success (✓) or failure (✗) message
+    - Spinners are suppressed when `--output json` is set (check output format flag)
+    - Spinners are suppressed when stderr is not a TTY (CI/piped output)
+  - Update `cmd/provision.go`: Add spinner around key phases (infra provisioning, Drasi install)
+  - Update `cmd/deploy.go`: Add spinner per component kind phase (sources, queries, middlewares, reactions)
+  - Update `cmd/teardown.go`: Add spinner around teardown phase
+  - Update `cmd/upgrade.go`: Add spinner around upgrade phase
+  - Test in `cmd/progress_test.go` (from Task 1):
+    - Test: spinner starts and stops with success message
+    - Test: spinner suppressed in JSON output mode
+    - Test: spinner suppressed in non-TTY environment
+
+  **Must NOT do**:
+  - Do NOT add spinners to fast commands (status, describe, validate, diagnose)
+  - Do NOT block command output — spinners must be on stderr, command output on stdout
+  - Do NOT make spinners mandatory — they must be skip-able via env or flag
+  - Do NOT import yacspin directly in command files — use the progress.go helper only
+
+  **Recommended Agent Profile**:
+  - **Category**: `quick`
+    - Reason: Wrapping existing operations with the progress helper — no new logic
+  - **Skills**: [`creating-azd-extensions`]
+    - `creating-azd-extensions`: Understands azd extension UX patterns
+
+  **Parallelization**:
+  - **Can Run In Parallel**: YES
+  - **Parallel Group**: Wave 3 (with Tasks 11, 13)
+  - **Blocks**: Task 15 (telemetry adds counters around the same command entry points)
+  - **Blocked By**: Task 1 (progress helper must exist first)
+
+  **References**:
+
+  **Pattern References**:
+  - `cmd/progress.go` (created in Task 1) — Progress helper wrapping yacspin
+  - `cmd/provision.go` — Provision command phases to wrap
+  - `cmd/deploy.go` — Deploy command with per-kind loop to wrap
+  - `cmd/teardown.go` — Teardown command to wrap
+  - `cmd/upgrade.go` — Upgrade command to wrap
+
+  **API/Type References**:
+  - `go.mod:87` — `github.com/theckman/yacspin v0.13.12` (existing dependency)
+  - Progress helper API (from Task 1): `StartProgress(message)`, `StopProgress(success bool, message)`
+
+  **External References**:
+  - yacspin API: https://pkg.go.dev/github.com/theckman/yacspin
+
+  **WHY Each Reference Matters**:
+  - The progress.go helper (Task 1) is the only allowed way to use yacspin — direct import in commands is prohibited
+  - Each command file has clear phase boundaries where spinners start/stop
+
+  **Acceptance Criteria**:
+  - [ ] Provision, deploy, teardown, upgrade show spinners during execution
+  - [ ] Spinners show phase-specific messages (not generic "working...")
+  - [ ] Spinners suppressed in JSON output mode
+  - [ ] Spinners suppressed in non-TTY environments
+  - [ ] Spinner output goes to stderr, not stdout
+  - [ ] `go test ./cmd/... -race` passes
+
+  **QA Scenarios**:
+
+  ```
+  Scenario: Progress spinner starts and stops
+    Tool: Bash
+    Steps:
+      1. Run: go test ./cmd/... -v -race -run TestProgressSpinner
+      2. Assert: Spinner start and stop calls recorded in mock
+    Expected Result: PASS — spinner lifecycle correct
+    Failure Indicators: Spinner never started, or never stopped (leak)
+    Evidence: .sisyphus/evidence/task-12-spinner.txt
+
+  Scenario: Spinner suppressed in JSON mode
+    Tool: Bash
+    Steps:
+      1. Run: go test ./cmd/... -v -race -run TestProgressSuppressedJSON
+      2. Assert: No spinner start call when output=json
+    Expected Result: PASS — no spinner in JSON mode
+    Failure Indicators: Spinner output mixed with JSON
+    Evidence: .sisyphus/evidence/task-12-json-suppress.txt
+  ```
+
+  **Commit**: YES
+  - Message: `feat(ux): add progress spinners to long-running commands`
+  - Files: `cmd/progress.go`, `cmd/provision.go`, `cmd/deploy.go`, `cmd/teardown.go`, `cmd/upgrade.go`
+  - Pre-commit: `go test ./cmd/... -race`
+
+- [x] 13. Implement Lifecycle Hook Real Logic (postprovision, predeploy)
+
+  **What to do**:
+  - In `cmd/listen.go`, implement real logic for the lifecycle hooks that currently only log:
+    - **handlePostProvision** (lines 20-27): After provisioning completes, run a health check:
+      1. Wait for Drasi API to become ready (poll `drasi status` with a 60-second timeout, 5-second interval)
+      2. Log success if API responds within timeout
+      3. Log warning and return nil (non-blocking) if timeout exceeded — do not fail the azd flow
+    - **handlePreDeploy** (lines 29-35): Before deploying components, run validation:
+      1. Call `validate` logic (reuse from `cmd/validate.go`) on the manifest
+      2. If validation fails with errors (not warnings), return error to block deploy
+      3. If validation passes or has only warnings, log warnings and proceed
+  - Follow the pattern of `handlePreDown` (lines 46-64) which already does real work (runs `drasi uninstall`)
+  - Update/create `cmd/listen_test.go`:
+    - Test: postprovision succeeds when Drasi API is ready
+    - Test: postprovision times out gracefully (returns nil, logs warning)
+    - Test: predeploy passes with valid manifest
+    - Test: predeploy blocks with invalid manifest (returns error)
+
+  **Must NOT do**:
+  - Do NOT modify `handlePreDown` — it already works correctly
+  - Do NOT make postprovision blocking on failure — it should warn, not fail
+  - Do NOT duplicate validation logic — reuse the validate command's core function
+  - Do NOT change the lifecycle hook registration mechanism
+
+  **Recommended Agent Profile**:
+  - **Category**: `deep`
+    - Reason: Requires polling logic with timeout, reuse of validate internals, and careful error handling
+  - **Skills**: [`creating-azd-extensions`]
+    - `creating-azd-extensions`: Understands azd extension lifecycle hooks
+
+  **Parallelization**:
+  - **Can Run In Parallel**: YES
+  - **Parallel Group**: Wave 3 (with Tasks 11, 12)
+  - **Blocks**: None
+  - **Blocked By**: Task 1 (observability), Task 6 (diagnose patterns inform health check approach)
+
+  **References**:
+
+  **Pattern References**:
+  - `cmd/listen.go:20-27` — `handlePostProvision`: currently only logs, no real logic
+  - `cmd/listen.go:29-35` — `handlePreDeploy`: currently only logs, no real logic
+  - `cmd/listen.go:46-64` — `handlePreDown`: working example that runs `drasi uninstall` (pattern to follow)
+  - `cmd/validate.go` — Validation logic to reuse in predeploy hook
+
+  **API/Type References**:
+  - `internal/drasi/client.go` — Client methods for status check (used for polling)
+  - `cmd/validate.go` — `runValidation()` or equivalent function to reuse
+
+  **External References**:
+  - azd extension lifecycle hooks: `.agents/skills/creating-azd-extensions/SKILL.md`
+
+  **WHY Each Reference Matters**:
+  - `handlePreDown` at lines 46-64 is the gold standard — it shows how a lifecycle hook runs real CLI commands
+  - `validate.go` has the validation logic to reuse — duplicating it would be AI slop
+  - The Drasi client provides the status check method needed for the postprovision health poll
+
+  **Acceptance Criteria**:
+  - [ ] `handlePostProvision` polls Drasi API status with 60-second timeout
+  - [ ] PostProvision returns nil on timeout (non-blocking), logs warning
+  - [ ] `handlePreDeploy` runs validation before deploy
+  - [ ] PreDeploy returns error if validation fails (blocks deploy)
+  - [ ] PreDeploy returns nil if validation has only warnings (allows deploy)
+  - [ ] `handlePreDown` unchanged and still works
+  - [ ] `go test ./cmd/... -race -run TestListen` passes
+
+  **QA Scenarios**:
+
+  ```
+  Scenario: PostProvision health check succeeds
+    Tool: Bash
+    Steps:
+      1. Run: go test ./cmd/... -v -race -run TestPostProvisionReady
+      2. Assert: Mock Drasi client status returns ready → hook returns nil
+    Expected Result: PASS — hook completes successfully when API is ready
+    Failure Indicators: Hook returns error on success, or never calls status
+    Evidence: .sisyphus/evidence/task-13-postprovision-ok.txt
+
+  Scenario: PostProvision timeout is non-blocking
+    Tool: Bash
+    Steps:
+      1. Run: go test ./cmd/... -v -race -run TestPostProvisionTimeout
+      2. Assert: Mock status always returns not-ready → hook returns nil after timeout
+      3. Assert: Warning logged mentioning timeout
+    Expected Result: PASS — hook returns nil (non-blocking), warning logged
+    Failure Indicators: Hook returns error, blocks azd flow, or hangs
+    Evidence: .sisyphus/evidence/task-13-postprovision-timeout.txt
+
+  Scenario: PreDeploy blocks on validation failure
+    Tool: Bash
+    Steps:
+      1. Run: go test ./cmd/... -v -race -run TestPreDeployInvalid
+      2. Assert: Mock validate returns errors → hook returns error
+    Expected Result: PASS — deploy blocked by validation failure
+    Failure Indicators: Deploy proceeds despite validation errors
+    Evidence: .sisyphus/evidence/task-13-predeploy-block.txt
+
+  Scenario: PreDeploy allows warnings
+    Tool: Bash
+    Steps:
+      1. Run: go test ./cmd/... -v -race -run TestPreDeployWarnings
+      2. Assert: Mock validate returns warnings only → hook returns nil
+    Expected Result: PASS — deploy proceeds with logged warnings
+    Failure Indicators: Deploy blocked by warnings
+    Evidence: .sisyphus/evidence/task-13-predeploy-warn.txt
+  ```
+
+  **Commit**: YES
+  - Message: `feat(hooks): implement postprovision health check and predeploy validation`
+  - Files: `cmd/listen.go`, `cmd/listen_test.go`
+  - Pre-commit: `go test ./cmd/... -race -run TestListen`
+
+- [ ] 14. Add PostgreSQL Source Scaffold Template
+
+  **What to do**:
+  - Create `internal/scaffold/templates/postgresql-source/` with the same structure as `cosmos-change-feed` (the best reference template):
+    - `.vscode/` — copy from blank template (launch.json, extensions.json)
+    - `azure.yaml` — define services with postgresql infra
+    - `docker-compose.yml` — local PostgreSQL container for dev (port 5432, with `wal_level=logical` for CDC)
+    - `drasi/drasi.yaml` — Drasi manifest with:
+      - 1 source of kind `source` with `type: PostgreSQL` and properties for connection string, database, tables
+      - 1 sample continuous query watching the source
+      - 1 sample reaction (debug/log reaction for observability)
+      - Include environment overlay example (from Task 4 pattern)
+    - `drasi/components/` — individual component YAML files (source, query, reaction)
+    - `infra/` — Bicep module for Azure Database for PostgreSQL Flexible Server:
+      - SKU: Burstable B1ms (cheapest dev-friendly)
+      - Enable logical replication (`wal_level = logical` server parameter)
+      - Enable public network access for dev (with note about private endpoint for prod)
+      - Managed identity for passwordless auth
+      - Output connection string and server FQDN
+    - `README.md` for the template — explain what it does, how to customize
+  - Register the template in the scaffold command — update `cmd/init.go` or wherever templates are registered
+  - Add the template name `postgresql-source` to the list of available templates
+  - Ensure `go test ./internal/scaffold/... -race` passes
+
+  **Must NOT do**:
+  - Do NOT create full production Bicep modules — reuse existing patterns from other templates
+  - Do NOT add real connection strings or secrets in template files
+  - Do NOT change other templates — only add the new one
+  - Do NOT add PostgreSQL Go driver to go.mod — the template uses Drasi CLI, not Go
+
+  **Recommended Agent Profile**:
+  - **Category**: `unspecified-high`
+    - Reason: Multi-file template with Bicep, YAML, and Docker Compose — needs consistency across files
+  - **Skills**: [`creating-azd-extensions`, `postgresql-npgsql`, `azd-deployment`]
+    - `creating-azd-extensions`: Template structure and registration patterns
+    - `postgresql-npgsql`: PostgreSQL-specific patterns (WAL level, logical replication)
+    - `azd-deployment`: azure.yaml structure and Bicep patterns
+
+  **Parallelization**:
+  - **Can Run In Parallel**: YES
+  - **Parallel Group**: Wave 4 (with Tasks 15, 16)
+  - **Blocks**: None
+  - **Blocked By**: Task 4 (overlay example — template must include it)
+
+  **References**:
+
+  **Pattern References**:
+  - `internal/scaffold/templates/cosmos-change-feed/` — Best reference template (has components/, infra/, drasi/)
+  - `internal/scaffold/templates/blank/` — Simplest template structure
+  - `internal/scaffold/templates/blank/.vscode/` — VS Code config files to copy
+  - `cmd/init.go` — Template registration point
+
+  **API/Type References**:
+  - Drasi PostgreSQL source type: `type: PostgreSQL` with properties `connectionString`, `database`, `tables`
+  - Azure Database for PostgreSQL Flexible Server Bicep: `Microsoft.DBforPostgreSQL/flexibleServers@2024-08-01`
+
+  **External References**:
+  - Drasi PostgreSQL source docs: https://drasi.io/drasi-server/reference/sources/postgresql/
+  - PostgreSQL Flexible Server Bicep: https://learn.microsoft.com/azure/templates/microsoft.dbforpostgresql/flexibleservers
+  - Drasi component YAML format: https://drasi.io/drasi-server/reference/cli/
+
+  **WHY Each Reference Matters**:
+  - `cosmos-change-feed` template shows the canonical multi-component template structure — follow exactly
+  - `blank` template shows the minimal scaffold — VS Code configs, azure.yaml base
+  - The Drasi PostgreSQL source docs define the exact YAML properties needed
+  - PostgreSQL Flexible Server Bicep reference ensures correct API version and properties
+
+  **Acceptance Criteria**:
+  - [ ] `internal/scaffold/templates/postgresql-source/` directory exists with all required files
+  - [ ] Template includes source, query, and reaction YAML components
+  - [ ] Bicep creates PostgreSQL Flexible Server with logical replication enabled
+  - [ ] docker-compose.yml runs local PostgreSQL with `wal_level=logical`
+  - [ ] Template registered in init command
+  - [ ] `azd drasi init --template postgresql-source` scaffolds correctly (tested via existing scaffold test pattern)
+  - [ ] `go test ./internal/scaffold/... -race` passes
+
+  **QA Scenarios**:
+
+  ```
+  Scenario: Scaffold PostgreSQL template
+    Tool: Bash
+    Steps:
+      1. Run: go test ./internal/scaffold/... -v -race -run TestScaffoldPostgreSQL
+      2. Assert: All expected files created in output directory
+      3. Assert: drasi.yaml contains source with type PostgreSQL
+    Expected Result: PASS — template scaffolds correctly
+    Failure Indicators: Missing files, or source type not PostgreSQL
+    Evidence: .sisyphus/evidence/task-14-scaffold.txt
+
+  Scenario: Validate scaffolded template
+    Tool: Bash
+    Steps:
+      1. Scaffold the template to a temp directory
+      2. Run: go run . validate --config <temp>/drasi/drasi.yaml
+      3. Assert: Validation passes (no errors, warnings acceptable)
+    Expected Result: PASS — scaffolded template is valid
+    Failure Indicators: Validation errors in freshly scaffolded template
+    Evidence: .sisyphus/evidence/task-14-validate.txt
+
+  Scenario: Bicep syntax valid
+    Tool: Bash
+    Steps:
+      1. Run: az bicep build --file internal/scaffold/templates/postgresql-source/infra/main.bicep
+      2. Assert: Exit code 0, no syntax errors
+    Expected Result: PASS — valid Bicep
+    Failure Indicators: Bicep compilation errors
+    Evidence: .sisyphus/evidence/task-14-bicep.txt
+  ```
+
+  **Commit**: YES
+  - Message: `feat(scaffold): add PostgreSQL source template`
+  - Files: `internal/scaffold/templates/postgresql-source/*`, `cmd/init.go`
+  - Pre-commit: `go test ./internal/scaffold/... -race`
+
+- [ ] 15. Track Command Usage and Error Rates via OpenTelemetry Telemetry
+
+  **What to do**:
+  - Create `internal/observability/telemetry.go`:
+    - Define command-level metrics using the OpenTelemetry meter from Task 1:
+      - Counter: `drasi.command.invocations` — tags: `command`, `status` (success/error)
+      - Histogram: `drasi.command.duration_ms` — tags: `command`
+      - Counter: `drasi.command.errors` — tags: `command`, `error_code`
+    - Export a `RecordCommandExecution(command string, duration time.Duration, err error)` function
+  - Wire `RecordCommandExecution` into `cmd/root.go` PersistentPostRunE (or a wrapper around each command's RunE):
+    - Capture command name, execution time, and error status
+    - Call `RecordCommandExecution` after every command completes
+  - All telemetry must respect the existing opt-in: only emit if `APPLICATIONINSIGHTS_CONNECTION_STRING` is set (check via the exporter setup from Task 1)
+  - Create `internal/observability/telemetry_test.go`:
+    - Test: command execution recorded with correct tags
+    - Test: error execution recorded with error_code tag
+    - Test: no metrics emitted when connection string not set
+
+  **Must NOT do**:
+  - Do NOT add telemetry that phones home without user consent — respect existing `APPLICATIONINSIGHTS_CONNECTION_STRING` opt-in
+  - Do NOT log secrets, Key Vault values, or PII in telemetry data
+  - Do NOT add command argument values to telemetry (privacy risk)
+  - Do NOT block command execution if telemetry fails — fire and forget
+
+  **Recommended Agent Profile**:
+  - **Category**: `unspecified-high`
+    - Reason: OpenTelemetry metric API usage and careful opt-in/privacy handling
+  - **Skills**: [`creating-azd-extensions`, `observability-monitoring`]
+    - `creating-azd-extensions`: Extension command lifecycle patterns
+    - `observability-monitoring`: OpenTelemetry instrumentation patterns
+
+  **Parallelization**:
+  - **Can Run In Parallel**: YES
+  - **Parallel Group**: Wave 4 (with Tasks 14, 16)
+  - **Blocks**: None
+  - **Blocked By**: Task 1 (observability wiring — meter and tracer must exist), Task 12 (progress — avoids conflicts in command files)
+
+  **References**:
+
+  **Pattern References**:
+  - `internal/observability/metrics.go` — Existing meter setup (Task 1 creates the global meter)
+  - `internal/observability/tracer.go` — Existing tracer setup
+  - `cmd/root.go` — PersistentPreRunE/PersistentPostRunE for wiring
+
+  **API/Type References**:
+  - OpenTelemetry Go metric API: `go.opentelemetry.io/otel/metric` — Counter, Histogram types
+  - `metric.NewInt64Counter()`, `metric.NewFloat64Histogram()`
+  - Attribute keys: `attribute.String("command", name)`, `attribute.String("status", "success")`
+
+  **External References**:
+  - OpenTelemetry Go metrics: https://pkg.go.dev/go.opentelemetry.io/otel/metric
+  - OTLP exporter: https://pkg.go.dev/go.opentelemetry.io/otel/exporters/otlp
+
+  **WHY Each Reference Matters**:
+  - `metrics.go` provides the initialized meter — telemetry.go creates instruments from it
+  - `root.go` is the single wiring point for all commands — PostRunE ensures every command is measured
+  - The opt-in connection string check prevents unauthorized data collection
+
+  **Acceptance Criteria**:
+  - [ ] `internal/observability/telemetry.go` defines 3 metrics (invocations, duration, errors)
+  - [ ] `RecordCommandExecution` called after every command completes
+  - [ ] Metrics include command name and status tags
+  - [ ] No metrics emitted without `APPLICATIONINSIGHTS_CONNECTION_STRING`
+  - [ ] No PII or argument values in telemetry
+  - [ ] Telemetry failures don't block commands
+  - [ ] `go test ./internal/observability/... -race` passes
+
+  **QA Scenarios**:
+
+  ```
+  Scenario: Command metrics recorded
+    Tool: Bash
+    Steps:
+      1. Run: go test ./internal/observability/... -v -race -run TestRecordCommandExecution
+      2. Assert: Counter incremented with correct command tag
+      3. Assert: Duration histogram recorded with positive value
+    Expected Result: PASS — metrics recorded with correct attributes
+    Failure Indicators: Missing metrics, wrong tags, or zero duration
+    Evidence: .sisyphus/evidence/task-15-metrics.txt
+
+  Scenario: Error metrics include error code
+    Tool: Bash
+    Steps:
+      1. Run: go test ./internal/observability/... -v -race -run TestRecordCommandError
+      2. Assert: Error counter incremented with error_code tag
+    Expected Result: PASS — error metric with code
+    Failure Indicators: Missing error_code tag, or success counter incremented on error
+    Evidence: .sisyphus/evidence/task-15-error-metrics.txt
+
+  Scenario: Telemetry opt-in respected
+    Tool: Bash
+    Steps:
+      1. Run: go test ./internal/observability/... -v -race -run TestTelemetryOptIn
+      2. Assert: No meter instruments created when connection string is empty
+    Expected Result: PASS — no metrics without opt-in
+    Failure Indicators: Metrics recorded without connection string
+    Evidence: .sisyphus/evidence/task-15-optin.txt
+  ```
+
+  **Commit**: YES
+  - Message: `feat(telemetry): track command usage and error rates via OpenTelemetry`
+  - Files: `internal/observability/telemetry.go`, `internal/observability/telemetry_test.go`, `cmd/root.go`
+  - Pre-commit: `go test ./internal/observability/... ./cmd/... -race`
+
+- [x] 16. Add Integration Tests for Key Vault Translator
+
+  **What to do**:
+  - In `internal/keyvault/translator_test.go` (create if it doesn't exist), add comprehensive tests for the Key Vault translator:
+    - The translator in `internal/keyvault/translator.go` handles 3 value types: String (passthrough), EnvRef (environment variable reference), SecretRef (Key Vault secret reference)
+    - **Test String passthrough**: Input with `kind: string` → output unchanged
+    - **Test EnvRef resolution**: Input with `kind: env` → resolved from environment state
+    - **Test SecretRef resolution**: Input with `kind: secret` + `vaultName` + `secretName` → mock SecretClient returns value
+    - **Test SecretRef with missing vault**: SecretClient returns error → translator returns error with context
+    - **Test SecretRef with missing secret**: SecretClient returns not-found → clear error message
+    - **Test mixed properties**: Component with mix of string, env, and secret refs → all resolved correctly
+    - **Test empty properties**: No properties → no error, empty output
+  - Mock the `SecretClient` interface defined in translator.go — follow the existing mock patterns (manual mocks, not gomock)
+  - Ensure tests are parallel-safe (`t.Parallel()`)
+
+  **Must NOT do**:
+  - Do NOT add real Azure Key Vault API calls — mock only
+  - Do NOT change the translator implementation — tests only
+  - Do NOT change the SecretClient interface
+  - Do NOT add gomock or other mock frameworks — use manual mocks
+
+  **Recommended Agent Profile**:
+  - **Category**: `quick`
+    - Reason: Pure test file creation — no production code changes
+  - **Skills**: [`creating-azd-extensions`]
+    - `creating-azd-extensions`: Test patterns and mock conventions
+
+  **Parallelization**:
+  - **Can Run In Parallel**: YES
+  - **Parallel Group**: Wave 4 (with Tasks 14, 15)
+  - **Blocks**: None
+  - **Blocked By**: None (tests only, can technically run in any wave but grouped with Wave 4 for clean sequencing)
+
+  **References**:
+
+  **Pattern References**:
+  - `internal/keyvault/translator.go` — Translator implementation with SecretClient interface and 3 value types
+  - `cmd/deploy_test.go` — Manual mock pattern (mockDrasiRunner)
+  - `internal/deployment/engine_test.go` — Another mock pattern example
+  - `internal/validation/validator_test.go` — Testify assert/require usage
+
+  **API/Type References**:
+  - `internal/keyvault/translator.go:SecretClient` — Interface to mock (GetSecret method)
+  - `internal/keyvault/translator.go:Translator` — Struct with `Translate(component)` method
+  - Value kinds: `string`, `env`, `secret` with `vaultName` and `secretName` properties
+
+  **Test References**:
+  - `go.mod` — testify v1.11.1 (assert, require packages)
+
+  **WHY Each Reference Matters**:
+  - `translator.go` defines the exact interface and value types — tests must cover all 3 paths
+  - The mock patterns in deploy_test.go show how to create manual mocks without gomock
+  - SecretClient interface is the mock boundary — tests verify translator logic, not Azure API
+
+  **Acceptance Criteria**:
+  - [ ] `internal/keyvault/translator_test.go` exists with comprehensive tests
+  - [ ] All 3 value types tested: string, env, secret
+  - [ ] Error paths tested: missing vault, missing secret
+  - [ ] Mixed property component tested
+  - [ ] Empty properties edge case tested
+  - [ ] Tests use `t.Parallel()`
+  - [ ] `go test ./internal/keyvault/... -race` passes
+
+  **QA Scenarios**:
+
+  ```
+  Scenario: All translator tests pass
+    Tool: Bash
+    Steps:
+      1. Run: go test ./internal/keyvault/... -v -race -count=1
+      2. Assert: All tests pass, including string, env, secret, error, and edge cases
+    Expected Result: PASS — full coverage of translator logic
+    Failure Indicators: Any test failure
+    Evidence: .sisyphus/evidence/task-16-translator-tests.txt
+
+  Scenario: Race detector clean
+    Tool: Bash
+    Steps:
+      1. Run: go test ./internal/keyvault/... -race -count=5
+      2. Assert: No race conditions detected across 5 runs
+    Expected Result: PASS — no data races
+    Failure Indicators: Race detector warnings
+    Evidence: .sisyphus/evidence/task-16-race.txt
+  ```
+
+  **Commit**: YES
+  - Message: `test(keyvault): add integration tests for Key Vault translator in deploy pipeline`
+  - Files: `internal/keyvault/translator_test.go`
+  - Pre-commit: `go test ./internal/keyvault/... -race`
 
 ---
 

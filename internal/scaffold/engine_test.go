@@ -98,6 +98,40 @@ func TestScaffold_InvalidTemplate_ReturnsError(t *testing.T) {
 
 // T104: dapr-pubsub reaction scaffold tests (FR-031)
 
+// T017: postgresql-source template scaffold tests
+
+func TestScaffold_PostgreSQLSourceTemplate_CreatesExpectedTree(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	files, err := scaffold.Scaffold("postgresql-source", dir, false)
+
+	require.NoError(t, err)
+	require.NotEmpty(t, files, "returned file list must not be empty")
+
+	requiredPaths := []string{
+		"azure.yaml",
+		"docker-compose.yml",
+		"drasi/drasi.yaml",
+		"drasi/sources/pg-source.yaml",
+		"drasi/queries/watch-orders.yaml",
+		"drasi/reactions/log-changes.yaml",
+		"drasi/environments/dev.yaml",
+		"infra/main.bicep",
+		"infra/main.parameters.bicepparam",
+		"infra/modules/postgresql.bicep",
+		".vscode/launch.json",
+	}
+
+	for _, rel := range requiredPaths {
+		fullPath := filepath.Join(dir, rel)
+		_, statErr := os.Stat(fullPath)
+		assert.NoError(t, statErr, "expected file to exist: %s", rel)
+	}
+}
+
+// T104: dapr-pubsub reaction scaffold tests (FR-031)
+
 func TestScaffold_CosmosFeed_CreatesDaprComponentYAML(t *testing.T) {
 	t.Parallel()
 

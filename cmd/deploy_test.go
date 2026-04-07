@@ -2,6 +2,7 @@ package cmd_test
 
 import (
 	"bytes"
+	"strings"
 	"testing"
 
 	"github.com/azure/azd.extensions.drasi/cmd"
@@ -74,10 +75,25 @@ func TestDeployCommand_EnvironmentFlagAccepted(t *testing.T) {
 	assert.NotContains(t, err.Error(), "unknown flag",
 		"--environment must be a registered flag on deploy command")
 	assert.True(t,
-		bytes.Contains([]byte(err.Error()), []byte(output.ERR_NO_AUTH)) ||
-			bytes.Contains([]byte(err.Error()), []byte(output.ERR_NO_MANIFEST)),
+		strings.Contains(err.Error(), output.ERR_NO_AUTH) ||
+			strings.Contains(err.Error(), output.ERR_NO_MANIFEST),
 		"deploy must fail with known auth/manifest code; got: %s", err.Error(),
 	)
+}
+
+func TestDeployCommand_NoRollbackFlagAccepted(t *testing.T) {
+	t.Parallel()
+	root := cmd.NewRootCommand()
+	root.SetOut(&bytes.Buffer{})
+	root.SetErr(&bytes.Buffer{})
+	root.SetArgs([]string{"deploy", "--no-rollback"})
+
+	err := root.Execute()
+
+	require.Error(t, err)
+	assert.NotContains(t, err.Error(), "unknown flag",
+		"--no-rollback must be a registered flag on deploy command")
+	assert.Contains(t, err.Error(), output.ERR_NO_AUTH)
 }
 
 // TestDeployCommand_NoAuth_ReturnsError verifies that without AZD_SERVER the command returns ERR_NO_AUTH.

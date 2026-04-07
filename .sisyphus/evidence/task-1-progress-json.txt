@@ -1,0 +1,14 @@
+=== RUN   TestProgressHelper_JSONMode_NoOutput
+=== PAUSE TestProgressHelper_JSONMode_NoOutput
+=== RUN   TestProgressHelper_TableMode_CreatesSpinner
+=== PAUSE TestProgressHelper_TableMode_CreatesSpinner
+=== RUN   TestProgressHelper_DefaultMode_CreatesSpinner
+=== PAUSE TestProgressHelper_DefaultMode_CreatesSpinner
+=== CONT  TestProgressHelper_JSONMode_NoOutput
+=== CONT  TestProgressHelper_DefaultMode_CreatesSpinner
+=== CONT  TestProgressHelper_TableMode_CreatesSpinner
+--- PASS: TestProgressHelper_DefaultMode_CreatesSpinner (0.04s)
+--- PASS: TestProgressHelper_JSONMode_NoOutput (0.04s)
+--- PASS: TestProgressHelper_TableMode_CreatesSpinner (0.04s)
+PASS
+ok  	github.com/azure/azd.extensions.drasi/cmd	1.686s

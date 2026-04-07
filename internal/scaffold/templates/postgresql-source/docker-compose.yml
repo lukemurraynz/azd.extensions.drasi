@@ -1,0 +1,25 @@
+# docker-compose.yml — Local development topology for PostgreSQL source workloads
+# Starts a local PostgreSQL container with logical replication enabled for Drasi CDC.
+version: "3.8"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: drasi-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: drasi
+      POSTGRES_PASSWORD: drasi-local-dev
+      POSTGRES_DB: drasidb
+    command: >
+      postgres
+      -c wal_level=logical
+      -c max_replication_slots=10
+      -c max_wal_senders=10
+    restart: unless-stopped
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+
+volumes:
+  postgres-data:

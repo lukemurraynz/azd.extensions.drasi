@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 
@@ -24,6 +25,7 @@ type drasiRunner interface {
 type DeployOptions struct {
 	DryRun      bool
 	Environment string
+	NoRollback  bool
 }
 
 // Engine orchestrates the full deploy lifecycle.
@@ -56,6 +58,7 @@ func (e *Engine) Deploy(ctx context.Context, manifest *config.ResolvedManifest, 
 	}
 
 	actions := SortForDeploy(Diff(hashes, existingState), manifest)
+	appliedComponents := make([]ComponentAction, 0, len(actions))
 
 	for _, action := range actions {
 		if action.Action == ActionNoOp {
@@ -83,6 +86,17 @@ func (e *Engine) Deploy(ctx context.Context, manifest *config.ResolvedManifest, 
 		compCancel()
 
 		if applyErr != nil {
+			if !opts.NoRollback {
+				for i := len(appliedComponents) - 1; i >= 0; i-- {
+					comp := appliedComponents[i]
+					if rbErr := e.drasiClient.RunCommand(ctx, "delete", comp.Kind, comp.ID); rbErr != nil {
+						slog.WarnContext(ctx, "rollback delete failed",
+							slog.String("kind", comp.Kind),
+							slog.String("id", comp.ID),
+							slog.Any("error", rbErr))
+					}
+				}
+			}
 			return applyErr
 		}
 
@@ -91,6 +105,8 @@ func (e *Engine) Deploy(ctx context.Context, manifest *config.ResolvedManifest, 
 		if writeErr := e.state.WriteHash(ctx, stateKey, action.Hash); writeErr != nil {
 			return fmt.Errorf("writing state for %s/%s: %w", action.Kind, action.ID, writeErr)
 		}
+
+		appliedComponents = append(appliedComponents, action)
 	}
 
 	return nil
@@ -227,7 +243,7 @@ func hashYAML(v any) string {
 	raw, err := yaml.Marshal(v)
 	if err != nil {
 		// yaml.Marshal should be deterministic for config model structs.
-		raw = []byte(fmt.Sprintf("%#v", v))
+		raw = fmt.Appendf(nil, "%#v", v)
 	}
 	digest := sha256.Sum256(raw)
 	return hex.EncodeToString(digest[:])

@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"os/exec"
 	"strings"
 
 	"github.com/azure/azd.extensions.drasi/internal/drasi"
@@ -21,10 +22,19 @@ var newLogsDrasiClient = func() logsDrasiClient {
 	return drasi.NewClient()
 }
 
+// kubectlLogsFunc shells out to kubectl for non-query kind log retrieval.
+// Replaceable in tests to avoid requiring a real kubectl binary.
+var kubectlLogsFunc = func(ctx context.Context, args ...string) (string, error) {
+	out, err := exec.CommandContext(ctx, "kubectl", args...).CombinedOutput()
+	if err != nil {
+		return "", fmt.Errorf("kubectl %s: %w\noutput: %s", strings.Join(args, " "), err, strings.TrimSpace(string(out)))
+	}
+	return string(out), nil
+}
+
 func newLogsCommand() *cobra.Command {
 	var componentID string
 	var kind string
-	var follow bool
 
 	cmd := &cobra.Command{
 		Use:   "logs",
@@ -50,17 +60,34 @@ func newLogsCommand() *cobra.Command {
 					output.ExitCodes[output.ERR_VALIDATION_FAILED],
 				)
 			}
+			// Non-query kinds: retrieve logs via kubectl label selector.
 			if kind != "query" {
-				return writeCommandError(
-					cmd,
-					output.ERR_VALIDATION_FAILED,
-					"logs only supports continuousquery/query components in this Drasi CLI version",
-					"Use --kind continuousquery (or query) and pass a query component id.",
-					format,
-					output.ExitCodes[output.ERR_VALIDATION_FAILED],
-				)
+				selector := fmt.Sprintf("drasi.io/kind=%s,drasi.io/component=%s", kind, componentID)
+				kubectlArgs := []string{"logs", "-l", selector, "-n", "drasi-system", "--tail=100"}
+				if kubeContext != "" {
+					kubectlArgs = append([]string{"--context", kubeContext}, kubectlArgs...)
+				}
+				logOutput, kubectlErr := kubectlLogsFunc(cmd.Context(), kubectlArgs...)
+				if kubectlErr != nil {
+					code := errorCodeFromError(kubectlErr, output.ERR_DRASI_CLI_ERROR)
+					return writeCommandError(cmd, code, kubectlErr.Error(),
+						"Ensure kubectl is configured and the component is running.", format, output.ExitCodes[code])
+				}
+
+				if format == output.FormatJSON {
+					payload := map[string]any{"status": "ok", "kind": kind, "component": componentID, "logs": strings.TrimSpace(logOutput)}
+					_, _ = fmt.Fprintln(cmd.OutOrStdout(), output.Format(payload, output.FormatJSON))
+					return nil
+				}
+				if strings.TrimSpace(logOutput) == "" {
+					_, _ = fmt.Fprintf(cmd.OutOrStdout(), "No logs found for %s (%s).\n", componentID, kind)
+					return nil
+				}
+				_, _ = fmt.Fprintln(cmd.OutOrStdout(), strings.TrimRight(logOutput, "\n"))
+				return nil
 			}
 
+			// Query kind: existing drasi watch path.
 			client := newLogsDrasiClient()
 			if err := client.CheckVersion(cmd.Context()); err != nil {
 				code := errorCodeFromError(err, output.ERR_DRASI_CLI_NOT_FOUND)
@@ -96,10 +123,6 @@ func newLogsCommand() *cobra.Command {
 			if kubeContext != "" {
 				logArgs = append([]string{"--context", kubeContext}, logArgs...)
 			}
-			if follow {
-				// drasi watch streams by default; --follow remains a compatibility alias.
-			}
-
 			logOutput, err := client.RunCommandOutput(cmd.Context(), logArgs...)
 			if err != nil {
 				code := errorCodeFromError(err, output.ERR_DRASI_CLI_ERROR)
@@ -117,7 +140,6 @@ func newLogsCommand() *cobra.Command {
 				"status":    "ok",
 				"component": componentID,
 				"kind":      kind,
-				"follow":    follow,
 				"detail":    detail,
 				"watch":     strings.TrimSpace(logOutput),
 			}
@@ -139,7 +161,6 @@ func newLogsCommand() *cobra.Command {
 
 	cmd.Flags().StringVar(&componentID, "component", "", "Filter logs by component ID")
 	cmd.Flags().StringVar(&kind, "kind", "", "Filter logs by component kind (source, continuousquery, middleware, reaction)")
-	cmd.Flags().BoolVar(&follow, "follow", false, "Stream log output (compatibility alias)")
 
 	return cmd
 }

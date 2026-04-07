@@ -1,0 +1,190 @@
+
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: drasi-default-deny
+  namespace: drasi-system
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+  - Egress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: drasi-allow-internal
+  namespace: drasi-system
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: drasi-system
+  egress:
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: drasi-system
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: drasi-allow-dns
+  namespace: drasi-system
+spec:
+  podSelector: {}
+  policyTypes:
+  - Egress
+  egress:
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: kube-system
+    ports:
+    - protocol: UDP
+      port: 53
+    - protocol: TCP
+      port: 53
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: drasi-allow-azure-api-egress
+  namespace: drasi-system
+  annotations:
+    description: Required for Key Vault, AAD token endpoint, and Azure Monitor HTTPS traffic
+spec:
+  podSelector: {}
+  policyTypes:
+  - Egress
+  egress:
+  - ports:
+    - protocol: TCP
+      port: 443
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: drasi-allow-dapr-sidecar
+  namespace: drasi-system
+  annotations:
+    description: Required for Dapr sidecar communication (HTTP, gRPC, Placement, query actors, views, publish)
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: drasi-system
+    ports:
+    - protocol: TCP
+      port: 3500  # Dapr HTTP
+    - protocol: TCP
+      port: 3501  # Dapr gRPC
+    - protocol: TCP
+      port: 50001  # Dapr Placement
+    - protocol: TCP
+      port: 3000  # Query actor server (query-host pod)
+    - protocol: TCP
+      port: 8080  # View service (view-svc pod)
+    - protocol: TCP
+      port: 4000  # Publish API (publish-api pod)
+  egress:
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: drasi-system
+    ports:
+    - protocol: TCP
+      port: 3500  # Dapr HTTP
+    - protocol: TCP
+      port: 3501  # Dapr gRPC
+    - protocol: TCP
+      port: 50001  # Dapr Placement
+    - protocol: TCP
+      port: 3000  # Query actor server
+    - protocol: TCP
+      port: 8080  # View service
+    - protocol: TCP
+      port: 4000  # Publish API
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: drasi-allow-k8s-api
+  namespace: drasi-system
+  annotations:
+    description: Required for resource-provider pod to access Kubernetes API (RBAC, resource watches)
+spec:
+  podSelector:
+    matchLabels:
+      drasi/infra: resource-provider
+  policyTypes:
+  - Egress
+  egress:
+  - to:
+    - namespaceSelector: {}
+    ports:
+    - protocol: TCP
+      port: 6443  # Kubernetes API server (HTTPS)
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: drasi-allow-datastores
+  namespace: drasi-system
+  annotations:
+    description: Required for access to Redis and MongoDB datastores (internal services)
+spec:
+  podSelector: {}
+  policyTypes:
+  - Egress
+  egress:
+  - to:
+    - podSelector:
+        matchLabels:
+          app: drasi-redis
+    ports:
+    - protocol: TCP
+      port: 6379  # Redis
+  - to:
+    - podSelector:
+        matchLabels:
+          app: drasi-mongo
+    ports:
+    - protocol: TCP
+      port: 27017  # MongoDB
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: drasi-allow-common-data-egress
+  namespace: drasi-system
+  annotations:
+    description: Baseline external data egress for common source/reaction endpoints; operators can further restrict by CIDR/namespace.
+spec:
+  podSelector: {}
+  policyTypes:
+  - Egress
+  egress:
+  - ports:
+    - protocol: TCP
+      port: 5432  # PostgreSQL
+    - protocol: TCP
+      port: 3306  # MySQL
+    - protocol: TCP
+      port: 1433  # SQL Server
+    - protocol: TCP
+      port: 9092  # Kafka
+    - protocol: TCP
+      port: 5671  # Azure Event Hubs AMQP over TLS
+    - protocol: TCP
+      port: 8081  # Cosmos DB Gremlin endpoint (common)

@@ -1,0 +1,4 @@
+name: postgresql-source
+metadata:
+  template: azd-drasi/postgresql-source
+services: {}

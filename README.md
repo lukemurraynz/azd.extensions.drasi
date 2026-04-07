@@ -43,7 +43,7 @@ azd drasi --help
 
 ## Publish and consume through GitHub Releases
 
-Yes — this repository can be used as a GitHub-hosted azd extension source for other systems.
+This repository can be used as a GitHub-hosted azd extension source for other systems.
 
 The intended flow is:
 
@@ -126,7 +126,7 @@ Scaffold a new Drasi project from a built-in template.
 
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
-| `--template` | string | `blank` | Template name. One of: `blank`, `blank-terraform`, `cosmos-change-feed`, `event-hub-routing`, `query-subscription`. |
+| `--template` | string | `blank` | Template name. One of: `blank`, `blank-terraform`, `cosmos-change-feed`, `event-hub-routing`, `query-subscription`, `postgresql-source`. |
 | `--output-dir` | string | `.` | Directory to write scaffolded files into. |
 | `--force` | bool | `false` | Overwrite existing files without prompting. |
 
@@ -205,10 +205,9 @@ Stream logs from Drasi components. When `--kind` and `--component` are provided 
 |------|------|---------|-------------|
 | `--kind` | string | | Component kind. One of: `source`, `continuousquery`, `middleware`, `reaction`. |
 | `--component` | string | | Component ID to stream logs for. |
-| `--follow` | bool | `false` | Keep the stream open and follow new output. |
 
 ```bash
-azd drasi logs --kind continuousquery --component order-changes --follow
+azd drasi logs --kind continuousquery --component order-changes
 azd drasi logs --kind source --component my-source
 azd drasi --environment dev logs --kind continuousquery --component my-query
 ```
@@ -324,7 +323,7 @@ Check component health, stream query output, and run diagnostics:
 ```bash
 azd drasi status
 azd drasi status --kind continuousquery --output json
-azd drasi logs --kind continuousquery --component order-changes --follow
+azd drasi logs --kind continuousquery --component order-changes
 azd drasi diagnose
 ```
 

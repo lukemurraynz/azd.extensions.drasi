@@ -1,0 +1,10 @@
+# Debug reaction — logs all query result changes to stdout.
+# Useful for verifying your source and query are producing results.
+# Replace with a production reaction (e.g., SignalR, Service Bus) when ready.
+apiVersion: v1
+kind: Reaction
+name: log-changes
+spec:
+  kind: Debug
+  queries:
+    - watch-orders

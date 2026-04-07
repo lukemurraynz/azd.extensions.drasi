@@ -6,11 +6,11 @@ import (
 	"os/exec"
 	"path/filepath"
 
-	"github.com/azure/azure-dev/cli/azd/pkg/azdext"
 	"github.com/azure/azd.extensions.drasi/internal/config"
 	"github.com/azure/azd.extensions.drasi/internal/deployment"
 	"github.com/azure/azd.extensions.drasi/internal/drasi"
 	"github.com/azure/azd.extensions.drasi/internal/output"
+	"github.com/azure/azure-dev/cli/azd/pkg/azdext"
 	"github.com/spf13/cobra"
 )
 
@@ -25,18 +25,38 @@ func newTeardownCommand() *cobra.Command {
 		Short: "Tear down Drasi components and infrastructure",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			format := outputFormatFromCommand(cmd)
-			if !force {
+
+			prompt := "This will remove all deployed Drasi components. Continue?"
+			if includeInfrastructure {
+				prompt = "This will delete all Drasi components AND the Azure resource group. This is irreversible. Continue?"
+			}
+			confirmed, err := ConfirmDestructive(prompt, force)
+			if err != nil {
 				return writeCommandError(
 					cmd,
 					output.ERR_FORCE_REQUIRED,
-					"teardown requires --force",
-					"Re-run the command with --force to confirm destructive actions.",
+					err.Error(),
+					"Re-run with --force for non-interactive environments.",
 					format,
 					output.ExitCodes[output.ERR_FORCE_REQUIRED],
 				)
 			}
+			if !confirmed {
+				_, _ = fmt.Fprintln(cmd.OutOrStdout(), "Teardown aborted by user.")
+				return nil
+			}
 
 			ctx := azdext.WithAccessToken(cmd.Context())
+
+			progress, progressErr := NewProgressHelper(cmd)
+			if progressErr != nil {
+				progress = &ProgressHelper{noop: true}
+			}
+			_ = progress.Start()
+			defer func() { _ = progress.Stop() }()
+
+			progress.Message("Resolving environment...")
+
 			azdClient, err := azdext.NewAzdClient()
 			if err != nil {
 				return writeCommandError(
@@ -114,6 +134,9 @@ func newTeardownCommand() *cobra.Command {
 
 			state := deployment.NewStateManagerFromClient(&azdEnvServiceAdapter{client: azdClient}, resolvedEnv)
 			engine := deployment.NewEngine(state, drasiClient)
+
+			progress.Message("Tearing down components...")
+
 			if err := engine.Teardown(ctx, &resolved, deployment.DeployOptions{Environment: resolvedEnv}); err != nil {
 				code := errorCodeFromError(err, output.ERR_DRASI_CLI_ERROR)
 				return writeCommandError(
@@ -127,6 +150,8 @@ func newTeardownCommand() *cobra.Command {
 			}
 
 			if includeInfrastructure {
+				progress.Message("Deleting Azure infrastructure...")
+
 				rgName, err := getEnvValue(ctx, azdClient, resolvedEnv, "AZURE_RESOURCE_GROUP")
 				if err != nil || rgName == "" {
 					return writeCommandError(
@@ -151,6 +176,8 @@ func newTeardownCommand() *cobra.Command {
 			}
 
 			payload := map[string]any{"status": "ok", "environment": resolvedEnv, "infrastructure": includeInfrastructure}
+			_ = progress.Stop()
+
 			if format == output.FormatJSON {
 				_, _ = fmt.Fprintln(cmd.OutOrStdout(), output.Format(payload, output.FormatJSON))
 				return nil

@@ -7,5 +7,11 @@ includes:
     pattern: "queries/*.yaml"
   - kind: reactions
     pattern: "reactions/*.yaml"
-environments: {}
+environments:
+  # staging:
+  #   components:
+  #     - kind: source
+  #       id: my-source
+  #       properties:
+  #         connectionString: "staging-connection-string"
 featureFlags: {}

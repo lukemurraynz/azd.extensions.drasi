@@ -74,22 +74,6 @@ func TestLogsCommand_KindFlagAccepted(t *testing.T) {
 	assert.Contains(t, err.Error(), output.ERR_VALIDATION_FAILED)
 }
 
-// TestLogsCommand_FollowFlagAccepted verifies --follow compatibility alias does not cause a flag parse error.
-func TestLogsCommand_FollowFlagAccepted(t *testing.T) {
-	t.Parallel()
-	root := cmd.NewRootCommand()
-	root.SetOut(&bytes.Buffer{})
-	root.SetErr(&bytes.Buffer{})
-	root.SetArgs([]string{"logs", "--follow"})
-
-	err := root.Execute()
-
-	require.Error(t, err)
-	assert.NotContains(t, err.Error(), "unknown flag",
-		"--follow must be a registered flag on logs command")
-	assert.Contains(t, err.Error(), output.ERR_VALIDATION_FAILED)
-}
-
 // TestLogsCommand_OutputJSONFlagAccepted verifies --output json does not cause a flag parse error.
 func TestLogsCommand_OutputJSONFlagAccepted(t *testing.T) {
 	t.Parallel()

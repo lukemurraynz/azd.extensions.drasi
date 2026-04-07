@@ -16,18 +16,33 @@ func newUpgradeCommand() *cobra.Command {
 		Short: "Upgrade Drasi runtime assets",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			format := outputFormatFromCommand(cmd)
-			if !force {
+
+			confirmed, err := ConfirmDestructive("This will upgrade the Drasi runtime on the active cluster. Continue?", force)
+			if err != nil {
 				return writeCommandError(
 					cmd,
 					output.ERR_FORCE_REQUIRED,
-					"upgrade requires --force",
-					"Re-run with --force to confirm runtime upgrade operations.",
+					err.Error(),
+					"Re-run with --force for non-interactive environments.",
 					format,
 					output.ExitCodes[output.ERR_FORCE_REQUIRED],
 				)
 			}
+			if !confirmed {
+				_, _ = fmt.Fprintln(cmd.OutOrStdout(), "Upgrade aborted by user.")
+				return nil
+			}
 
 			// Resolve kube context from --environment root flag (same pattern as status/diagnose).
+			progress, progressErr := NewProgressHelper(cmd)
+			if progressErr != nil {
+				progress = &ProgressHelper{noop: true}
+			}
+			_ = progress.Start()
+			defer func() { _ = progress.Stop() }()
+
+			progress.Message("Resolving cluster context...")
+
 			kubeContext, err := resolvedKubeContextForCommand(cmd.Context(), cmd, "")
 			if err != nil {
 				code := errorCodeFromError(err, output.ERR_AKS_CONTEXT_NOT_FOUND)
@@ -64,6 +79,8 @@ func newUpgradeCommand() *cobra.Command {
 				)
 			}
 
+			progress.Message("Upgrading Drasi runtime...")
+
 			if err := runDrasiCommand(cmd.Context(), "upgrade"); err != nil {
 				code := errorCodeFromError(err, output.ERR_DRASI_CLI_ERROR)
 				return writeCommandError(
@@ -78,6 +95,8 @@ func newUpgradeCommand() *cobra.Command {
 
 			// Derive the environment label from the root flag for output messaging.
 			envLabel, _ := cmd.Root().PersistentFlags().GetString("environment")
+
+			_ = progress.Stop()
 
 			if format == output.FormatJSON {
 				payload := map[string]any{"status": "ok", "environment": envLabel}

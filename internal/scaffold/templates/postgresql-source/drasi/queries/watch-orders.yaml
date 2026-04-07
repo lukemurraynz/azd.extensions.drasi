@@ -1,0 +1,13 @@
+# Continuous query that watches the public.orders table for INSERT events.
+# Adjust the Cypher query to match your actual table structure.
+apiVersion: v1
+kind: ContinuousQuery
+name: watch-orders
+spec:
+  mode: query
+  sources:
+    subscriptions:
+      - id: pg-source
+  query: >
+    MATCH (o:public_orders)
+    RETURN o.id AS orderId, o.status AS status, o.created_at AS createdAt

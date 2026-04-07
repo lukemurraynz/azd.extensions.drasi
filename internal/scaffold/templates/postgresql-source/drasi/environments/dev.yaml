@@ -1,0 +1,12 @@
+# Environment overlay for local development.
+# Override source properties to point at the local docker-compose PostgreSQL.
+components:
+  - kind: source
+    id: pg-source
+    properties:
+      connectionString:
+        kind: string
+        value: "postgresql://drasi:drasi-local-dev@localhost:5432/drasidb?replication=database"
+      database: drasidb
+      tables:
+        - public.orders

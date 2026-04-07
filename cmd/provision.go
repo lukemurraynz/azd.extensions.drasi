@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	_ "embed"
 	"encoding/json"
 	"fmt"
 	"os/exec"
@@ -13,6 +14,9 @@ import (
 	"github.com/google/uuid"
 	"github.com/spf13/cobra"
 )
+
+//go:embed network_policies.yaml
+var drasiNetworkPoliciesYAML string
 
 // runProvisionFunc can be overridden in tests to avoid a live Azure connection.
 var runProvisionFunc = defaultRunProvision
@@ -38,6 +42,16 @@ func defaultRunProvision(cmd *cobra.Command, _ []string) error {
 	}
 
 	envName, _ := cmd.Flags().GetString("environment")
+
+	progress, err := NewProgressHelper(cmd)
+	if err != nil {
+		// Spinner failure is non-fatal; degrade gracefully.
+		progress = &ProgressHelper{noop: true}
+	}
+	_ = progress.Start()
+	defer func() { _ = progress.Stop() }()
+
+	progress.Message("Resolving environment...")
 
 	ctx := azdext.WithAccessToken(cmd.Context())
 
@@ -93,6 +107,7 @@ func defaultRunProvision(cmd *cobra.Command, _ []string) error {
 	acrLoginServer, _ := getEnvValue(ctx, azdClient, envName, "AZURE_ACR_LOGIN_SERVER")
 
 	// Run `drasi init` to bootstrap the Drasi runtime onto AKS.
+	progress.Message("Installing Drasi runtime...")
 	if err := runDrasiInit(cmd.Context(), aksContext, usePrivateAcr == "true", acrLoginServer); err != nil {
 		return writeCommandError(
 			cmd,
@@ -105,6 +120,7 @@ func defaultRunProvision(cmd *cobra.Command, _ []string) error {
 	}
 
 	// Apply baseline Cilium NetworkPolicies to drasi-system namespace.
+	progress.Message("Applying network policies...")
 	if err := applyDrasiNetworkPolicies(cmd.Context(), aksContext); err != nil {
 		return writeCommandError(
 			cmd,
@@ -116,21 +132,9 @@ func defaultRunProvision(cmd *cobra.Command, _ []string) error {
 		)
 	}
 
-	// Apply default provider manifests (FR-025): deterministic registration independent of
-	// installer side effects.
-	if err := applyDefaultProviders(cmd.Context(), aksContext); err != nil {
-		return writeCommandError(
-			cmd,
-			output.ERR_DRASI_CLI_ERROR,
-			fmt.Sprintf("applying default providers failed: %s", err),
-			"Ensure the Drasi runtime is reachable on the AKS cluster.",
-			format,
-			output.ExitCodes[output.ERR_DRASI_CLI_ERROR],
-		)
-	}
-
 	// Write DRASI_PROVISIONED=true to azd environment state.
 	// NOTE: Uses the gRPC Environment service per T074 — never direct file I/O on .azure/.env.
+	progress.Message("Finalizing environment state...")
 	if _, err := azdClient.Environment().SetValue(ctx, &azdext.SetEnvRequest{
 		EnvName: envName,
 		Key:     "DRASI_PROVISIONED",
@@ -147,6 +151,8 @@ func defaultRunProvision(cmd *cobra.Command, _ []string) error {
 	}
 
 	endedAt := time.Now().UTC()
+
+	_ = progress.Stop()
 
 	// Emit structured audit event to stderr (audit output goes to stderr per spec).
 	auditEvent := output.AuditEvent{
@@ -216,18 +222,6 @@ func switchKubectlContext(ctx context.Context, contextName string) error {
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("kubectl config use-context %s: %w\n%s", contextName, err, out)
 	}
-	return nil
-}
-
-// applyDefaultProviders is intentionally a no-op for Drasi v0.10.0+.
-//
-// NOTE: `drasi init` automatically registers all default source and reaction providers
-// during cluster bootstrap. The `drasi apply --default-providers` flag does not exist
-// in v0.10.0 and calling it produces "unknown flag: --default-providers". Since init
-// already covers deterministic registration, this function returns nil unconditionally.
-// If a future Drasi release adds explicit provider registration commands, re-implement
-// this using the verified flag/subcommand for that version.
-func applyDefaultProviders(_ context.Context, _ string) error {
 	return nil
 }
 
@@ -366,207 +360,3 @@ func applyDrasiNetworkPolicies(ctx context.Context, aksContext string) error {
 	}
 	return nil
 }
-
-// drasiNetworkPoliciesYAML contains NetworkPolicy manifests for the drasi-system
-// namespace enforced by Cilium (Azure CNI Overlay + Cilium dataplane).
-//
-// Policies applied:
-//   - drasi-default-deny: deny all ingress and egress by default
-//   - drasi-allow-internal: allow intra-namespace pod communication
-//   - drasi-allow-dns: allow UDP/TCP 53 to kube-system for DNS resolution
-//   - drasi-allow-azure-api-egress: allow TCP 443 egress for Key Vault, AAD, and Azure Monitor
-//   - drasi-allow-dapr-sidecar: allow Dapr HTTP (3500), gRPC (3501), Placement (50001), actor/view/publish ports
-//   - drasi-allow-k8s-api: allow resource-provider pod to access Kubernetes API (6443)
-//   - drasi-allow-datastores: allow pod access to Redis (6379) and MongoDB (27017)
-//   - drasi-allow-common-data-egress: allow common external data source ports (PostgreSQL, MySQL, SQL Server, Kafka, Event Hubs)
-const drasiNetworkPoliciesYAML = `
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: drasi-default-deny
-  namespace: drasi-system
-spec:
-  podSelector: {}
-  policyTypes:
-  - Ingress
-  - Egress
----
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: drasi-allow-internal
-  namespace: drasi-system
-spec:
-  podSelector: {}
-  policyTypes:
-  - Ingress
-  - Egress
-  ingress:
-  - from:
-    - namespaceSelector:
-        matchLabels:
-          kubernetes.io/metadata.name: drasi-system
-  egress:
-  - to:
-    - namespaceSelector:
-        matchLabels:
-          kubernetes.io/metadata.name: drasi-system
----
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: drasi-allow-dns
-  namespace: drasi-system
-spec:
-  podSelector: {}
-  policyTypes:
-  - Egress
-  egress:
-  - to:
-    - namespaceSelector:
-        matchLabels:
-          kubernetes.io/metadata.name: kube-system
-    ports:
-    - protocol: UDP
-      port: 53
-    - protocol: TCP
-      port: 53
----
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: drasi-allow-azure-api-egress
-  namespace: drasi-system
-  annotations:
-    description: Required for Key Vault, AAD token endpoint, and Azure Monitor HTTPS traffic
-spec:
-  podSelector: {}
-  policyTypes:
-  - Egress
-  egress:
-  - ports:
-    - protocol: TCP
-      port: 443
----
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: drasi-allow-dapr-sidecar
-  namespace: drasi-system
-  annotations:
-    description: Required for Dapr sidecar communication (HTTP, gRPC, Placement, query actors, views, publish)
-spec:
-  podSelector: {}
-  policyTypes:
-  - Ingress
-  - Egress
-  ingress:
-  - from:
-    - namespaceSelector:
-        matchLabels:
-          kubernetes.io/metadata.name: drasi-system
-    ports:
-    - protocol: TCP
-      port: 3500  # Dapr HTTP
-    - protocol: TCP
-      port: 3501  # Dapr gRPC
-    - protocol: TCP
-      port: 50001  # Dapr Placement
-    - protocol: TCP
-      port: 3000  # Query actor server (query-host pod)
-    - protocol: TCP
-      port: 8080  # View service (view-svc pod)
-    - protocol: TCP
-      port: 4000  # Publish API (publish-api pod)
-  egress:
-  - to:
-    - namespaceSelector:
-        matchLabels:
-          kubernetes.io/metadata.name: drasi-system
-    ports:
-    - protocol: TCP
-      port: 3500  # Dapr HTTP
-    - protocol: TCP
-      port: 3501  # Dapr gRPC
-    - protocol: TCP
-      port: 50001  # Dapr Placement
-    - protocol: TCP
-      port: 3000  # Query actor server
-    - protocol: TCP
-      port: 8080  # View service
-    - protocol: TCP
-      port: 4000  # Publish API
----
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: drasi-allow-k8s-api
-  namespace: drasi-system
-  annotations:
-    description: Required for resource-provider pod to access Kubernetes API (RBAC, resource watches)
-spec:
-  podSelector:
-    matchLabels:
-      drasi/infra: resource-provider
-  policyTypes:
-  - Egress
-  egress:
-  - to:
-    - namespaceSelector: {}
-    ports:
-    - protocol: TCP
-      port: 6443  # Kubernetes API server (HTTPS)
----
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: drasi-allow-datastores
-  namespace: drasi-system
-  annotations:
-    description: Required for access to Redis and MongoDB datastores (internal services)
-spec:
-  podSelector: {}
-  policyTypes:
-  - Egress
-  egress:
-  - to:
-    - podSelector:
-        matchLabels:
-          app: drasi-redis
-    ports:
-    - protocol: TCP
-      port: 6379  # Redis
-  - to:
-    - podSelector:
-        matchLabels:
-          app: drasi-mongo
-    ports:
-    - protocol: TCP
-      port: 27017  # MongoDB
----
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: drasi-allow-common-data-egress
-  namespace: drasi-system
-  annotations:
-    description: Baseline external data egress for common source/reaction endpoints; operators can further restrict by CIDR/namespace.
-spec:
-  podSelector: {}
-  policyTypes:
-  - Egress
-  egress:
-  - ports:
-    - protocol: TCP
-      port: 5432  # PostgreSQL
-    - protocol: TCP
-      port: 3306  # MySQL
-    - protocol: TCP
-      port: 1433  # SQL Server
-    - protocol: TCP
-      port: 9092  # Kafka
-    - protocol: TCP
-      port: 5671  # Azure Event Hubs AMQP over TLS
-    - protocol: TCP
-      port: 8081  # Cosmos DB Gremlin endpoint (common)
-`
