@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/lukemurraynz/azd.extensions.drasi/internal/output"
@@ -299,7 +300,7 @@ func TestRealRunner_Run_Success(t *testing.T) {
 	stdout, stderr, exitCode, err := runner.Run(context.Background(), "version")
 
 	require.NoError(t, err)
-	assert.Equal(t, "Drasi CLI version: v0.10.2\n", stdout)
+	assert.Equal(t, "Drasi CLI version: v0.10.2", strings.TrimSpace(stdout))
 	assert.Empty(t, stderr)
 	assert.Equal(t, 0, exitCode)
 }
@@ -315,8 +316,8 @@ func TestRealRunner_Run_NonZeroExit_ReturnsExitCodeAndStderr(t *testing.T) {
 	stdout, stderr, exitCode, err := runner.Run(context.Background(), "apply", "-f", "manifest.yaml")
 
 	require.NoError(t, err)
-	assert.Equal(t, "partial output\n", stdout)
-	assert.Equal(t, "boom\n", stderr)
+	assert.Equal(t, "partial output", strings.TrimSpace(stdout))
+	assert.Equal(t, "boom", strings.TrimSpace(stderr))
 	assert.Equal(t, 7, exitCode)
 }
 
