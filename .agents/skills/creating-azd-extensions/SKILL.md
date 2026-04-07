@@ -2,8 +2,8 @@
 name: creating-azd-extensions
 description: >-
   Author, build, and publish Azure Developer CLI (azd) extensions in Go. USE FOR: creating new azd extensions, implementing lifecycle hooks, exposing custom CLI commands, writing extension.yaml manifests, adding metadata/version commands, hardening cross-platform build scripts, release workflows, registry distribution, scaffold templates with embed.FS, wrapping external CLIs, and kube context resolution from azd environment state.
-version: 1.9.0
-lastUpdated: 2026-04-07
+version: 1.10.0
+lastUpdated: 2026-04-08
 ---
 
 # Creating Azure Developer CLI Extensions
@@ -654,6 +654,237 @@ Report "skipped" (not "ok") when a check cannot run because a dependency is abse
 4. Secret store auth (can the service access Key Vault?)
 5. Observability (is Log Analytics receiving data?)
 
+## Testing
+
+### Recommended test file structure
+
+```text
+cmd/
+├── root_test.go                    # Black-box tests (package cmd_test)
+├── provision_internal_test.go      # White-box tests (package cmd)
+├── teardown_internal_test.go       # White-box tests (package cmd)
+├── testhelpers_internal_test.go    # Shared test helpers (package cmd)
+└── deploy_test.go                  # Black-box tests (package cmd_test)
+```
+
+Use `package cmd` (internal) for tests that need to access unexported symbols like injectable function variables. Use `package cmd_test` (external) for tests that exercise the public API only.
+
+### Cross-platform fake command helpers
+
+Extensions that shell out to external CLIs (`kubectl`, `az`, `drasi`) need fake command scripts for testing. These MUST work on both Windows and Linux.
+
+```go
+import "runtime"
+
+// fakeScript returns a platform-appropriate fake command script body.
+func fakeScript(winBody, unixBody string) string {
+    if runtime.GOOS == "windows" {
+        return winBody
+    }
+    return unixBody
+}
+
+func installFakeCommands(t *testing.T, scripts map[string]string) string {
+    t.Helper()
+
+    dir := t.TempDir()
+    for name, body := range scripts {
+        var path, content string
+        if runtime.GOOS == "windows" {
+            path = filepath.Join(dir, name+".cmd")
+            content = "@echo off\r\n" + body + "\r\n"
+        } else {
+            path = filepath.Join(dir, name)
+            content = "#!/bin/sh\n" + body + "\n"
+        }
+        require.NoError(t, os.WriteFile(path, []byte(content), 0o755))
+    }
+
+    t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+    return dir
+}
+```
+
+Every fake command body must be written for both platforms:
+
+```go
+installFakeCommands(t, map[string]string{
+    "kubectl": fakeScript(
+        // Windows batch
+        `echo %%*>>"%s"
+if "%%1 %%2"=="config current-context" (
+  echo desired-context
+  exit /b 0
+)
+exit /b 1`,
+        // POSIX shell
+        `echo "$@" >> "%s"
+if [ "$1 $2" = "config current-context" ]; then
+  echo desired-context
+  exit 0
+fi
+exit 1`,
+    ),
+})
+```
+
+Windows batch uses `%%1`, `%%*`, `exit /b`, and `1>&2`. POSIX shell uses `$1`, `$@`, `exit`, and `>&2`. Creating `.cmd` files only will pass on Windows CI but fail on Ubuntu CI.
+
+### Mock gRPC server for azd environment API
+
+Test commands that call `azdext.NewAzdClient()` by providing a local gRPC server:
+
+```go
+type testEnvironmentService struct {
+    azdext.UnimplementedEnvironmentServiceServer
+    getCurrentFunc func(context.Context, *azdext.EmptyRequest) (*azdext.EnvironmentResponse, error)
+    getValueFunc   func(context.Context, *azdext.GetEnvRequest) (*azdext.KeyValueResponse, error)
+    setValueFunc   func(context.Context, *azdext.SetEnvRequest) (*azdext.EmptyResponse, error)
+}
+
+func startTestEnvironmentServer(t *testing.T, service *testEnvironmentService) string {
+    t.Helper()
+
+    listener, err := net.Listen("tcp", "127.0.0.1:0")
+    require.NoError(t, err)
+
+    server := grpc.NewServer()
+    azdext.RegisterEnvironmentServiceServer(server, service)
+
+    go func() { _ = server.Serve(listener) }()
+    t.Cleanup(func() {
+        server.Stop()
+        _ = listener.Close()
+    })
+
+    return listener.Addr().String()
+}
+```
+
+Set `AZD_SERVER` to the returned address to make `azdext.NewAzdClient()` connect to the test server:
+
+```go
+addr := startTestEnvironmentServer(t, &testEnvironmentService{
+    getCurrentFunc: func(context.Context, *azdext.EmptyRequest) (*azdext.EnvironmentResponse, error) {
+        return &azdext.EnvironmentResponse{Environment: &azdext.Environment{Name: "dev"}}, nil
+    },
+})
+t.Setenv("AZD_SERVER", addr)
+```
+
+### Injectable function variables for testing
+
+For commands that call external systems (Azure, Kubernetes), use package-level function variables that tests can replace:
+
+```go
+// provision.go
+var runProvisionFunc = defaultRunProvision
+
+func newProvisionCommand() *cobra.Command {
+    return &cobra.Command{
+        RunE: func(cmd *cobra.Command, args []string) error {
+            return runProvisionFunc(cmd, args)
+        },
+    }
+}
+```
+
+```go
+// provision_internal_test.go (package cmd)
+func TestProvision_Success(t *testing.T) {
+    orig := runProvisionFunc
+    t.Cleanup(func() { runProvisionFunc = orig })
+    runProvisionFunc = func(_ *cobra.Command, _ []string) error {
+        return nil
+    }
+    // ...
+}
+```
+
+Do not use `t.Parallel()` in tests that mutate package-level variables.
+
+### gRPC error assertions
+
+gRPC wraps errors in transport-level types. `assert.ErrorIs` and `errors.Is` will not match the original error. Use string matching instead:
+
+```go
+// Wrong: gRPC wrapping breaks ErrorIs
+assert.ErrorIs(t, err, originalErr)
+
+// Right: match on the error message text
+require.Error(t, err)
+assert.Contains(t, err.Error(), "grpc unavailable")
+```
+
+### Go JSON nil vs empty slice
+
+`json.Marshal` encodes a `nil` slice as `null`, not `[]`. If your test compares JSON output, account for this:
+
+```go
+// This struct produces {"items":null} not {"items":[]}
+type Response struct {
+    Items []string `json:"items"`
+}
+
+// Initialize the slice to get []:
+resp := Response{Items: []string{}}
+```
+
+Test assertions that expect `"items": []` will fail when the production code returns a nil slice. Either initialize the slice or adjust the assertion.
+
+### Coverage profiling
+
+Go's multi-package `-coverprofile` does not merge coverage data correctly when tests in one package exercise code in another. This is a known Go tooling issue.
+
+For accurate per-package coverage, use `-coverpkg` to specify the package under measurement:
+
+```bash
+# Wrong: multi-package profile shows artificially low numbers
+go test -coverprofile=cover.out ./...
+
+# Right: measure one package at a time with -coverpkg
+go test -coverprofile=cmd.out -coverpkg=github.com/org/ext/cmd -timeout=300s ./cmd/
+go tool cover -func=cmd.out
+```
+
+The `-coverpkg` flag tells the coverage tool which package to instrument, regardless of which test package exercises the code.
+
+### CI matrix testing
+
+Test on both `ubuntu-latest` and `windows-latest` in CI. Cross-platform failures are the most common CI blocker for azd extensions.
+
+```yaml
+strategy:
+  matrix:
+    os: [ubuntu-latest, windows-latest]
+runs-on: ${{ matrix.os }}
+```
+
+Common cross-platform failure sources:
+
+- Fake command scripts using Windows batch syntax only (`.cmd` files)
+- Line ending differences in string comparison (`\r\n` vs `\n`)
+- Path separator assumptions (`\` vs `/`)
+- `-race` flag requiring CGO_ENABLED=1 and a C compiler (gcc). Ubuntu CI runners have gcc. Windows runners may not. If `-race` fails locally on Windows, test without it locally and rely on CI for race detection.
+
+### Save and restore package-level test variables
+
+When tests mutate package-level variables (like `confirmFunc` or `isTTYFunc`), save and restore them in a helper:
+
+```go
+func saveConfirmVars(t *testing.T) {
+    t.Helper()
+    origConfirm := confirmFunc
+    origTTY := isTTYFunc
+    t.Cleanup(func() {
+        confirmFunc = origConfirm
+        isTTYFunc = origTTY
+    })
+}
+```
+
+This prevents test pollution across parallel or sequential test runs.
+
 ## Avoid these mistakes
 
 - documenting `listen` or `metadata` as user-facing commands
@@ -670,6 +901,12 @@ Report "skipped" (not "ok") when a check cannot run because a dependency is abse
 - hardcoding version in Go source beyond the `"dev"` default
 - forgetting to update both `version.txt` and `extension.yaml` when bumping versions
 - shipping Kubernetes source templates without required properties (validate in tests)
+- creating `.cmd` fake command scripts without POSIX shell equivalents (breaks Linux CI)
+- using `assert.ErrorIs` for gRPC errors (transport wrapping breaks error matching)
+- comparing JSON output expecting `[]` when the Go code returns a nil slice (marshals as `null`)
+- relying on multi-package `-coverprofile` for accurate per-package coverage (use `-coverpkg`)
+- running `-race` tests locally on Windows without gcc installed (use CI for race detection)
+- using `t.Parallel()` in tests that mutate package-level function variables
 
 ## Validation checklist
 
@@ -689,3 +926,7 @@ Report "skipped" (not "ok") when a check cannot run because a dependency is abse
 - `registry.json` conforms to the [official azd extension registry schema](https://github.com/Azure/azure-dev/blob/main/cli/azd/extensions/registry.schema.json)
 - registry update step is conditional on PAT secret being configured
 - cross-platform binaries built with `CGO_ENABLED=0`
+- tests pass on both `ubuntu-latest` and `windows-latest`
+- fake command scripts provide both Windows batch and POSIX shell bodies
+- test assertions for gRPC errors use string matching, not `errors.Is`
+- package-level test variables are saved and restored via `t.Cleanup`
