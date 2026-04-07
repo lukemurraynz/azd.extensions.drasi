@@ -9,59 +9,44 @@ Thumbs.db
 # JetBrains
 .idea/
 
-# Visual Studio (not .vscode — shared config is committed)
+# Visual Studio (not .vscode -- shared config is committed)
 .vs/
-*.suo
-*.user
-*.userosscache
-*.sln.docstates
-*.DotSettings.user
 
 # =============================================================================
-# C# / .NET
+# Go build and test outputs
 # =============================================================================
-[Bb]in/
-[Oo]bj/
-TestResults/
-*.nupkg
-*.snupkg
-*.pdb
+bin/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Go test coverage files
+*.out
+*_cov
+*_cov.*
+cmd_cov*
+cov
+cov_*
+coverage
+coverage_*
+cmd_coverage
+cmd_only.*
+deploy_cov*
+prov_cov*
+scaffold_cov*
+teardown_cov*
+val_cov*
+verify-coverage
 
 # =============================================================================
-# TypeScript / JavaScript / Node
+# Build artifacts and release outputs
 # =============================================================================
-node_modules/
 dist/
-build/
-.next/
-.nuxt/
-*.tsbuildinfo
-.turbo/
-coverage/
-.nyc_output/
 
 # =============================================================================
-# Python
-# =============================================================================
-__pycache__/
-*.pyc
-*.pyo
-.venv/
-venv/
-*.egg-info/
-.mypy_cache/
-.pytest_cache/
-.ruff_cache/
-htmlcov/
-
-
-# =============================================================================
-# Rust
-# =============================================================================
-target/
-
-# =============================================================================
-# Terraform / IaC
+# Terraform / IaC (used in scaffold templates)
 # =============================================================================
 .terraform/
 *.tfstate
@@ -89,10 +74,6 @@ override.tf.json
 # Logs
 # =============================================================================
 *.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
 
 # =============================================================================
 # azd extension local build outputs and generated IaC artifacts
@@ -103,3 +84,11 @@ infra/modules/*.json
 internal/scaffold/templates/*/infra/main.json
 internal/scaffold/templates/*/infra/modules/*.json
 /.tmp
+
+# =============================================================================
+# Internal development tooling (not part of the extension)
+# =============================================================================
+.agents/
+.sisyphus/
+.specify/
+specs/

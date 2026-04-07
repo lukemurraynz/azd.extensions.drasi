@@ -80,7 +80,7 @@ Alex is a senior platform engineer at a mid-size SaaS company that runs its oper
 **Touchpoints:**
 
 - `lukemurraynz/azd.extensions.drasi` README: prerequisites table, features list, command reference, and example scenarios.
-- `specs/001-azd-drasi-extension/quickstart.md`: step-by-step walkthrough from scaffold to status.
+- README Quick start section: step-by-step walkthrough from scaffold to status.
 - `docs/troubleshooting.md`: error code reference confirming that structured errors exist.
 - GitHub Issues and Discussions on the `drasi-project` org.
 - Internal team conversation about AKS cost and operational overhead vs. a serverless alternative.

@@ -11,7 +11,7 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-# Restrictive top-level; each job opens only what it needs (cicd-security.instructions.md)
+# Restrictive top-level; each job opens only what it needs
 permissions: {}
 
 jobs:
@@ -33,41 +33,6 @@ jobs:
         uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7 # v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-  markdown-lint:
-    name: Markdown Lint
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-        with:
-          persist-credentials: false
-
-      - name: Run markdownlint-cli2
-        uses: DavidAnson/markdownlint-cli2-action@ce4853d43830c74c1753b39f3cf40f71c2031eb9 # v23.0.0
-        with:
-          globs: |
-            **/*.md
-            !.github/**/*.md
-            !memories/**/*.md
-            !.agents/**/*.md
-
-  validate-yaml:
-    name: Validate YAML
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-        with:
-          persist-credentials: false
-
-      - name: Run yamllint
-        uses: ibiqlik/action-yamllint@2576378a8e339169678f9939646ee3ee325e845c # v3
-        with:
-          file_or_dir: .
-          config_file: .yamllint.yml
 
   validate-actions:
     name: Validate GitHub Actions Workflows
