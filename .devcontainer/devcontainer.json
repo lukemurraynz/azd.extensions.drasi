@@ -45,7 +45,6 @@
       // version >= 1.10.0 required for extension subcommand support (FR-035)
       "version": "1.23"
     },
-    "ghcr.io/devcontainers-extra/features/dapr-cli:1": {},
     "ghcr.io/devcontainers-extra/features/checkov:1": {},
     "ghcr.io/prulloac/devcontainer-features/pre-commit:1.0.3": {}
   },
