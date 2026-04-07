@@ -58,3 +58,24 @@ func TestNewMeter_CounterNames(t *testing.T) {
 		assert.NoError(t, shutdown(context.Background()))
 	}
 }
+
+// TestNewMeter_ReturnsMeterWhenEnvVarPresent verifies that NewMeter creates a
+// real meter provider path when APPLICATIONINSIGHTS_CONNECTION_STRING is set.
+func TestNewMeter_ReturnsMeterWhenEnvVarPresent(t *testing.T) {
+	// NOTE: t.Parallel() omitted — t.Setenv cannot be used with parallel tests.
+
+	t.Setenv("APPLICATIONINSIGHTS_CONNECTION_STRING",
+		"InstrumentationKey=00000000-0000-0000-0000-000000000000;IngestionEndpoint=https://example.invalid/;LiveEndpoint=https://example.invalid/")
+
+	meter, shutdown, err := observability.NewMeter(context.Background())
+
+	require.NoError(t, err)
+	require.NotNil(t, meter)
+	require.NotNil(t, shutdown)
+
+	counter, err := meter.Int64Counter("drasi.command.invocations")
+	require.NoError(t, err)
+	assert.NotNil(t, counter)
+
+	assert.NoError(t, shutdown(context.Background()))
+}

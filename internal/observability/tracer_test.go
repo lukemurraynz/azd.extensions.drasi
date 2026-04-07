@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/lukemurraynz/azd.extensions.drasi/internal/observability"
 	"github.com/stretchr/testify/assert"
@@ -61,4 +62,36 @@ func TestNewTracer_ReturnsTracerWhenEnvVarPresent(t *testing.T) {
 	span.End()
 
 	assert.NoError(t, shutdown(context.Background()))
+}
+
+// TestNewTracer_EnvVarPresent_ExercisesConfiguredPath verifies the configured
+// tracer path is exercised when APPLICATIONINSIGHTS_CONNECTION_STRING is set,
+// without requiring network connectivity.
+func TestNewTracer_EnvVarPresent_ExercisesConfiguredPath(t *testing.T) {
+	// NOTE: t.Parallel() omitted — t.Setenv cannot be used with parallel tests.
+
+	t.Setenv("APPLICATIONINSIGHTS_CONNECTION_STRING",
+		"InstrumentationKey=00000000-0000-0000-0000-000000000000;IngestionEndpoint=https://example.invalid/;LiveEndpoint=https://example.invalid/")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+	defer cancel()
+
+	tracer, shutdown, err := observability.NewTracer(ctx)
+	if err != nil {
+		assert.Error(t, err)
+		assert.Nil(t, tracer)
+		assert.Nil(t, shutdown)
+		return
+	}
+
+	require.NotNil(t, tracer)
+	require.NotNil(t, shutdown)
+
+	_, span := tracer.Start(context.Background(), "configured-test-span")
+	assert.Implements(t, (*trace.Span)(nil), span)
+	span.End()
+
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), time.Second)
+	defer shutdownCancel()
+	assert.NoError(t, shutdown(shutdownCtx))
 }

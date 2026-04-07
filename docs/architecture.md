@@ -15,7 +15,7 @@ It currently contains two sheets:
 
 ## Component diagram (text view)
 
-```
+```text
 ┌──────────────────────────────────────────────────────────────────────────┐
 │ Developer workstation                                                    │
 │                                                                          │
@@ -60,7 +60,7 @@ The **Deploy Flow** sheet uses three top-level phases:
 
 ## Provision flow (detailed)
 
-```
+```text
 azd drasi provision
        │
        ├─ 1. Read environment via gRPC (env name, subscription, resource group)
@@ -79,7 +79,7 @@ The provision command stores AKS context name and Key Vault URI in azd environme
 
 ## Deploy flow with Key Vault translation
 
-```
+```text
 azd drasi deploy
        │
        ├─ 1. Pre-deploy validation (same checks as azd drasi validate)
@@ -107,7 +107,7 @@ Teardown follows the reverse deployment order: Reactions → Middleware → Cont
 
 ## Code layout
 
-```
+```text
 azd.extensions.drasi/
 ├── main.go                   # Wire cobra root, execute
 ├── cmd/                      # One file per command; thin RunE handlers

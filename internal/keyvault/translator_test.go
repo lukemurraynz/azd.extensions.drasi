@@ -59,6 +59,29 @@ func TestTranslator_SecretRef_PropagatesClientError(t *testing.T) {
 	assert.Contains(t, err.Error(), output.ERR_KV_AUTH_FAILED)
 }
 
+func TestTranslator_SecretRef_ResolvesFromEnvironmentFallback(t *testing.T) {
+	t.Setenv("DRASI_SECRET_kv_dev_reaction_token", "fallback-secret")
+
+	translator := NewTranslatorWithSecretClient(nil)
+	got, err := translator.Translate(context.Background(), config.Value{SecretRef: &config.SecretRef{
+		VaultName:  "kv_dev",
+		SecretName: "reaction_token",
+	}})
+	require.NoError(t, err)
+	assert.Equal(t, &TranslatedValue{StringValue: "fallback-secret", IsSecretRef: true}, got)
+}
+
+func TestTranslator_SecretRef_MissingEnvironmentFallback_ReturnsError(t *testing.T) {
+	translator := NewTranslator()
+	_, err := translator.Translate(context.Background(), config.Value{SecretRef: &config.SecretRef{
+		VaultName:  "kv_missing",
+		SecretName: "reaction_token",
+	}})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), output.ERR_KV_AUTH_FAILED)
+	assert.Contains(t, err.Error(), "DRASI_SECRET_kv_missing_reaction_token")
+}
+
 func TestTranslator_EnvRef_ResolvesFromEnvironment(t *testing.T) {
 	t.Setenv("DRASI_NAMESPACE", "drasi-system")
 

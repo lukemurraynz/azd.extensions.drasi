@@ -102,3 +102,26 @@ func TestStateManager_RoundTrip_PreservesHash(t *testing.T) {
 		})
 	}
 }
+
+func TestExportedEnvStateClient_Environment_ReturnsUnderlyingService(t *testing.T) {
+	t.Parallel()
+
+	svc := &mockEnvService{store: make(map[string]string)}
+	client := &exportedEnvStateClient{svc: svc}
+
+	assert.Same(t, svc, client.environment())
+}
+
+func TestNewStateManagerFromClient_ReadWriteHash(t *testing.T) {
+	t.Parallel()
+
+	svc := &mockEnvService{store: make(map[string]string)}
+	manager := NewStateManagerFromClient(svc, "test-env")
+
+	require.Equal(t, "test-env", manager.envName)
+	require.NoError(t, manager.WriteHash(context.Background(), "DRASI_HASH_SOURCE_alerts", "hash-123"))
+
+	got, err := manager.ReadHash(context.Background(), "DRASI_HASH_SOURCE_alerts")
+	require.NoError(t, err)
+	assert.Equal(t, "hash-123", got)
+}

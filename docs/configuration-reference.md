@@ -4,7 +4,7 @@ This document describes every YAML entity type the extension reads and the full 
 
 ## File layout
 
-```
+```text
 <project-root>/
 └── drasi/
     ├── drasi.yaml               # Manifest (required)
@@ -27,7 +27,7 @@ The manifest controls which files are included. By default all YAML files in the
 Use this guide to pick the right starter template for `azd drasi init --template <name>`.
 
 | Template | Use when | Data source | What you get |
-|----------|----------|-------------|--------------|
+| -------- | -------- | ----------- | ------------ |
 | `cosmos-change-feed` | You need to react to changes in Azure Cosmos DB | Cosmos DB change feed | Cosmos DB source, sample query, Dapr pub/sub reaction, AKS + Key Vault + Cosmos DB infra |
 | `postgresql-source` | You need to react to changes in PostgreSQL via logical replication | PostgreSQL (logical replication) | PostgreSQL source, sample query, debug reaction, AKS + Key Vault + PostgreSQL infra |
 | `event-hub-routing` | You need to route events from Azure Event Hubs through Drasi queries | Azure Event Hubs | Event Hub source, routing query, reaction, AKS + Key Vault + Event Hub infra |
@@ -64,7 +64,7 @@ featureFlags:           # optional; map of flag name to bool
 Fields:
 
 | Field | Type | Required | Description |
-|-------|------|----------|-------------|
+| ----- | ---- | -------- | ----------- |
 | `apiVersion` | string | yes | Schema version. Must be `"v1"`. |
 | `includes` | list | no | Override the default glob patterns. If omitted, all YAML files in each entity subdirectory are loaded. |
 | `includes[].kind` | string | yes | One of `source`, `continuousquery`, `reaction`, `middleware`. |
@@ -96,7 +96,7 @@ properties:             # required; key-value map of source-specific config
 Fields:
 
 | Field | Type | Required | Description |
-|-------|------|----------|-------------|
+| ----- | ---- | -------- | ----------- |
 | `apiVersion` | string | yes | Must be `"v1"`. |
 | `kind` | string | yes | Must be `"Source"` (case-insensitive). |
 | `id` | string | yes | Unique identifier within the project. |
@@ -136,7 +136,7 @@ autoStart: true          # optional; default false
 Fields:
 
 | Field | Type | Required | Description |
-|-------|------|----------|-------------|
+| ----- | ---- | -------- | ----------- |
 | `apiVersion` | string | yes | Must be `"v1"`. |
 | `kind` | string | yes | Must be `"ContinuousQuery"` (case-insensitive). |
 | `id` | string | yes | Unique identifier. |
@@ -169,7 +169,7 @@ config:                  # optional; key-value map of reaction-specific config
 Fields:
 
 | Field | Type | Required | Description |
-|-------|------|----------|-------------|
+| ----- | ---- | -------- | ----------- |
 | `apiVersion` | string | yes | Must be `"v1"`. |
 | `kind` | string | yes | Must be `"Reaction"` (case-insensitive). |
 | `id` | string | yes | Unique identifier. |
@@ -192,7 +192,7 @@ config:                  # optional; key-value map
 Fields:
 
 | Field | Type | Required | Description |
-|-------|------|----------|-------------|
+| ----- | ---- | -------- | ----------- |
 | `apiVersion` | string | yes | Must be `"v1"`. |
 | `kind` | string | yes | Must be `"Middleware"` (case-insensitive). |
 | `id` | string | yes | Unique identifier. |
@@ -280,7 +280,7 @@ Components listed in `exclude` are removed from the deployment plan before any a
 
 Feature flags are defined in `drasi.yaml` and read by the extension at runtime. No flag affects Drasi runtime behavior directly; they gate extension-level behavior only.
 
-| Flag | Default | Effect |
-|------|---------|--------|
-| `enableAuditLog` | `false` | Emit structured audit events to Log Analytics for each deploy action. |
-| `experimentalDeploy` | `false` | Reserved for future use. Currently a no-op. |
+| Flag                 | Default | Effect                                                                        |
+| -------------------- | ------- | ----------------------------------------------------------------------------- |
+| `enableAuditLog`     | `false` | Emit structured audit events to Log Analytics for each deploy action.         |
+| `experimentalDeploy` | `false` | Reserved for future use. Currently a no-op.                                   |

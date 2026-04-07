@@ -7,8 +7,8 @@
 
 ## Prerequisites
 
-| Tool                        | Version  | Install                                 |
-| --------------------------- | -------- | --------------------------------------- |
+| Tool                        | Version  | Install                                   |
+| --------------------------- | -------- | ----------------------------------------- |
 | Azure Developer CLI (`azd`) | ≥ 1.10.0 | <https://aka.ms/azd>                      |
 | Drasi CLI                   | ≥ 0.10.0 | <https://drasi.io/docs/getting-started>   |
 | Azure CLI                   | ≥ 2.60.0 | <https://aka.ms/azcli>                    |

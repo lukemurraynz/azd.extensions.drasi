@@ -184,3 +184,66 @@ func TestScaffold_CosmosFeed_DaprComponentPath_IsUnderDrasiComponents(t *testing
 	}
 	assert.True(t, hasDaprComponent, "cosmos-change-feed template must emit a file under drasi/components/dapr/")
 }
+
+func TestScaffold_AllTemplates_ProduceFiles(t *testing.T) {
+	t.Parallel()
+
+	templates := []string{
+		"blank",
+		"blank-terraform",
+		"cosmos-change-feed",
+		"event-hub-routing",
+		"postgresql-source",
+		"query-subscription",
+	}
+
+	for _, tmpl := range templates {
+		t.Run(tmpl, func(t *testing.T) {
+			t.Parallel()
+
+			dir := t.TempDir()
+			files, err := scaffold.Scaffold(tmpl, dir, false)
+			require.NoError(t, err, "template %q must scaffold without error", tmpl)
+			require.NotEmpty(t, files, "template %q must produce at least one file", tmpl)
+
+			for _, rel := range files {
+				fullPath := filepath.Join(dir, rel)
+				info, statErr := os.Stat(fullPath)
+				require.NoError(t, statErr, "file must exist on disk: %s", rel)
+				assert.True(t, info.Size() > 0, "file must be non-empty: %s", rel)
+			}
+		})
+	}
+}
+
+func TestScaffold_AllTemplates_ForceOverwrite(t *testing.T) {
+	t.Parallel()
+
+	templates := []string{
+		"blank-terraform",
+		"event-hub-routing",
+		"query-subscription",
+	}
+
+	for _, tmpl := range templates {
+		t.Run(tmpl, func(t *testing.T) {
+			t.Parallel()
+
+			dir := t.TempDir()
+
+			// First scaffold
+			_, err := scaffold.Scaffold(tmpl, dir, false)
+			require.NoError(t, err)
+
+			// Second without force should fail
+			_, err = scaffold.Scaffold(tmpl, dir, false)
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), "already exists")
+
+			// Third with force should succeed
+			files, err := scaffold.Scaffold(tmpl, dir, true)
+			require.NoError(t, err)
+			assert.NotEmpty(t, files)
+		})
+	}
+}

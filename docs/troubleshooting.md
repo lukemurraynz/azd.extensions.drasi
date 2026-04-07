@@ -7,9 +7,9 @@ Run `azd drasi diagnose` first. It checks AKS connectivity, Drasi API health, Da
 Every failure the extension emits includes a structured error code. The table below lists each code, when it occurs, the exit code, and what to do.
 
 | Code | Exit | When it occurs | Remediation |
-|------|------|----------------|-------------|
+| ---- | ---- | -------------- | ----------- |
 | `ERR_NO_AUTH` | 2 | No valid Azure credential found when the command tried to call a gRPC service or Azure API | Run `azd auth login` and try again. In CI, ensure `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, and `AZURE_SUBSCRIPTION_ID` are set and the federated credential is configured. |
-| `ERR_DRASI_CLI_NOT_FOUND` | 2 | The `drasi` binary is not on `PATH` | Install the Drasi CLI (>= 0.10.0) from https://drasi.io/docs/getting-started and ensure it is on `PATH`. |
+| `ERR_DRASI_CLI_NOT_FOUND` | 2 | The `drasi` binary is not on `PATH` | Install the Drasi CLI (>= 0.10.0) from <https://drasi.io/docs/getting-started> and ensure it is on `PATH`. |
 | `ERR_DRASI_CLI_VERSION` | 2 | The installed `drasi` binary is older than the minimum required version (0.10.0) | Upgrade the Drasi CLI. |
 | `ERR_DRASI_CLI_ERROR` | 1 | The `drasi` subprocess exited with a non-zero code | Read the error message for the underlying cause. Run the same `drasi` command manually to see the full output. Check that your kubeconfig context points to the correct AKS cluster. |
 | `ERR_COMPONENT_TIMEOUT` | 1 | A component did not reach `Online` state within 5 minutes | Run `azd drasi diagnose` to check Dapr and the Drasi API. Check the component pod logs: `kubectl logs -n drasi-system -l drasi.io/component-id=<id>`. |
