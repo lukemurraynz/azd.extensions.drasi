@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"runtime"
 	"testing"
 
@@ -398,4 +399,124 @@ func TestEngine_ApplyComponent_TempFileHasRestrictedPermissions(t *testing.T) {
 	err := h.engine.Deploy(context.Background(), manifest, DeployOptions{Environment: "test-env"})
 	require.NoError(t, err)
 	assert.NotEmpty(t, capturedPath, "drasi apply should have been called with a temp file path")
+}
+
+func TestMarshalComponent_ReadsOriginalFileForSource(t *testing.T) {
+	t.Parallel()
+
+	manifestDir := t.TempDir()
+	relPath := filepath.Join("components", "source.yaml")
+	absPath := filepath.Join(manifestDir, relPath)
+	require.NoError(t, os.MkdirAll(filepath.Dir(absPath), 0o755))
+
+	want := []byte("apiVersion: v1\nkind: Source\nname: alerts\nspec:\n  kind: CosmosDB\n")
+	require.NoError(t, os.WriteFile(absPath, want, 0o600))
+
+	manifest := &config.ResolvedManifest{
+		ManifestDir: manifestDir,
+		Sources: []config.Source{{
+			ID:       "alerts",
+			FilePath: filepath.ToSlash(relPath),
+			Spec:     config.SourceSpec{Kind: "ignored-by-file-read"},
+		}},
+	}
+
+	got, err := marshalComponent(ComponentAction{Kind: "source", ID: "alerts"}, manifest)
+	require.NoError(t, err)
+	assert.Equal(t, want, got)
+}
+
+func TestMarshalComponent_FallbackMarshalForKindsWithoutManifestDir(t *testing.T) {
+	t.Parallel()
+
+	manifest := &config.ResolvedManifest{
+		Queries: []config.ContinuousQuery{{
+			APIVersion: "v1",
+			Kind:       "ContinuousQuery",
+			ID:         "alerts-query",
+			Spec:       config.QuerySpec{Query: "MATCH (n) RETURN n"},
+		}},
+		Middlewares: []config.Middleware{{
+			APIVersion: "v1",
+			Kind:       "Middleware",
+			ID:         "enricher",
+			Spec:       config.MiddlewareSpec{Kind: "Identity"},
+		}},
+		Reactions: []config.Reaction{{
+			APIVersion: "v1",
+			Kind:       "Reaction",
+			ID:         "sink",
+			Spec:       config.ReactionSpec{Kind: "EventGrid"},
+		}},
+	}
+
+	tests := []struct {
+		name   string
+		action ComponentAction
+		want   string
+	}{
+		{name: "query marshals from struct", action: ComponentAction{Kind: "continuousquery", ID: "alerts-query"}, want: "name: alerts-query"},
+		{name: "middleware marshals from struct", action: ComponentAction{Kind: "middleware", ID: "enricher"}, want: "name: enricher"},
+		{name: "reaction marshals from struct", action: ComponentAction{Kind: "reaction", ID: "sink"}, want: "name: sink"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got, err := marshalComponent(tt.action, manifest)
+			require.NoError(t, err)
+			assert.Contains(t, string(got), tt.want)
+		})
+	}
+}
+
+func TestMarshalComponent_ComponentNotFound_ReturnsError(t *testing.T) {
+	t.Parallel()
+
+	manifest := &config.ResolvedManifest{}
+
+	got, err := marshalComponent(ComponentAction{Kind: "source", ID: "missing"}, manifest)
+
+	require.Error(t, err)
+	assert.Nil(t, got)
+	assert.Contains(t, err.Error(), "component source/missing not found")
+}
+
+func TestEngine_ApplyComponent_MarshalError_ReturnsContext(t *testing.T) {
+	t.Parallel()
+
+	h := newEngineHarness()
+	manifest := &config.ResolvedManifest{}
+
+	err := h.engine.applyComponent(context.Background(), ComponentAction{Kind: "source", ID: "missing"}, manifest)
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "marshalling source/missing")
+	assert.Empty(t, h.mockDrasi.commandsCalled)
+}
+
+func TestEngine_ApplyComponent_RunCommandError_Propagates(t *testing.T) {
+	t.Parallel()
+
+	h := newEngineHarness()
+	h.mockDrasi.runCommandFunc = func(ctx context.Context, args ...string) error {
+		return fmt.Errorf("apply failed")
+	}
+	manifest := &config.ResolvedManifest{
+		Sources: []config.Source{{
+			APIVersion: "v1",
+			Kind:       "Source",
+			ID:         "alerts",
+			Spec:       config.SourceSpec{Kind: "CosmosDB"},
+		}},
+	}
+
+	err := h.engine.applyComponent(context.Background(), ComponentAction{Kind: "source", ID: "alerts"}, manifest)
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "apply failed")
+	require.Len(t, h.mockDrasi.commandsCalled, 1)
+	assert.Equal(t, "apply", h.mockDrasi.commandsCalled[0][0])
+	assert.Equal(t, "-f", h.mockDrasi.commandsCalled[0][1])
 }

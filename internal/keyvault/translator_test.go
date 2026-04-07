@@ -104,8 +104,7 @@ func TestTranslator_EnvRef_MissingVariable_ReturnsValidationError(t *testing.T) 
 }
 
 func TestTranslator_SecretRef_EmitsAuditLog(t *testing.T) {
-	t.Parallel()
-
+	// NOTE: Not parallel because slog.SetDefault mutates global state.
 	var buf bytes.Buffer
 	handler := slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelInfo})
 	original := slog.Default()
