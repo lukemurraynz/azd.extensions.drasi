@@ -3,6 +3,10 @@ package drasi
 import (
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
+	"runtime"
+	"strconv"
 	"testing"
 
 	"github.com/lukemurraynz/azd.extensions.drasi/internal/output"
@@ -283,4 +287,126 @@ func TestClient_RunCommandOutput_NoAutomaticRetry(t *testing.T) {
 			assert.Equal(t, 1, runner.callCount)
 		})
 	}
+}
+
+func TestRealRunner_Run_Success(t *testing.T) {
+	t.Parallel()
+
+	installFakeDrasiCLI(t, scriptBehavior{
+		stdout:   "Drasi CLI version: v0.10.2\n",
+		exitCode: 0,
+	})
+
+	runner := &realRunner{}
+	stdout, stderr, exitCode, err := runner.Run(context.Background(), "version")
+
+	require.NoError(t, err)
+	assert.Equal(t, "Drasi CLI version: v0.10.2\n", stdout)
+	assert.Empty(t, stderr)
+	assert.Equal(t, 0, exitCode)
+}
+
+func TestRealRunner_Run_NonZeroExit_ReturnsExitCodeAndStderr(t *testing.T) {
+	t.Parallel()
+
+	installFakeDrasiCLI(t, scriptBehavior{
+		stdout:   "partial output\n",
+		stderr:   "boom\n",
+		exitCode: 7,
+	})
+
+	runner := &realRunner{}
+	stdout, stderr, exitCode, err := runner.Run(context.Background(), "apply", "-f", "manifest.yaml")
+
+	require.NoError(t, err)
+	assert.Equal(t, "partial output\n", stdout)
+	assert.Equal(t, "boom\n", stderr)
+	assert.Equal(t, 7, exitCode)
+}
+
+func TestNewClient_UsesRealRunner(t *testing.T) {
+	t.Parallel()
+
+	client := NewClient()
+
+	require.NotNil(t, client)
+	assert.IsType(t, &realRunner{}, client.runner)
+}
+
+type scriptBehavior struct {
+	stdout   string
+	stderr   string
+	exitCode int
+}
+
+func installFakeDrasiCLI(t *testing.T, behavior scriptBehavior) {
+	t.Helper()
+
+	binDir := t.TempDir()
+	path := filepath.Join(binDir, fakeDrasiCLIName())
+	require.NoError(t, os.WriteFile(path, []byte(fakeDrasiCLIScript(behavior)), 0o700))
+	if runtime.GOOS != "windows" {
+		require.NoError(t, os.Chmod(path, 0o700))
+	}
+
+	currentPath := os.Getenv("PATH")
+	if currentPath == "" {
+		t.Setenv("PATH", binDir)
+		return
+	}
+	t.Setenv("PATH", binDir+string(os.PathListSeparator)+currentPath)
+}
+
+func fakeDrasiCLIName() string {
+	if runtime.GOOS == "windows" {
+		return "drasi.cmd"
+	}
+	return "drasi"
+}
+
+func fakeDrasiCLIScript(behavior scriptBehavior) string {
+	if runtime.GOOS == "windows" {
+		return "@echo off\r\n" +
+			writeWindowsLine(behavior.stdout, false) +
+			writeWindowsLine(behavior.stderr, true) +
+			"exit /b " + strconv.Itoa(behavior.exitCode) + "\r\n"
+	}
+
+	return "#!/bin/sh\n" +
+		writeUnixLine(behavior.stdout, false) +
+		writeUnixLine(behavior.stderr, true) +
+		"exit " + strconv.Itoa(behavior.exitCode) + "\n"
+}
+
+func writeWindowsLine(value string, toStderr bool) string {
+	if value == "" {
+		return ""
+	}
+	line := trimTrailingNewline(value)
+	if toStderr {
+		return "echo " + line + " 1>&2\r\n"
+	}
+	return "echo " + line + "\r\n"
+}
+
+func writeUnixLine(value string, toStderr bool) string {
+	if value == "" {
+		return ""
+	}
+	line := trimTrailingNewline(value)
+	if toStderr {
+		return "printf '%s\\n' '" + line + "' 1>&2\n"
+	}
+	return "printf '%s\\n' '" + line + "'\n"
+}
+
+func trimTrailingNewline(value string) string {
+	for len(value) > 0 {
+		last := value[len(value)-1]
+		if last != '\n' && last != '\r' {
+			break
+		}
+		value = value[:len(value)-1]
+	}
+	return value
 }
