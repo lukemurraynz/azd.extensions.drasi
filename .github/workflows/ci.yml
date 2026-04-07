@@ -5,6 +5,7 @@ on:
     branches: [main, "001-azd-drasi-extension"]
   pull_request:
     branches: [main]
+  workflow_call:
 
 # Cancel stale runs for the same ref
 concurrency:
