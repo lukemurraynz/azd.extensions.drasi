@@ -29,7 +29,7 @@ If you install `azure.drasi` from this repository's GitHub Releases, you do **no
 | Tool                        | Version   | Required for                                                  | Install                                   |
 | --------------------------- | --------- | ------------------------------------------------------------- | ----------------------------------------- |
 | Azure Developer CLI (`azd`) | >= 1.10.0 | Installing and running the extension                          | <https://aka.ms/azd>                      |
-| Drasi CLI                   | >= 0.10.0 | Drasi component operations (`deploy`, `status`, `logs`, etc.) | <https://drasi.io/docs/getting-started>   |
+| Drasi CLI                   | >= 0.10.0 | Drasi component operations (`deploy`, `status`, `logs`, etc.) | <https://drasi.io/drasi-server/getting-started/>   |
 | Azure CLI                   | >= 2.60.0 | Azure authentication and infrastructure operations            | <https://aka.ms/azcli>                    |
 | kubectl                     | >= 1.28   | Cluster connectivity for health/status/log operations         | <https://kubernetes.io/docs/tasks/tools/> |
 
