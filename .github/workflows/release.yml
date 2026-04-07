@@ -72,7 +72,7 @@ jobs:
           cd bin
 
           # windows/amd64
-          zip ../dist/azd-drasi-windows-amd64.zip windows/amd64/azd-drasi.exe
+          zip -j ../dist/azd-drasi-windows-amd64.zip windows/amd64/azd-drasi.exe
 
           # linux/amd64
           tar -czf ../dist/azd-drasi-linux-amd64.tar.gz -C linux/amd64 azd-drasi
