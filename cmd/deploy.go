@@ -3,7 +3,9 @@ package cmd
 import (
 	"fmt"
 	"log/slog"
+	"os"
 	"path/filepath"
+	"regexp"
 	"time"
 
 	"github.com/azure/azure-dev/cli/azd/pkg/azdext"
@@ -15,6 +17,56 @@ import (
 	"github.com/lukemurraynz/azd.extensions.drasi/internal/validation"
 	"github.com/spf13/cobra"
 )
+
+// envVarRefPattern matches $(VARNAME) placeholders in YAML files.
+var envVarRefPattern = regexp.MustCompile(`\$\(([A-Za-z_][A-Za-z0-9_]*)\)`)
+
+// scanEnvVarRefs reads component YAML files from the manifest directory and
+// returns the unique set of $(VARNAME) variable names referenced across all files.
+func scanEnvVarRefs(resolved *config.ResolvedManifest) []string {
+	seen := make(map[string]struct{})
+	var paths []string
+
+	for _, s := range resolved.Sources {
+		if s.FilePath != "" {
+			paths = append(paths, s.FilePath)
+		}
+	}
+	for _, q := range resolved.Queries {
+		if q.FilePath != "" {
+			paths = append(paths, q.FilePath)
+		}
+	}
+	for _, r := range resolved.Reactions {
+		if r.FilePath != "" {
+			paths = append(paths, r.FilePath)
+		}
+	}
+	for _, m := range resolved.Middlewares {
+		if m.FilePath != "" {
+			paths = append(paths, m.FilePath)
+		}
+	}
+
+	for _, relPath := range paths {
+		absPath := filepath.Join(resolved.ManifestDir, filepath.FromSlash(relPath))
+		data, err := os.ReadFile(absPath)
+		if err != nil {
+			continue
+		}
+		for _, match := range envVarRefPattern.FindAllSubmatch(data, -1) {
+			if len(match) > 1 {
+				seen[string(match[1])] = struct{}{}
+			}
+		}
+	}
+
+	names := make([]string, 0, len(seen))
+	for name := range seen {
+		names = append(names, name)
+	}
+	return names
+}
 
 func newDeployCommand() *cobra.Command {
 	var configPath string
@@ -205,6 +257,22 @@ func newDeployCommand() *cobra.Command {
 
 			engine := deployment.NewEngine(state, drasiClient)
 
+			// Scan component YAML files for $(VARNAME) references and resolve
+			// each from azd environment state so the deploy engine can substitute
+			// them before passing YAML to `drasi apply`.
+			envVars := make(map[string]string)
+			for _, varName := range scanEnvVarRefs(&resolved) {
+				val, err := getEnvValue(ctx, azdClient, resolvedEnv, varName)
+				if err != nil {
+					slog.WarnContext(ctx, "could not resolve env var for YAML substitution",
+						slog.String("var", varName), slog.Any("error", err))
+					continue
+				}
+				if val != "" {
+					envVars[varName] = val
+				}
+			}
+
 			progress.Message("Deploying components...")
 
 			if err := engine.Deploy(ctx, &resolved, deployment.DeployOptions{
@@ -212,6 +280,7 @@ func newDeployCommand() *cobra.Command {
 				Environment:  resolvedEnv,
 				NoRollback:   noRollback,
 				TotalTimeout: totalTimeout,
+				EnvVars:      envVars,
 			}); err != nil {
 				code := errorCodeFromError(err, output.ERR_DRASI_CLI_ERROR)
 				return writeCommandError(

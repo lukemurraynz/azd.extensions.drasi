@@ -1,6 +1,10 @@
-// drasi-infra.bicep — Drasi infrastructure module
-// Provisions all Azure resources required to run the Drasi reactive data pipeline runtime:
-// Log Analytics, managed identities, Key Vault, NAT Gateway, VNet, and AKS (AVM modules).
+// drasi-infra.bicep — Core Azure infrastructure for Drasi workloads.
+// Provisions: VNet, NAT Gateway, Public IP, AKS (Azure CNI Overlay + Cilium, OIDC + Workload
+// Identity), Key Vault, Log Analytics workspace, User-Assigned Managed Identities (control-plane
+// and workload), role assignments, and federated identity credential.
+//
+// All resources use Azure Verified Modules (AVM) public registry modules.
+// AKS configuration follows the AKS skill recommendations for production clusters.
 
 @description('The Azure region for all resources.')
 param location string
@@ -11,307 +15,350 @@ param environmentName string
 @description('Tags to apply to all resources.')
 param tags object
 
-// ---------------------------------------------------------------------------
-// Naming
-// uniqueString ensures all globally-unique names are deterministic and
-// collision-free per resource group + environment combination.
-// ---------------------------------------------------------------------------
-var suffix = take(uniqueString(resourceGroup().id, environmentName), 10)
-
-var logAnalyticsName     = 'log-drasi-${suffix}'
-var workloadUamiName     = 'drasi-id-${suffix}'
-var controlPlaneUamiName = 'drasi-cp-${suffix}'
-var keyVaultName         = take('kv-drasi-${suffix}', 24)
-var publicIpName         = 'pip-drasi-nat-${suffix}'
-var natGatewayName       = 'ng-drasi-${suffix}'
-var vnetName             = 'vnet-drasi-${suffix}'
-var aksName              = 'drasi-aks-${suffix}'
-var federatedCredName    = 'drasi-resource-provider-fed'
-
 @description('Object ID of the deploying user. Used to assign AKS RBAC Cluster Admin so the user can run kubectl/drasi commands after provisioning.')
 param principalId string
 
-// ---------------------------------------------------------------------------
-// Built-in role definition IDs (subscription-independent format)
-// Verified: https://learn.microsoft.com/azure/role-based-access-control/built-in-roles
-// ---------------------------------------------------------------------------
-var keyVaultSecretsUserRoleId         = '4633458b-17de-408a-b874-0445c86b69e6'
-var networkContributorRoleId          = '4d97b98b-1d4f-4787-a291-c67834d212e7'
-var monitoringMetricsPublisherRoleId  = '3913510d-42f4-4e42-8a64-420c390055eb'
-var aksRbacClusterAdminRoleId         = 'b1ff04bb-8a4e-4dc4-8eb5-8693973ce19b'
+@description('Kubernetes namespace where Drasi is installed.')
+param drasiNamespace string = 'drasi-system'
+
+@description('Service account name used by the Drasi resource provider.')
+param drasiServiceAccountName string = 'drasi-resource-provider'
 
 // ---------------------------------------------------------------------------
-// 1. Log Analytics workspace
-// AVM: br/public:avm/res/operational-insights/workspace:0.15.0
+// Names — deterministic suffix so redeploys are idempotent
+// ---------------------------------------------------------------------------
+var suffix = uniqueString(resourceGroup().id, environmentName)
+var aksName        = 'drasi-aks-${suffix}'
+var kvName         = take('drasi-kv-${suffix}', 24) // Key Vault name max 24 chars
+var lawName        = 'drasi-law-${suffix}'
+// Drasi workload UAMI — used for Workload Identity federated credential
+var uamiName       = 'drasi-id-${suffix}'
+// Control-plane UAMI — used as the AKS cluster identity (Network Contributor on VNet)
+var cpUamiName     = 'drasi-cp-${suffix}'
+var vnetName       = 'drasi-vnet-${suffix}'
+var natGwName      = 'drasi-natgw-${suffix}'
+var pipName        = 'drasi-pip-${suffix}'
+// Subnet address spaces
+var vnetPrefix     = '10.0.0.0/16'
+var aksSubnetPrefix = '10.0.0.0/22' // /22 = 1022 usable IPs; sufficient for Azure CNI Overlay pod CIDRs
+
+// Role definition GUIDs (built-in, verified against Azure RBAC docs)
+// https://learn.microsoft.com/azure/role-based-access-control/built-in-roles
+var kvSecretsUserRoleId        = '4633458b-17de-408a-b874-0445c86b69e6' // Key Vault Secrets User
+var monitoringPublisherRoleId  = '3913510d-42f4-4e42-8a64-420c390055eb' // Monitoring Metrics Publisher
+var networkContributorRoleId   = '4d97b98b-1d4f-4787-a291-c67834d212e7' // Network Contributor
+var aksRbacClusterAdminRoleId  = 'b1ff04bb-8a4e-4dc4-8eb5-8693973ce19b' // Azure Kubernetes Service RBAC Cluster Admin
+
+// ---------------------------------------------------------------------------
+// Log Analytics Workspace — AVM module
+// https://github.com/Azure/bicep-registry-modules/tree/main/avm/res/operational-insights/workspace
 // ---------------------------------------------------------------------------
 module logAnalytics 'br/public:avm/res/operational-insights/workspace:0.15.0' = {
-  name: 'log-analytics'
+  name: 'law-deployment'
   params: {
-    name: logAnalyticsName
+    name: lawName
     location: location
-    tags: tags
+    tags: union(tags, { component: 'observability', 'managed-by': 'azd' })
     skuName: 'PerGB2018'
     dataRetention: 30
   }
 }
 
 // ---------------------------------------------------------------------------
-// 2. Workload user-assigned managed identity (used by Drasi resource-provider pod)
-// Native resource — no AVM module for standalone UAMI.
-// API version verified: az provider show --namespace Microsoft.ManagedIdentity
+// Drasi workload User-Assigned Managed Identity — AVM module
+// Used for Workload Identity federated credential; grants pod access to Key Vault.
+// https://github.com/Azure/bicep-registry-modules/tree/main/avm/res/managed-identity/user-assigned-identity
 // ---------------------------------------------------------------------------
-resource workloadUami 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' = {
-  name: workloadUamiName
-  location: location
-  tags: tags
+module uami 'br/public:avm/res/managed-identity/user-assigned-identity:0.5.0' = {
+  name: 'uami-deployment'
+  params: {
+    name: uamiName
+    location: location
+    tags: union(tags, { component: 'identity', 'managed-by': 'azd' })
+  }
 }
 
 // ---------------------------------------------------------------------------
-// 3. Control-plane user-assigned managed identity (used by AKS control plane)
+// Control-plane User-Assigned Managed Identity — AVM module
+// Used as the AKS cluster identity per AKS skill: pre-create so Network Contributor
+// can be assigned before the cluster is provisioned.
 // ---------------------------------------------------------------------------
-resource controlPlaneUami 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' = {
-  name: controlPlaneUamiName
-  location: location
-  tags: tags
+module cpUami 'br/public:avm/res/managed-identity/user-assigned-identity:0.5.0' = {
+  name: 'cp-uami-deployment'
+  params: {
+    name: cpUamiName
+    location: location
+    tags: union(tags, { component: 'aks-control-plane-identity', 'managed-by': 'azd' })
+  }
 }
 
 // ---------------------------------------------------------------------------
-// 4. Key Vault — RBAC auth, purge protection, 7-day soft delete
-// AVM: br/public:avm/res/key-vault/vault:0.13.3
+// Key Vault (RBAC-authorised, purge-protected) — AVM module
+// https://github.com/Azure/bicep-registry-modules/tree/main/avm/res/key-vault/vault
 // ---------------------------------------------------------------------------
 module keyVault 'br/public:avm/res/key-vault/vault:0.13.3' = {
-  name: 'key-vault'
+  name: 'kv-deployment'
   params: {
-    name: keyVaultName
+    name: kvName
     location: location
-    tags: tags
+    tags: union(tags, { component: 'secrets', 'managed-by': 'azd' })
     enableRbacAuthorization: true
-    enablePurgeProtection: true
+    enableSoftDelete: true
     softDeleteRetentionInDays: 7
-    enableVaultForDeployment: false
-    enableVaultForDiskEncryption: false
-    enableVaultForTemplateDeployment: false
-  }
-}
-
-// ---------------------------------------------------------------------------
-// 5. Key Vault Secrets User — workload UAMI on Key Vault scope
-// BCP120 fix: role assignment name must use static inputs calculable at deployment start.
-// We use resourceGroup().id + static names rather than module output resourceId.
-// ---------------------------------------------------------------------------
-resource keyVaultResource 'Microsoft.KeyVault/vaults@2023-07-01' existing = {
-  name: keyVaultName
-  dependsOn: [keyVault]
-}
-
-resource kvSecretsUserAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(resourceGroup().id, workloadUamiName, keyVaultSecretsUserRoleId)
-  scope: keyVaultResource
-  properties: {
-    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', keyVaultSecretsUserRoleId)
-    principalId: workloadUami.properties.principalId
-    principalType: 'ServicePrincipal'
-  }
-}
-
-// ---------------------------------------------------------------------------
-// 6. Public IP for NAT Gateway (Standard, Static, zones 1/2/3)
-// API version verified: az provider show --namespace Microsoft.Network
-// BCP034 fix: zones must be string[] for publicIPAddresses (ARM requirement).
-// ---------------------------------------------------------------------------
-resource natPublicIp 'Microsoft.Network/publicIPAddresses@2024-10-01' = {
-  name: publicIpName
-  location: location
-  tags: tags
-  sku: {
-    name: 'Standard'
-    tier: 'Regional'
-  }
-  zones: ['1', '2', '3']
-  properties: {
-    publicIPAllocationMethod: 'Static'
-    publicIPAddressVersion: 'IPv4'
-  }
-}
-
-// ---------------------------------------------------------------------------
-// 7. NAT Gateway (Standard, zone 1, 10-minute idle timeout)
-// ---------------------------------------------------------------------------
-resource natGateway 'Microsoft.Network/natGateways@2024-10-01' = {
-  name: natGatewayName
-  location: location
-  tags: tags
-  sku: {
-    name: 'Standard'
-  }
-  zones: ['1']
-  properties: {
-    idleTimeoutInMinutes: 10
-    publicIpAddresses: [
-      { id: natPublicIp.id }
-    ]
-  }
-}
-
-// ---------------------------------------------------------------------------
-// 8. Virtual Network — 10.0.0.0/16, AKS subnet 10.0.0.0/22 with NAT GW
-// AVM: br/public:avm/res/network/virtual-network:0.8.0
-// ---------------------------------------------------------------------------
-module vnet 'br/public:avm/res/network/virtual-network:0.8.0' = {
-  name: 'virtual-network'
-  params: {
-    name: vnetName
-    location: location
-    tags: tags
-    addressPrefixes: ['10.0.0.0/16']
-    subnets: [
+    enablePurgeProtection: true
+    // Grant the Drasi workload UAMI Key Vault Secrets User so pods can read secrets.
+    roleAssignments: [
       {
-        name: 'snet-aks'
-        addressPrefix: '10.0.0.0/22'
-        natGatewayResourceId: natGateway.id
+        principalId: uami.outputs.principalId
+        roleDefinitionIdOrName: kvSecretsUserRoleId
+        principalType: 'ServicePrincipal'
       }
     ]
   }
 }
 
 // ---------------------------------------------------------------------------
-// 9. Network Contributor — control-plane UAMI on VNet scope
-// BCP120 fix: use static name inputs (vnetName + uami name) for guid().
+// Public IP Address — AVM module (used by NAT Gateway)
+// Standard SKU + Static required for NAT Gateway compatibility.
+// Zone-redundant across all three zones.
+// https://github.com/Azure/bicep-registry-modules/tree/main/avm/res/network/public-ip-address
 // ---------------------------------------------------------------------------
-resource vnetResource 'Microsoft.Network/virtualNetworks@2024-10-01' existing = {
+module publicIp 'br/public:avm/res/network/public-ip-address:0.9.1' = {
+  name: 'pip-deployment'
+  params: {
+    name: pipName
+    location: location
+    tags: union(tags, { component: 'network', 'managed-by': 'azd' })
+    skuName: 'Standard'
+    skuTier: 'Regional'
+    publicIPAllocationMethod: 'Static'
+    publicIPAddressVersion: 'IPv4'
+    // Zone-redundant: all three availability zones
+    availabilityZones: [1, 2, 3]
+  }
+}
+
+// ---------------------------------------------------------------------------
+// NAT Gateway — AVM module
+// AKS skill: outbound via NAT Gateway to prevent SNAT port exhaustion.
+// Zone-redundant deployment (no zone pinning) — matches multi-zone AKS pools.
+// https://github.com/Azure/bicep-registry-modules/tree/main/avm/res/network/nat-gateway
+// ---------------------------------------------------------------------------
+module natGateway 'br/public:avm/res/network/nat-gateway:2.0.1' = {
+  name: 'nat-gw-deployment'
+  params: {
+    name: natGwName
+    location: location
+    tags: union(tags, { component: 'network', 'managed-by': 'azd' })
+    // Zone-redundant: -1 means no zone pinning, matching multi-zone AKS pools
+    availabilityZone: -1
+    publicIpResourceIds: [
+      publicIp.outputs.resourceId
+    ]
+    idleTimeoutInMinutes: 10
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Virtual Network — AVM module
+// AKS skill: dedicated VNet for Azure CNI Overlay networking.
+// NAT Gateway is associated at the subnet level.
+// https://github.com/Azure/bicep-registry-modules/tree/main/avm/res/network/virtual-network
+// ---------------------------------------------------------------------------
+module vnet 'br/public:avm/res/network/virtual-network:0.8.0' = {
+  name: 'vnet-deployment'
+  params: {
+    name: vnetName
+    location: location
+    tags: union(tags, { component: 'network', 'managed-by': 'azd' })
+    addressPrefixes: [
+      vnetPrefix
+    ]
+    subnets: [
+      {
+        name: 'snet-aks'
+        addressPrefix: aksSubnetPrefix
+        // Associate NAT Gateway for outbound traffic (AKS skill requirement)
+        natGatewayResourceId: natGateway.outputs.resourceId
+      }
+    ]
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Network Contributor on VNet for the AKS control-plane UAMI
+// AKS skill: control-plane identity needs Network Contributor to manage VNet
+// resources (NICs, load balancers) during cluster operations.
+// Using a direct roleAssignment avoids re-deploying the VNet module (which causes
+// a DeploymentActive conflict on the subnet sub-deployment).
+// guid() inputs use known var names so the name is calculable at deployment start.
+// ---------------------------------------------------------------------------
+resource vnetRef 'Microsoft.Network/virtualNetworks@2024-10-01' existing = {
   name: vnetName
   dependsOn: [vnet]
 }
 
-resource vnetNetworkContributorAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(resourceGroup().id, controlPlaneUamiName, networkContributorRoleId)
-  scope: vnetResource
+resource vnetNetworkContributorRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(resourceGroup().id, cpUamiName, networkContributorRoleId)
+  scope: vnetRef
   properties: {
     roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', networkContributorRoleId)
-    principalId: controlPlaneUami.properties.principalId
+    principalId: cpUami.outputs.principalId
     principalType: 'ServicePrincipal'
   }
 }
 
 // ---------------------------------------------------------------------------
-// 10. AKS cluster — Azure CNI Overlay + Cilium, Workload Identity, OIDC
-// AVM: br/public:avm/res/container-service/managed-cluster:0.13.0
-//
-// AVM 0.13.0 parameter mapping (verified from module main.bicep):
-//   - oidcIssuerEnabled        → enableOidcIssuerProfile
-//   - enableWorkloadIdentity   → securityProfile.workloadIdentity.enabled
-//   - enableAzureRbac          → enableRBAC
-//   - managedAAD               → aadProfile { managed: true, enableAzureRBAC: true }
-//   - autoUpgradeChannel       → autoUpgradeProfile.upgradeChannel
-//   - nodeOsUpgradeChannel     → autoUpgradeProfile.nodeOSUpgradeChannel
-//   - diskCSIDriverEnabled     → enableStorageProfileDiskCSIDriver
-//   - agentPools (required)    → primaryAgentPoolProfiles
-//   - agentPools (additional)  → agentPools
-//   - availabilityZones        → int[] (not string[])
+// AKS Managed Cluster — AVM module
+// AKS skill compliance:
+//   - Azure CNI Overlay + Cilium network plugin (replaces retiring Kubenet)
+//   - User-assigned control-plane identity (pre-created, Network Contributor on VNet)
+//   - System node pool: 3 nodes, Standard_D4s_v5, AzureLinux 3.0,
+//     CriticalAddonsOnly taint, availability zones [1,2,3]
+//   - disableLocalAccounts: true (production hardening)
+//   - autoUpgradeProfile: stable + nodeOSUpgradeChannel: NodeImage
+//   - OIDC issuer + Workload Identity for Drasi federated credential
+// https://github.com/Azure/bicep-registry-modules/tree/main/avm/res/container-service/managed-cluster
 // ---------------------------------------------------------------------------
 module aks 'br/public:avm/res/container-service/managed-cluster:0.13.0' = {
-  name: 'aks-cluster'
+  name: 'aks-deployment'
   params: {
     name: aksName
     location: location
-    tags: tags
+    tags: union(tags, { component: 'compute', 'managed-by': 'azd' })
 
-    // Identity — control-plane UAMI.
+    // AKS skill: user-assigned identity for control plane (not system-assigned)
     managedIdentities: {
-      userAssignedResourceIds: [controlPlaneUami.id]
+      userAssignedResourceIds: [
+        cpUami.outputs.resourceId
+      ]
     }
 
-    // OIDC issuer (required for Workload Identity federation).
+    // OIDC issuer — required for Drasi federated credential on workload UAMI
     enableOidcIssuerProfile: true
 
-    // Workload Identity via securityProfile.
+    // Kubernetes RBAC — explicit for clarity
+    enableRBAC: true
+
+    // AKS skill: Azure CNI Overlay + Cilium (replaces Kubenet, non-reversible decision)
+    networkPlugin: 'azure'
+    networkPluginMode: 'overlay'
+    networkDataplane: 'cilium'
+    networkPolicy: 'cilium'
+
+    // Explicit outbound type — required when using BYO NAT Gateway
+    outboundType: 'userAssignedNATGateway'
+
+    // Non-overlapping CIDRs — must not overlap with VNet (10.0.0.0/16) or subnet (10.0.0.0/22)
+    serviceCidr: '10.2.0.0/16'
+    dnsServiceIP: '10.2.0.10'
+
+    // AKS skill: Managed AAD integration — required for disableLocalAccounts and Azure RBAC on cluster
+    // aadProfile enables Microsoft Entra ID authentication; Azure RBAC replaces Kubernetes RBAC for authz.
+    aadProfile: {
+      managed: true
+      enableAzureRBAC: true
+    }
+
+    // AKS skill: disable local accounts in production (requires managed AAD above)
+    disableLocalAccounts: true
+
+    // AKS skill: automatic upgrade channels
+    autoUpgradeProfile: {
+      upgradeChannel: 'stable'
+      nodeOSUpgradeChannel: 'NodeImage'
+    }
+
+    // Wire Log Analytics for Container Insights via OMS agent
+    omsAgentEnabled: true
+    omsAgentUseAADAuth: true
+    monitoringWorkspaceResourceId: logAnalytics.outputs.resourceId
+
+    // Workload Identity — Drasi pods exchange Kubernetes SATs for Entra ID tokens
     securityProfile: {
       workloadIdentity: {
         enabled: true
       }
     }
 
-    // Managed AAD (Entra ID) integration — required for disableLocalAccounts and Azure RBAC on cluster.
-    aadProfile: {
-      managed: true
-      enableAzureRBAC: true
-    }
-
-    // Disable local accounts; use Entra RBAC only (requires managed AAD above).
-    disableLocalAccounts: true
-    enableRBAC: true
-
-    // Auto-upgrade: keep cluster on stable channel, nodes on latest OS image.
-    autoUpgradeProfile: {
-      upgradeChannel: 'stable'
-      nodeOSUpgradeChannel: 'NodeImage'
-    }
-
-    // Disk CSI driver (required for Drasi persistent volumes).
+    // Storage profile — enable Azure Disk CSI driver so StatefulSets (redis, mongo)
+    // can provision PersistentVolumeClaims using the 'default' StorageClass.
     enableStorageProfileDiskCSIDriver: true
 
-    // Networking — Azure CNI Overlay + Cilium dataplane + Cilium network policy.
-    networkPlugin: 'azure'
-    networkPluginMode: 'overlay'
-    networkDataplane: 'cilium'
-    networkPolicy: 'cilium'
-    podCidr: '192.168.0.0/16'
-    serviceCidr: '172.16.0.0/16'
-    dnsServiceIP: '172.16.0.10'
-    outboundType: 'userAssignedNATGateway'
-
-    // OMS / Log Analytics integration.
-    omsAgentEnabled: true
-    monitoringWorkspaceResourceId: logAnalytics.outputs.resourceId
-
-    // System node pool — only critical addons, 3 nodes, zones 1/2/3.
-    // availabilityZones is int[] in AVM 0.13.0.
+    // System node pool: AKS skill requirements
+    //   - Minimum 3 nodes
+    //   - Standard_D4s_v5 or larger
+    //   - Azure Linux 3.0 (osSku: AzureLinux)
+    //   - CriticalAddonsOnly=true:NoSchedule taint
+    //   - Availability zones [1, 2, 3]
+    //   - VNet subnet wired here (not a top-level cluster param in AVM 0.13.0)
     primaryAgentPoolProfiles: [
       {
-        name: 'system'
-        mode: 'System'
+        name: 'systempool'
         count: 3
         vmSize: 'Standard_D4s_v5'
         osType: 'Linux'
         osSKU: 'AzureLinux'
-        availabilityZones: [1, 2, 3]
-        nodeTaints: ['CriticalAddonsOnly=true:NoSchedule']
-        vnetSubnetResourceId: '${vnet.outputs.resourceId}/subnets/snet-aks'
+        mode: 'System'
         enableAutoScaling: false
+        vnetSubnetResourceId: '${vnet.outputs.resourceId}/subnets/snet-aks'
+        availabilityZones: [
+          1
+          2
+          3
+        ]
+        nodeTaints: [
+          'CriticalAddonsOnly=true:NoSchedule'
+        ]
       }
     ]
 
-    // User/workload node pool — 2 nodes, zones 1/2/3.
+    // User node pool — Dapr, Drasi, and application workloads schedule here.
+    // System pools carry CriticalAddonsOnly=true:NoSchedule automatically, so a
+    // separate User pool with no taints is required for non-system pods to schedule.
+    // Node count >= zone count for balanced zonal HA.
     agentPools: [
       {
         name: 'workload'
-        mode: 'User'
-        count: 2
+        count: 3
         vmSize: 'Standard_D4s_v5'
         osType: 'Linux'
         osSKU: 'AzureLinux'
-        availabilityZones: [1, 2, 3]
-        vnetSubnetResourceId: '${vnet.outputs.resourceId}/subnets/snet-aks'
+        mode: 'User'
         enableAutoScaling: false
+        vnetSubnetResourceId: '${vnet.outputs.resourceId}/subnets/snet-aks'
+        availabilityZones: [
+          1
+          2
+          3
+        ]
+        // No nodeTaints — all workloads (Dapr, Drasi) must be able to schedule here.
+        nodeTaints: []
       }
     ]
   }
+  dependsOn: [vnetNetworkContributorRole]
 }
 
 // ---------------------------------------------------------------------------
-// 11. Monitoring Metrics Publisher — workload UAMI on resource group scope
+// Monitoring Metrics Publisher role on Log Analytics — direct roleAssignment resource
+// Grants the Drasi workload UAMI publish rights for Container Insights custom metrics.
+// Using a direct roleAssignment avoids re-deploying the LAW module (which causes a
+// Conflict error when the workspace is still provisioning).
 // ---------------------------------------------------------------------------
-resource monitoringRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(resourceGroup().id, workloadUami.id, monitoringMetricsPublisherRoleId)
+resource lawMetricsPublisherRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  // guid() inputs must be calculable at deployment start — use known names, not module outputs
+  name: guid(resourceGroup().id, uamiName, monitoringPublisherRoleId)
+  scope: resourceGroup()
   properties: {
-    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', monitoringMetricsPublisherRoleId)
-    principalId: workloadUami.properties.principalId
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', monitoringPublisherRoleId)
+    principalId: uami.outputs.principalId
     principalType: 'ServicePrincipal'
   }
 }
 
 // ---------------------------------------------------------------------------
-// 12. AKS RBAC Cluster Admin — deploying user on AKS cluster scope
+// AKS RBAC Cluster Admin — deploying user on AKS cluster scope
 // Required because the cluster uses disableLocalAccounts + enableAzureRBAC.
 // Without this, the deploying user cannot run kubectl or drasi commands.
 // ---------------------------------------------------------------------------
@@ -331,39 +378,31 @@ resource aksClusterAdminAssignment 'Microsoft.Authorization/roleAssignments@2022
 }
 
 // ---------------------------------------------------------------------------
-// 13. Federated credential — binds workload UAMI to the Drasi resource-provider
-// service account so the pod can acquire Azure tokens without a client secret.
-// Subject: system:serviceaccount:drasi-system:drasi-resource-provider
-// BCP321 fix: aks.outputs.oidcIssuerUrl is nullable — use ! (non-null assertion)
-// since OIDC is explicitly enabled above and the value will always be present.
+// Federated Identity Credential — allows the Drasi resource-provider pod to
+// exchange a Kubernetes ServiceAccountToken for an Entra ID access token.
+// AVM UAMI module does not expose federated credentials; use child resource.
+// API version: 2024-11-30 (verified stable)
 // ---------------------------------------------------------------------------
-resource federatedCredential 'Microsoft.ManagedIdentity/userAssignedIdentities/federatedIdentityCredentials@2023-01-31' = {
-  name: federatedCredName
-  parent: workloadUami
+resource federatedCredential 'Microsoft.ManagedIdentity/userAssignedIdentities/federatedIdentityCredentials@2024-11-30' = {
+  name: '${uamiName}/drasi-federation'
   properties: {
-    audiences: ['api://AzureADTokenExchange']
     issuer: aks.outputs.oidcIssuerUrl!
-    subject: 'system:serviceaccount:drasi-system:drasi-resource-provider'
+    subject: 'system:serviceaccount:${drasiNamespace}:${drasiServiceAccountName}'
+    audiences: [
+      'api://AzureADTokenExchange'
+    ]
   }
 }
 
 // ---------------------------------------------------------------------------
-// Outputs — consumed by main.bicep and written to azd env state.
+// Outputs — consumed by main.bicep and mapped to azd env state
 // ---------------------------------------------------------------------------
-@description('Name of the AKS cluster.')
 output aksClusterName string = aks.outputs.name
-
-@description('Name of the Key Vault resource.')
+output aksOidcIssuerUrl string = aks.outputs.oidcIssuerUrl!
 output keyVaultName string = keyVault.outputs.name
-
-@description('Key Vault URI for secret references.')
 output keyVaultUri string = keyVault.outputs.uri
-
-@description('Resource ID of the Log Analytics workspace.')
 output logAnalyticsWorkspaceId string = logAnalytics.outputs.resourceId
-
-@description('OIDC issuer URL for federated identity configuration.')
-output oidcIssuerUrl string = aks.outputs.oidcIssuerUrl!
-
-@description('Client ID of the workload UAMI (used by drasi-resource-provider pod annotation).')
-output kubeletClientId string = workloadUami.properties.clientId
+output uamiClientId string = uami.outputs.clientId
+output uamiPrincipalId string = uami.outputs.principalId
+output uamiResourceId string = uami.outputs.resourceId
+output vnetResourceId string = vnet.outputs.resourceId

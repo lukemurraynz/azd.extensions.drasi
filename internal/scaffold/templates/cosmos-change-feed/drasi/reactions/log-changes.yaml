@@ -1,0 +1,10 @@
+# log-changes.yaml — Debug reaction that logs query result changes to stdout.
+# Useful for development and verifying that the source and query are working.
+# Replace with a Dapr, SignalR, or webhook reaction for production use.
+apiVersion: v1
+kind: Reaction
+name: log-changes
+spec:
+  kind: Debug
+  queries:
+    cosmos-query: ""

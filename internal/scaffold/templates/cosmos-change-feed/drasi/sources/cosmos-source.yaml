@@ -1,5 +1,6 @@
-# cosmos-source.yaml - Drasi Source for Azure Cosmos DB (Gremlin API)
-# Replace Key Vault secret references with your actual vault name and secret names.
+# cosmos-source.yaml — Drasi Source for Azure Cosmos DB (Gremlin API)
+# Connects to the Cosmos DB Gremlin account provisioned by infra/modules/cosmos-gremlin.bicep.
+# Secret references are resolved by the Drasi resource-provider via Workload Identity.
 apiVersion: v1
 kind: Source
 name: cosmos-source
@@ -7,12 +8,12 @@ spec:
   kind: CosmosGremlin
   properties:
     accountEndpoint:
-      secretRef:
-        vaultName: "<your-keyvault-name>"
-        secretName: "cosmos-account-endpoint"
+      kind: secret
+      vaultName: "$(AZURE_KEY_VAULT_NAME)"
+      secretName: "cosmos-account-endpoint"
     masterKey:
-      secretRef:
-        vaultName: "<your-keyvault-name>"
-        secretName: "cosmos-master-key"
-    database: "<your-database>"
-    container: "<your-container>"
+      kind: secret
+      vaultName: "$(AZURE_KEY_VAULT_NAME)"
+      secretName: "cosmos-master-key"
+    database: "drasidb"
+    container: "drasi-graph"

@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"regexp"
 	"time"
 
 	"gopkg.in/yaml.v3"
@@ -29,6 +30,9 @@ type DeployOptions struct {
 	NoRollback          bool
 	TotalTimeout        time.Duration
 	PerComponentTimeout time.Duration
+	// EnvVars holds azd environment values used to resolve $(VARNAME) patterns
+	// in component YAML files before applying them to the cluster.
+	EnvVars map[string]string
 }
 
 // Engine orchestrates the full deploy lifecycle.
@@ -79,7 +83,7 @@ func (e *Engine) Deploy(ctx context.Context, manifest *config.ResolvedManifest, 
 		}
 
 		if applyErr == nil {
-			applyErr = e.applyComponent(compCtx, action, manifest)
+			applyErr = e.applyComponent(compCtx, action, manifest, opts.EnvVars)
 		}
 
 		if applyErr == nil {
@@ -140,8 +144,8 @@ func (e *Engine) Teardown(ctx context.Context, manifest *config.ResolvedManifest
 }
 
 // applyComponent writes the component to a temp YAML file and calls drasi apply.
-func (e *Engine) applyComponent(ctx context.Context, action ComponentAction, manifest *config.ResolvedManifest) error {
-	raw, err := marshalComponent(action, manifest)
+func (e *Engine) applyComponent(ctx context.Context, action ComponentAction, manifest *config.ResolvedManifest, envVars map[string]string) error {
+	raw, err := marshalComponent(action, manifest, envVars)
 	if err != nil {
 		return fmt.Errorf("marshalling %s/%s: %w", action.Kind, action.ID, err)
 	}
@@ -179,7 +183,7 @@ func (e *Engine) applyComponent(ctx context.Context, action ComponentAction, man
 // directly without a loader), we fall back to yaml.Marshal of the in-memory struct.
 // This fallback is only exercised by tests; production deployments always have
 // ManifestDir populated by ResolveManifest.
-func marshalComponent(action ComponentAction, manifest *config.ResolvedManifest) ([]byte, error) {
+func marshalComponent(action ComponentAction, manifest *config.ResolvedManifest, envVars map[string]string) ([]byte, error) {
 	var relPath string
 	var structVal any
 	switch action.Kind {
@@ -223,15 +227,30 @@ func marshalComponent(action ComponentAction, manifest *config.ResolvedManifest)
 		if err != nil {
 			return nil, fmt.Errorf("reading source file for %s/%s: %w", action.Kind, action.ID, err)
 		}
-		return data, nil
+		return expandEnvVars(data, envVars), nil
 	}
 
 	// Fallback for unit tests that build ResolvedManifest directly without a loader.
 	return yaml.Marshal(structVal)
 }
 
-// manifestToHashes converts a ResolvedManifest to a flat slice of ComponentHash values.
-// Hashes are computed from canonical YAML content so unchanged components become no-ops.
+var envVarPattern = regexp.MustCompile(`\$\(([A-Za-z_][A-Za-z0-9_]*)\)`)
+
+// expandEnvVars replaces $(VARNAME) patterns in data with values from envVars.
+// Patterns whose variable name is not present in envVars are left unchanged.
+func expandEnvVars(data []byte, envVars map[string]string) []byte {
+	if len(envVars) == 0 {
+		return data
+	}
+	return envVarPattern.ReplaceAllFunc(data, func(match []byte) []byte {
+		varName := string(envVarPattern.FindSubmatch(match)[1])
+		if val, ok := envVars[varName]; ok {
+			return []byte(val)
+		}
+		return match
+	})
+}
+
 func manifestToHashes(manifest *config.ResolvedManifest) []config.ComponentHash {
 	var hashes []config.ComponentHash
 	for _, s := range manifest.Sources {

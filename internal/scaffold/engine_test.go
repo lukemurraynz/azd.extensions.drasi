@@ -128,8 +128,6 @@ func TestScaffold_InvalidTemplate_ReturnsError(t *testing.T) {
 	require.Error(t, err)
 }
 
-// T104: dapr-pubsub reaction scaffold tests (FR-031)
-
 // T017: postgresql-source template scaffold tests
 
 func TestScaffold_PostgreSQLSourceTemplate_CreatesExpectedTree(t *testing.T) {
@@ -162,9 +160,9 @@ func TestScaffold_PostgreSQLSourceTemplate_CreatesExpectedTree(t *testing.T) {
 	}
 }
 
-// T104: dapr-pubsub reaction scaffold tests (FR-031)
+// T104: cosmos-change-feed reaction scaffold tests
 
-func TestScaffold_CosmosFeed_CreatesDaprComponentYAML(t *testing.T) {
+func TestScaffold_CosmosFeed_CreatesDebugReaction(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
@@ -172,48 +170,40 @@ func TestScaffold_CosmosFeed_CreatesDaprComponentYAML(t *testing.T) {
 	require.NoError(t, err)
 	require.NotEmpty(t, files)
 
-	// A Dapr pub/sub component YAML must exist under drasi/components/dapr/.
-	daprDir := filepath.Join(dir, "drasi", "components", "dapr")
-	entries, readErr := os.ReadDir(daprDir)
-	require.NoError(t, readErr, "drasi/components/dapr/ directory must exist")
-	require.NotEmpty(t, entries, "at least one Dapr component YAML must be generated")
+	// A Debug reaction YAML must exist under drasi/reactions/.
+	reactionPath := filepath.Join(dir, "drasi", "reactions", "log-changes.yaml")
+	_, statErr := os.Stat(reactionPath)
+	assert.NoError(t, statErr, "drasi/reactions/log-changes.yaml must exist")
 }
 
-func TestScaffold_CosmosFeed_ReactionReferencesDaprComponent(t *testing.T) {
+func TestScaffold_CosmosFeed_ReactionIsDebugKind(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
 	_, err := scaffold.Scaffold("cosmos-change-feed", dir, false)
 	require.NoError(t, err)
 
-	// The reaction YAML file must exist.
-	reactionDir := filepath.Join(dir, "drasi", "reactions")
-	entries, readErr := os.ReadDir(reactionDir)
+	reactionPath := filepath.Join(dir, "drasi", "reactions", "log-changes.yaml")
+	content, readErr := os.ReadFile(reactionPath)
 	require.NoError(t, readErr)
-	require.NotEmpty(t, entries, "at least one reaction YAML must exist")
-
-	// The Dapr component file must exist and is referenced by the same topic/broker metadata.
-	daprDir := filepath.Join(dir, "drasi", "components", "dapr")
-	daprEntries, err2 := os.ReadDir(daprDir)
-	require.NoError(t, err2)
-	require.NotEmpty(t, daprEntries)
+	assert.Contains(t, string(content), "kind: Debug", "reaction must be Debug kind")
 }
 
-func TestScaffold_CosmosFeed_DaprComponentPath_IsUnderDrasiComponents(t *testing.T) {
+func TestScaffold_CosmosFeed_HasCosmosGremlinBicepModule(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
 	files, err := scaffold.Scaffold("cosmos-change-feed", dir, false)
 	require.NoError(t, err)
 
-	hasDaprComponent := false
+	hasCosmosModule := false
 	for _, f := range files {
-		if strings.HasPrefix(filepath.ToSlash(f), "drasi/components/dapr/") {
-			hasDaprComponent = true
+		if strings.HasSuffix(filepath.ToSlash(f), "infra/modules/cosmos-gremlin.bicep") {
+			hasCosmosModule = true
 			break
 		}
 	}
-	assert.True(t, hasDaprComponent, "cosmos-change-feed template must emit a file under drasi/components/dapr/")
+	assert.True(t, hasCosmosModule, "cosmos-change-feed template must emit infra/modules/cosmos-gremlin.bicep")
 }
 
 func TestScaffold_AllTemplates_ProduceFiles(t *testing.T) {

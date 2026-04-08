@@ -38,5 +38,5 @@ output AZURE_AKS_CLUSTER_NAME string = drasiInfra.outputs.aksClusterName
 output AZURE_KEY_VAULT_NAME string = drasiInfra.outputs.keyVaultName
 output AZURE_KEY_VAULT_URI string = drasiInfra.outputs.keyVaultUri
 output AZURE_LOG_ANALYTICS_WORKSPACE_ID string = drasiInfra.outputs.logAnalyticsWorkspaceId
-output AZURE_UAMI_CLIENT_ID string = drasiInfra.outputs.kubeletClientId
+output AZURE_UAMI_CLIENT_ID string = drasiInfra.outputs.uamiClientId
 output drasiResourceGroupName string = resourceGroup().name

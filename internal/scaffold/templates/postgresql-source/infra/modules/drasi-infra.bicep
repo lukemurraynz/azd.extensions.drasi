@@ -29,7 +29,7 @@ param drasiServiceAccountName string = 'drasi-resource-provider'
 // ---------------------------------------------------------------------------
 var suffix = uniqueString(resourceGroup().id, environmentName)
 var aksName        = 'drasi-aks-${suffix}'
-var kvName         = 'drasi-kv-${suffix}'
+var kvName         = take('drasi-kv-${suffix}', 24) // Key Vault name max 24 chars
 var lawName        = 'drasi-law-${suffix}'
 // Drasi workload UAMI — used for Workload Identity federated credential
 var uamiName       = 'drasi-id-${suffix}'
@@ -141,7 +141,7 @@ module publicIp 'br/public:avm/res/network/public-ip-address:0.9.1' = {
 // ---------------------------------------------------------------------------
 // NAT Gateway — AVM module
 // AKS skill: outbound via NAT Gateway to prevent SNAT port exhaustion.
-// Uses zonal deployment (zone 1); the Public IP is zone-redundant.
+// Zone-redundant deployment (no zone pinning) — matches multi-zone AKS pools.
 // https://github.com/Azure/bicep-registry-modules/tree/main/avm/res/network/nat-gateway
 // ---------------------------------------------------------------------------
 module natGateway 'br/public:avm/res/network/nat-gateway:2.0.1' = {
@@ -150,8 +150,8 @@ module natGateway 'br/public:avm/res/network/nat-gateway:2.0.1' = {
     name: natGwName
     location: location
     tags: union(tags, { component: 'network', 'managed-by': 'azd' })
-    // availabilityZone: int — 1 = zone 1, -1 = no zone
-    availabilityZone: 1
+    // Zone-redundant: -1 means no zone pinning, matching multi-zone AKS pools
+    availabilityZone: -1
     publicIpResourceIds: [
       publicIp.outputs.resourceId
     ]
@@ -238,12 +238,19 @@ module aks 'br/public:avm/res/container-service/managed-cluster:0.13.0' = {
     // OIDC issuer — required for Drasi federated credential on workload UAMI
     enableOidcIssuerProfile: true
 
+    // Kubernetes RBAC — explicit for clarity
+    enableRBAC: true
+
     // AKS skill: Azure CNI Overlay + Cilium (replaces Kubenet, non-reversible decision)
     networkPlugin: 'azure'
     networkPluginMode: 'overlay'
     networkDataplane: 'cilium'
+    networkPolicy: 'cilium'
 
-    // Non-overlapping service CIDR — must not overlap with VNet (10.0.0.0/16) or subnet (10.0.0.0/22)
+    // Explicit outbound type — required when using BYO NAT Gateway
+    outboundType: 'userAssignedNATGateway'
+
+    // Non-overlapping CIDRs — must not overlap with VNet (10.0.0.0/16) or subnet (10.0.0.0/22)
     serviceCidr: '10.2.0.0/16'
     dnsServiceIP: '10.2.0.10'
 
@@ -310,10 +317,11 @@ module aks 'br/public:avm/res/container-service/managed-cluster:0.13.0' = {
     // User node pool — Dapr, Drasi, and application workloads schedule here.
     // System pools carry CriticalAddonsOnly=true:NoSchedule automatically, so a
     // separate User pool with no taints is required for non-system pods to schedule.
+    // Node count >= zone count for balanced zonal HA.
     agentPools: [
       {
         name: 'workload'
-        count: 2
+        count: 3
         vmSize: 'Standard_D4s_v5'
         osType: 'Linux'
         osSKU: 'AzureLinux'

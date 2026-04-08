@@ -421,7 +421,7 @@ func TestMarshalComponent_ReadsOriginalFileForSource(t *testing.T) {
 		}},
 	}
 
-	got, err := marshalComponent(ComponentAction{Kind: "source", ID: "alerts"}, manifest)
+	got, err := marshalComponent(ComponentAction{Kind: "source", ID: "alerts"}, manifest, nil)
 	require.NoError(t, err)
 	assert.Equal(t, want, got)
 }
@@ -464,7 +464,7 @@ func TestMarshalComponent_FallbackMarshalForKindsWithoutManifestDir(t *testing.T
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			got, err := marshalComponent(tt.action, manifest)
+			got, err := marshalComponent(tt.action, manifest, nil)
 			require.NoError(t, err)
 			assert.Contains(t, string(got), tt.want)
 		})
@@ -476,7 +476,7 @@ func TestMarshalComponent_ComponentNotFound_ReturnsError(t *testing.T) {
 
 	manifest := &config.ResolvedManifest{}
 
-	got, err := marshalComponent(ComponentAction{Kind: "source", ID: "missing"}, manifest)
+	got, err := marshalComponent(ComponentAction{Kind: "source", ID: "missing"}, manifest, nil)
 
 	require.Error(t, err)
 	assert.Nil(t, got)
@@ -489,7 +489,7 @@ func TestEngine_ApplyComponent_MarshalError_ReturnsContext(t *testing.T) {
 	h := newEngineHarness()
 	manifest := &config.ResolvedManifest{}
 
-	err := h.engine.applyComponent(context.Background(), ComponentAction{Kind: "source", ID: "missing"}, manifest)
+	err := h.engine.applyComponent(context.Background(), ComponentAction{Kind: "source", ID: "missing"}, manifest, nil)
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "marshalling source/missing")
@@ -512,11 +512,89 @@ func TestEngine_ApplyComponent_RunCommandError_Propagates(t *testing.T) {
 		}},
 	}
 
-	err := h.engine.applyComponent(context.Background(), ComponentAction{Kind: "source", ID: "alerts"}, manifest)
+	err := h.engine.applyComponent(context.Background(), ComponentAction{Kind: "source", ID: "alerts"}, manifest, nil)
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "apply failed")
 	require.Len(t, h.mockDrasi.commandsCalled, 1)
 	assert.Equal(t, "apply", h.mockDrasi.commandsCalled[0][0])
 	assert.Equal(t, "-f", h.mockDrasi.commandsCalled[0][1])
+}
+
+func TestExpandEnvVars_ReplacesKnownVars(t *testing.T) {
+	t.Parallel()
+
+	input := []byte(`vaultName: "$(AZURE_KEY_VAULT_NAME)"`)
+	envVars := map[string]string{"AZURE_KEY_VAULT_NAME": "kv-drasi-abc123"}
+
+	got := expandEnvVars(input, envVars)
+	assert.Equal(t, `vaultName: "kv-drasi-abc123"`, string(got))
+}
+
+func TestExpandEnvVars_LeavesUnknownVarsUnchanged(t *testing.T) {
+	t.Parallel()
+
+	input := []byte(`vaultName: "$(UNKNOWN_VAR)"`)
+	envVars := map[string]string{"AZURE_KEY_VAULT_NAME": "kv-drasi-abc123"}
+
+	got := expandEnvVars(input, envVars)
+	assert.Equal(t, `vaultName: "$(UNKNOWN_VAR)"`, string(got))
+}
+
+func TestExpandEnvVars_MultipleVarsInSameInput(t *testing.T) {
+	t.Parallel()
+
+	input := []byte(`vault: "$(VAULT)" db: "$(DATABASE)"`)
+	envVars := map[string]string{"VAULT": "my-vault", "DATABASE": "my-db"}
+
+	got := expandEnvVars(input, envVars)
+	assert.Equal(t, `vault: "my-vault" db: "my-db"`, string(got))
+}
+
+func TestExpandEnvVars_EmptyEnvVars(t *testing.T) {
+	t.Parallel()
+
+	input := []byte(`vaultName: "$(AZURE_KEY_VAULT_NAME)"`)
+
+	got := expandEnvVars(input, nil)
+	assert.Equal(t, string(input), string(got))
+
+	got = expandEnvVars(input, map[string]string{})
+	assert.Equal(t, string(input), string(got))
+}
+
+func TestExpandEnvVars_NoVarsInInput(t *testing.T) {
+	t.Parallel()
+
+	input := []byte(`database: "drasidb"`)
+	envVars := map[string]string{"AZURE_KEY_VAULT_NAME": "kv-drasi-abc123"}
+
+	got := expandEnvVars(input, envVars)
+	assert.Equal(t, `database: "drasidb"`, string(got))
+}
+
+func TestMarshalComponent_ExpandsEnvVarsFromFile(t *testing.T) {
+	t.Parallel()
+
+	manifestDir := t.TempDir()
+	relPath := filepath.Join("sources", "my-source.yaml")
+	absPath := filepath.Join(manifestDir, relPath)
+	require.NoError(t, os.MkdirAll(filepath.Dir(absPath), 0o755))
+
+	content := []byte("vaultName: \"$(AZURE_KEY_VAULT_NAME)\"\ndb: \"$(DB_NAME)\"\n")
+	require.NoError(t, os.WriteFile(absPath, content, 0o600))
+
+	manifest := &config.ResolvedManifest{
+		ManifestDir: manifestDir,
+		Sources: []config.Source{{
+			ID:       "my-source",
+			FilePath: filepath.ToSlash(relPath),
+			Spec:     config.SourceSpec{Kind: "CosmosGremlin"},
+		}},
+	}
+	envVars := map[string]string{"AZURE_KEY_VAULT_NAME": "kv-test", "DB_NAME": "testdb"}
+
+	got, err := marshalComponent(ComponentAction{Kind: "source", ID: "my-source"}, manifest, envVars)
+	require.NoError(t, err)
+	assert.Equal(t, "vaultName: \"kv-test\"\ndb: \"testdb\"\n", string(got))
 }

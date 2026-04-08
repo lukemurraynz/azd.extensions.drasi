@@ -27,6 +27,16 @@ module drasiInfra 'modules/drasi-infra.bicep' = {
   }
 }
 
+module cosmosGremlin 'modules/cosmos-gremlin.bicep' = {
+  name: 'cosmos-gremlin'
+  params: {
+    location: location
+    environmentName: environmentName
+    tags: tags
+    keyVaultName: drasiInfra.outputs.keyVaultName
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Outputs — azd writes Bicep output names verbatim to environment state.
 // These are read by azd drasi provision and azd drasi deploy commands.
@@ -37,4 +47,7 @@ output AZURE_KEY_VAULT_NAME string = drasiInfra.outputs.keyVaultName
 output AZURE_KEY_VAULT_URI string = drasiInfra.outputs.keyVaultUri
 output AZURE_LOG_ANALYTICS_WORKSPACE_ID string = drasiInfra.outputs.logAnalyticsWorkspaceId
 output AZURE_UAMI_CLIENT_ID string = drasiInfra.outputs.uamiClientId
+output COSMOS_ACCOUNT_NAME string = cosmosGremlin.outputs.accountName
+output COSMOS_DATABASE_NAME string = cosmosGremlin.outputs.databaseName
+output COSMOS_GRAPH_NAME string = cosmosGremlin.outputs.graphName
 output drasiResourceGroupName string = resourceGroup().name
