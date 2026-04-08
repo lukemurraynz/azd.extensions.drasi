@@ -61,7 +61,8 @@ type QuerySpec struct {
 	Reactions []string         `yaml:"reactions,omitempty" json:",omitempty"`
 }
 
-// ReactionSpec holds the spec block of a Reaction resource.type ReactionSpec struct {
+// ReactionSpec holds the spec block of a Reaction resource.
+type ReactionSpec struct {
 	Kind    string            `yaml:"kind"`
 	Queries map[string]string `yaml:"queries,omitempty"`
 }
@@ -73,8 +74,7 @@ type MiddlewareSpec struct {
 }
 
 // Source represents a Drasi Source resource.
-// ID maps to "name:" in YAML (drasi CLI 0.10.0 name+spec format).
-// SourceKind and Properties are legacy fields kept for backward compatibility; use Spec.Kind and Spec.Properties instead.
+// SourceKind and Properties are legacy fields; use Spec.Kind and Spec.Properties instead.
 type Source struct {
 	APIVersion string           `yaml:"apiVersion"`
 	Kind       string           `yaml:"kind"`
@@ -87,9 +87,7 @@ type Source struct {
 }
 
 // ContinuousQuery represents a Drasi ContinuousQuery resource.
-// ID maps to "name:" in YAML (drasi CLI 0.10.0 name+spec format).
-// Sources and Reactions are populated in loader.go from Spec after YAML decoding.
-// QueryLanguage is a legacy field kept so unit tests that construct structs directly still compile.
+// Sources and Reactions are populated from Spec after YAML decoding.
 type ContinuousQuery struct {
 	APIVersion    string      `yaml:"apiVersion"`
 	Kind          string      `yaml:"kind"`
@@ -104,7 +102,7 @@ type ContinuousQuery struct {
 	Line          int         `yaml:"-"`
 }
 
-// SourceRef is the legacy flat source reference; still used by validation and tests.
+// SourceRef is a flat source reference used by validation and tests.
 type SourceRef struct {
 	ID string `yaml:"id"`
 }
@@ -120,8 +118,7 @@ type JoinKey struct {
 }
 
 // Reaction represents a Drasi Reaction resource.
-// ID maps to "name:" in YAML (drasi CLI 0.10.0 name+spec format).
-// ReactionKind and Config are legacy fields kept for backward compatibility; use Spec.Kind and Spec.Queries instead.
+// ReactionKind and Config are legacy fields; use Spec.Kind and Spec.Queries instead.
 type Reaction struct {
 	APIVersion   string           `yaml:"apiVersion"`
 	Kind         string           `yaml:"kind"`
@@ -134,8 +131,7 @@ type Reaction struct {
 }
 
 // Middleware represents a Drasi Middleware resource.
-// ID maps to "name:" in YAML (drasi CLI 0.10.0 name+spec format).
-// MiddlewareKind and Config are legacy fields kept for backward compatibility; use Spec.Kind and Spec.Config instead.
+// MiddlewareKind and Config are legacy fields; use Spec.Kind and Spec.Config instead.
 type Middleware struct {
 	APIVersion     string           `yaml:"apiVersion"`
 	Kind           string           `yaml:"kind"`
