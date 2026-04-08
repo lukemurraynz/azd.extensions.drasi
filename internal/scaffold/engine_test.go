@@ -70,7 +70,7 @@ func TestScaffold_BlankTemplate_ConflictWithoutForce_ReturnsError(t *testing.T) 
 	require.NoError(t, err)
 
 	// Second call without --force — must fail with a conflict error on a
-	// non-azure.yaml file (azure.yaml is always overwritten).
+	// non-azure.yaml file (azure.yaml is silently skipped).
 	_, err = scaffold.Scaffold("blank", dir, false)
 	require.Error(t, err, "expected conflict error on re-run without --force")
 	assert.Contains(t, err.Error(), "already exists")
@@ -92,27 +92,32 @@ func TestScaffold_BlankTemplate_ForceOverwrites(t *testing.T) {
 	assert.NotEmpty(t, files)
 }
 
-func TestScaffold_PreExistingAzureYAML_OverwrittenWithoutForce(t *testing.T) {
+func TestScaffold_PreExistingAzureYAML_SkippedWithoutForce(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
 
 	// Simulate `azd init` creating an azure.yaml before the extension runs.
 	azureYAML := filepath.Join(dir, "azure.yaml")
-	require.NoError(t, os.WriteFile(azureYAML, []byte("name: from-azd-init\n"), 0600))
+	originalContent := "name: from-azd-init\n"
+	require.NoError(t, os.WriteFile(azureYAML, []byte(originalContent), 0600))
 
 	// `azd drasi init` (without --force) must succeed despite the existing azure.yaml.
 	files, err := scaffold.Scaffold("blank", dir, false)
 	require.NoError(t, err)
 	assert.NotEmpty(t, files)
 
-	// The template's azure.yaml must have replaced the original content.
+	// azure.yaml must NOT appear in the returned file list (it was skipped).
+	for _, f := range files {
+		assert.NotEqual(t, "azure.yaml", f,
+			"azure.yaml must be skipped, not included in the output list")
+	}
+
+	// The original azure.yaml content from `azd init` must be preserved.
 	content, readErr := os.ReadFile(azureYAML)
 	require.NoError(t, readErr)
-	assert.Contains(t, string(content), "azd-drasi",
-		"azure.yaml must contain Drasi template metadata, not the original azd init content")
-	assert.NotContains(t, string(content), "from-azd-init",
-		"azure.yaml must have been overwritten")
+	assert.Equal(t, originalContent, string(content),
+		"azure.yaml must be left untouched when it already exists")
 }
 
 func TestScaffold_InvalidTemplate_ReturnsError(t *testing.T) {
