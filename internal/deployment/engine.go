@@ -54,9 +54,8 @@ func NewEngine(state *StateManager, drasi drasiRunner, runner cmdRunner) *Engine
 	return &Engine{state: state, drasiClient: drasi, runner: runner}
 }
 
-// Deploy applies a resolved manifest to the cluster in dependency order.
-// Sources → queries → middleware → reactions. Skips no-op components.
-// Writes state hashes on success. Dry-run mode computes the diff without running commands.
+// Deploy applies a resolved manifest in dependency order:
+// sources → queries → middleware → reactions.
 func (e *Engine) Deploy(ctx context.Context, manifest *config.ResolvedManifest, opts DeployOptions) error {
 	ctx, cancel := WithTotalDeployTimeout(ctx, opts.TotalTimeout)
 	defer cancel()
