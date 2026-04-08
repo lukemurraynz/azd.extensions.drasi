@@ -41,7 +41,7 @@ func defaultRunProvision(cmd *cobra.Command, _ []string) error {
 		format = output.FormatJSON
 	}
 
-	envName, _ := cmd.Flags().GetString("environment")
+	envFlag, _ := cmd.Flags().GetString("environment")
 
 	progress, err := NewProgressHelper(cmd)
 	if err != nil {
@@ -68,26 +68,62 @@ func defaultRunProvision(cmd *cobra.Command, _ []string) error {
 	}
 	defer azdClient.Close()
 
-	// Resolve the environment name from azd if not provided via flag.
-	if envName == "" {
-		envResp, err := azdClient.Environment().GetCurrent(ctx, &azdext.EmptyRequest{})
-		if err != nil {
-			return writeCommandError(
-				cmd,
-				output.ERR_NO_AUTH,
-				fmt.Sprintf("getting current environment: %s", err),
-				"Run `azd auth login` or specify --environment.",
-				format,
-				output.ExitCodes[output.ERR_NO_AUTH],
-			)
-		}
-		if envResp != nil && envResp.Environment != nil {
-			envName = envResp.Environment.Name
-		}
+	envName, err := resolveEnvironmentName(ctx, cmd, azdClient, envFlag)
+	if err != nil {
+		return writeCommandError(cmd, output.ERR_NO_AUTH,
+			fmt.Sprintf("resolving environment: %s", err),
+			"Run `azd auth login` or specify --environment.",
+			format, output.ExitCodes[output.ERR_NO_AUTH])
 	}
 
 	startedAt := time.Now().UTC()
 	correlationID := uuid.New().String()
+	var aksClusterName string
+	var rgName string
+
+	// Provision Azure infrastructure if not already deployed.
+	// Check for both AZURE_AKS_CLUSTER_NAME and AZURE_RESOURCE_GROUP as signals
+	// that Bicep infrastructure has been deployed.
+	aksClusterName, _ = getEnvValue(ctx, azdClient, envName, "AZURE_AKS_CLUSTER_NAME")
+	rgName, _ = getEnvValue(ctx, azdClient, envName, "AZURE_RESOURCE_GROUP")
+	if aksClusterName == "" || rgName == "" {
+		progress.Message("Provisioning Azure infrastructure...")
+		provisionArgs := []string{"provision"}
+		if envName != "" {
+			provisionArgs = append(provisionArgs, "--environment", envName)
+		}
+		if _, err := azdClient.Workflow().Run(ctx, &azdext.RunWorkflowRequest{
+			Workflow: &azdext.Workflow{
+				Name: "provision",
+				Steps: []*azdext.WorkflowStep{
+					{Command: &azdext.WorkflowCommand{Args: provisionArgs}},
+				},
+			},
+		}); err != nil {
+			return writeCommandError(
+				cmd,
+				output.ERR_INFRA_PROVISION_FAILED,
+				fmt.Sprintf("infrastructure provisioning failed: %s", err),
+				"Run `azd auth login`, ensure you have an active Azure subscription, and check infra/ for Bicep errors.",
+				format,
+				output.ExitCodes[output.ERR_INFRA_PROVISION_FAILED],
+			)
+		}
+
+		// Re-read cluster name and resource group after provisioning.
+		aksClusterName, _ = getEnvValue(ctx, azdClient, envName, "AZURE_AKS_CLUSTER_NAME")
+		rgName, _ = getEnvValue(ctx, azdClient, envName, "AZURE_RESOURCE_GROUP")
+		if aksClusterName == "" || rgName == "" {
+			return writeCommandError(
+				cmd,
+				output.ERR_INFRA_PROVISION_FAILED,
+				"infrastructure provisioning completed but AZURE_AKS_CLUSTER_NAME or AZURE_RESOURCE_GROUP not found in environment state",
+				"Check Bicep outputs in infra/main.bicep and ensure they include aksClusterName.",
+				format,
+				output.ExitCodes[output.ERR_INFRA_PROVISION_FAILED],
+			)
+		}
+	}
 
 	// Detect unmanaged resources (warn-only, never mutate).
 	if err := warnUnmanagedResources(cmd, ctx, azdClient, envName, format); err != nil {
@@ -95,12 +131,38 @@ func defaultRunProvision(cmd *cobra.Command, _ []string) error {
 		_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "warning: unmanaged resource detection failed: %s\n", err)
 	}
 
-	// Read AKS context and optional ACR login server from azd env state.
-	aksContext, err := getEnvValue(ctx, azdClient, envName, "AZURE_AKS_CONTEXT")
-	if err != nil {
-		// AKS context not yet written — env state may not exist yet. Continue; drasi init
-		// will fail explicitly if the context is truly absent.
-		aksContext = ""
+	// Set up kubectl context if not already configured.
+	aksContext, _ := getEnvValue(ctx, azdClient, envName, "AZURE_AKS_CONTEXT")
+	if aksContext == "" {
+		progress.Message("Acquiring AKS credentials...")
+		acquiredContext, err := acquireAKSCredentials(cmd.Context(), rgName, aksClusterName)
+		if err != nil {
+			return writeCommandError(
+				cmd,
+				output.ERR_AKS_CONTEXT_NOT_FOUND,
+				fmt.Sprintf("acquiring AKS credentials: %s", err),
+				"Ensure `az` CLI is installed and you have access to the AKS cluster.",
+				format,
+				output.ExitCodes[output.ERR_AKS_CONTEXT_NOT_FOUND],
+			)
+		}
+		aksContext = acquiredContext
+
+		// Persist the kubectl context name so subsequent commands can use it.
+		if _, err := azdClient.Environment().SetValue(ctx, &azdext.SetEnvRequest{
+			EnvName: envName,
+			Key:     "AZURE_AKS_CONTEXT",
+			Value:   aksContext,
+		}); err != nil {
+			return writeCommandError(
+				cmd,
+				output.ERR_NO_AUTH,
+				fmt.Sprintf("writing AZURE_AKS_CONTEXT to azd env state: %s", err),
+				"Ensure the azd gRPC server is running.",
+				format,
+				output.ExitCodes[output.ERR_NO_AUTH],
+			)
+		}
 	}
 
 	usePrivateAcr, _ := getEnvValue(ctx, azdClient, envName, "USE_PRIVATE_ACR")
@@ -223,6 +285,39 @@ func switchKubectlContext(ctx context.Context, contextName string) error {
 		return fmt.Errorf("kubectl config use-context %s: %w\n%s", contextName, err, out)
 	}
 	return nil
+}
+
+// acquireAKSCredentials runs `az aks get-credentials` to configure kubectl access
+// to the AKS cluster, then reads back the actual context name from kubectl.
+func acquireAKSCredentials(ctx context.Context, resourceGroup, clusterName string) (string, error) {
+	azPath, err := exec.LookPath("az")
+	if err != nil {
+		return "", fmt.Errorf("az CLI not found on PATH: %w", err)
+	}
+
+	//nolint:gosec // az CLI path resolved via LookPath
+	azCmd := exec.CommandContext(ctx, azPath,
+		"aks", "get-credentials",
+		"--resource-group", resourceGroup,
+		"--name", clusterName,
+		"--overwrite-existing",
+	)
+	if out, err := azCmd.CombinedOutput(); err != nil {
+		return "", fmt.Errorf("az aks get-credentials: %w\n%s", err, string(out))
+	}
+
+	// Read back the actual kubectl context name rather than assuming it matches
+	// the cluster name.
+	kubectlPath, err := exec.LookPath("kubectl")
+	if err != nil {
+		return "", fmt.Errorf("kubectl not found on PATH: %w", err)
+	}
+	//nolint:gosec // kubectl path resolved via LookPath
+	out, err := exec.CommandContext(ctx, kubectlPath, "config", "current-context").Output()
+	if err != nil {
+		return "", fmt.Errorf("reading current kubectl context: %w", err)
+	}
+	return strings.TrimSpace(string(out)), nil
 }
 
 func runDrasiCommand(ctx context.Context, args ...string) error {
