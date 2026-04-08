@@ -1,3 +1,15 @@
+# Drasi baseline NetworkPolicies for Cilium-backed AKS clusters.
+#
+# Architecture:
+#   drasi-system  — Drasi API, resource-provider, query-host, view-svc, publish-api, mongo, redis
+#   dapr-system   — Dapr control plane (placement, sentry, operator, sidecar-injector)
+#
+# kubectl port-forward traffic originates from the kubelet on the node (not from
+# a pod), so namespace selectors cannot match it. Policies that serve port-forwarded
+# services must allow ingress from all sources on the target port.
+# ---------------------------------------------------------------------------
+# 1. Default deny — blocks all traffic unless explicitly allowed below.
+# ---------------------------------------------------------------------------
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -9,6 +21,9 @@ spec:
   - Ingress
   - Egress
 ---
+# ---------------------------------------------------------------------------
+# 2. Intra-namespace — all pods in drasi-system can talk to each other.
+# ---------------------------------------------------------------------------
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -30,6 +45,9 @@ spec:
         matchLabels:
           kubernetes.io/metadata.name: drasi-system
 ---
+# ---------------------------------------------------------------------------
+# 3. DNS — all pods need CoreDNS in kube-system.
+# ---------------------------------------------------------------------------
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -50,13 +68,16 @@ spec:
     - protocol: TCP
       port: 53
 ---
+# ---------------------------------------------------------------------------
+# 4. HTTPS egress — Key Vault, AAD/Entra token endpoints, Azure Monitor, ACR.
+# ---------------------------------------------------------------------------
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
   name: drasi-allow-azure-api-egress
   namespace: drasi-system
   annotations:
-    description: Required for Key Vault, AAD token endpoint, and Azure Monitor HTTPS traffic
+    description: Required for Key Vault, AAD token endpoint, Azure Monitor, and ACR HTTPS traffic
 spec:
   podSelector: {}
   policyTypes:
@@ -66,62 +87,72 @@ spec:
     - protocol: TCP
       port: 443
 ---
+# ---------------------------------------------------------------------------
+# 5. Dapr control plane — sidecars must reach placement, sentry, operator
+#    in dapr-system namespace.
+# ---------------------------------------------------------------------------
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: drasi-allow-dapr-sidecar
+  name: drasi-allow-dapr-control-plane
   namespace: drasi-system
   annotations:
-    description: Required for Dapr sidecar communication (HTTP, gRPC, Placement, query actors, views, publish)
+    description: Dapr sidecars need egress to dapr-system for placement, sentry, and operator
 spec:
   podSelector: {}
   policyTypes:
-  - Ingress
   - Egress
-  ingress:
-  - from:
-    - namespaceSelector:
-        matchLabels:
-          kubernetes.io/metadata.name: drasi-system
-    ports:
-    - protocol: TCP
-      port: 3500  # Dapr HTTP
-    - protocol: TCP
-      port: 3501  # Dapr gRPC
-    - protocol: TCP
-      port: 50001  # Dapr Placement
-    - protocol: TCP
-      port: 3000  # Query actor server (query-host pod)
-    - protocol: TCP
-      port: 8080  # View service (view-svc pod)
-    - protocol: TCP
-      port: 4000  # Publish API (publish-api pod)
   egress:
   - to:
     - namespaceSelector:
         matchLabels:
-          kubernetes.io/metadata.name: drasi-system
+          kubernetes.io/metadata.name: dapr-system
     ports:
     - protocol: TCP
-      port: 3500  # Dapr HTTP
+      port: 50005  # Dapr Placement
     - protocol: TCP
-      port: 3501  # Dapr gRPC
+      port: 50001  # Dapr Placement (legacy port)
     - protocol: TCP
-      port: 50001  # Dapr Placement
+      port: 443    # Dapr Sentry (mTLS cert issuance)
     - protocol: TCP
-      port: 3000  # Query actor server
+      port: 50006  # Dapr Sentry gRPC
     - protocol: TCP
-      port: 8080  # View service
-    - protocol: TCP
-      port: 4000  # Publish API
+      port: 6500   # Dapr Scheduler
 ---
+# ---------------------------------------------------------------------------
+# 6. Drasi API — accept port-forward ingress on port 8080.
+#    kubectl port-forward originates from the kubelet, not from a pod, so the
+#    source cannot be matched by a namespace or pod selector.
+# ---------------------------------------------------------------------------
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: drasi-allow-api-ingress
+  namespace: drasi-system
+  annotations:
+    description: Allows kubectl port-forward and drasi CLI access to the Drasi API
+spec:
+  podSelector:
+    matchLabels:
+      drasi/infra: api
+  policyTypes:
+  - Ingress
+  ingress:
+  - ports:
+    - protocol: TCP
+      port: 8080
+---
+# ---------------------------------------------------------------------------
+# 7. Kubernetes API egress — resource-provider watches resources via K8s API.
+#    AKS API server listens on port 443 (not 6443).
+# ---------------------------------------------------------------------------
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
   name: drasi-allow-k8s-api
   namespace: drasi-system
   annotations:
-    description: Required for resource-provider pod to access Kubernetes API (RBAC, resource watches)
+    description: Required for resource-provider pod to access Kubernetes API
 spec:
   podSelector:
     matchLabels:
@@ -129,46 +160,23 @@ spec:
   policyTypes:
   - Egress
   egress:
-  - to:
-    - namespaceSelector: {}
-    ports:
+  - ports:
     - protocol: TCP
-      port: 6443  # Kubernetes API server (HTTPS)
+      port: 443
+    - protocol: TCP
+      port: 6443
 ---
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: drasi-allow-datastores
-  namespace: drasi-system
-  annotations:
-    description: Required for access to Redis and MongoDB datastores (internal services)
-spec:
-  podSelector: {}
-  policyTypes:
-  - Egress
-  egress:
-  - to:
-    - podSelector:
-        matchLabels:
-          app: drasi-redis
-    ports:
-    - protocol: TCP
-      port: 6379  # Redis
-  - to:
-    - podSelector:
-        matchLabels:
-          app: drasi-mongo
-    ports:
-    - protocol: TCP
-      port: 27017  # MongoDB
----
+# ---------------------------------------------------------------------------
+# 8. Common data source/reaction egress — baseline ports for external
+#    databases and messaging systems that Drasi sources/reactions connect to.
+# ---------------------------------------------------------------------------
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
   name: drasi-allow-common-data-egress
   namespace: drasi-system
   annotations:
-    description: Baseline external data egress for common source/reaction endpoints; operators can further restrict by CIDR/namespace.
+    description: Baseline external data egress for source/reaction endpoints
 spec:
   podSelector: {}
   policyTypes:
@@ -176,14 +184,18 @@ spec:
   egress:
   - ports:
     - protocol: TCP
-      port: 5432  # PostgreSQL
+      port: 5432   # PostgreSQL
     - protocol: TCP
-      port: 3306  # MySQL
+      port: 3306   # MySQL
     - protocol: TCP
-      port: 1433  # SQL Server
+      port: 1433   # SQL Server
     - protocol: TCP
-      port: 9092  # Kafka
+      port: 9092   # Kafka
     - protocol: TCP
-      port: 5671  # Azure Event Hubs AMQP over TLS
+      port: 5671   # Azure Event Hubs AMQP over TLS
     - protocol: TCP
-      port: 8081  # Cosmos DB Gremlin endpoint (common)
+      port: 8081   # Cosmos DB Gremlin endpoint
+    - protocol: TCP
+      port: 10255  # Cosmos DB MongoDB endpoint
+    - protocol: TCP
+      port: 27017  # MongoDB (external)

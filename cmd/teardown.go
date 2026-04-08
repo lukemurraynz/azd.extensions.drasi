@@ -18,7 +18,6 @@ func newTeardownCommand() *cobra.Command {
 	var configPath string
 	var force bool
 	var includeInfrastructure bool
-	var envName string
 
 	cmd := &cobra.Command{
 		Use:   "teardown",
@@ -70,7 +69,8 @@ func newTeardownCommand() *cobra.Command {
 			}
 			defer azdClient.Close()
 
-			resolvedEnv, err := resolveEnvironmentName(ctx, cmd, azdClient, envName)
+			envFlag, _ := cmd.Root().PersistentFlags().GetString("environment")
+			resolvedEnv, err := resolveEnvironmentName(ctx, cmd, azdClient, envFlag)
 			if err != nil {
 				return writeCommandError(
 					cmd,
@@ -195,7 +195,6 @@ func newTeardownCommand() *cobra.Command {
 	cmd.Flags().StringVar(&configPath, "config", filepath.Join("drasi", "drasi.yaml"), "Path to drasi.yaml manifest")
 	cmd.Flags().BoolVar(&force, "force", false, "Confirm destructive teardown")
 	cmd.Flags().BoolVar(&includeInfrastructure, "infrastructure", false, "Delete provisioned Azure infrastructure after component teardown")
-	cmd.Flags().StringVar(&envName, "environment", "", "Target azd environment name")
 
 	return cmd
 }

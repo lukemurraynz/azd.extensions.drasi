@@ -35,11 +35,16 @@ func getProvisionCommand(t *testing.T) (*cobra.Command, *cobra.Command) {
 	return nil, nil
 }
 
-// TestProvisionCommand_EnvironmentFlag_Accepted verifies that --environment is registered
-// on the provision command.
+// TestProvisionCommand_EnvironmentFlag_Accepted verifies that --environment is available
+// to the provision command via the root persistent flag (not a local flag).
 func TestProvisionCommand_EnvironmentFlag_Accepted(t *testing.T) {
-	_, provision := getProvisionCommand(t)
-	assert.NotNil(t, provision.Flags().Lookup("environment"), "--environment must be a registered flag on provision")
+	root, provision := getProvisionCommand(t)
+	// --environment is a root persistent flag inherited by all subcommands, not a local flag on provision.
+	flag := provision.InheritedFlags().Lookup("environment")
+	if flag == nil {
+		flag = root.PersistentFlags().Lookup("environment")
+	}
+	assert.NotNil(t, flag, "--environment must be available to provision via root persistent flags")
 }
 
 // TestProvisionCommand_OutputJSONFlag_Accepted verifies that --output json is accepted

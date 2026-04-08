@@ -28,6 +28,9 @@ var vnetName             = 'vnet-drasi-${suffix}'
 var aksName              = 'drasi-aks-${suffix}'
 var federatedCredName    = 'drasi-resource-provider-fed'
 
+@description('Object ID of the deploying user. Used to assign AKS RBAC Cluster Admin so the user can run kubectl/drasi commands after provisioning.')
+param principalId string
+
 // ---------------------------------------------------------------------------
 // Built-in role definition IDs (subscription-independent format)
 // Verified: https://learn.microsoft.com/azure/role-based-access-control/built-in-roles
@@ -35,6 +38,7 @@ var federatedCredName    = 'drasi-resource-provider-fed'
 var keyVaultSecretsUserRoleId         = '4633458b-17de-408a-b874-0445c86b69e6'
 var networkContributorRoleId          = '4d97b98b-1d4f-4787-a291-c67834d212e7'
 var monitoringMetricsPublisherRoleId  = '3913510d-42f4-4e42-8a64-420c390055eb'
+var aksRbacClusterAdminRoleId         = 'b1ff04bb-8a4e-4dc4-8eb5-8693973ce19b'
 
 // ---------------------------------------------------------------------------
 // 1. Log Analytics workspace
@@ -197,6 +201,7 @@ resource vnetNetworkContributorAssignment 'Microsoft.Authorization/roleAssignmen
 //   - oidcIssuerEnabled        → enableOidcIssuerProfile
 //   - enableWorkloadIdentity   → securityProfile.workloadIdentity.enabled
 //   - enableAzureRbac          → enableRBAC
+//   - managedAAD               → aadProfile { managed: true, enableAzureRBAC: true }
 //   - autoUpgradeChannel       → autoUpgradeProfile.upgradeChannel
 //   - nodeOsUpgradeChannel     → autoUpgradeProfile.nodeOSUpgradeChannel
 //   - diskCSIDriverEnabled     → enableStorageProfileDiskCSIDriver
@@ -226,7 +231,13 @@ module aks 'br/public:avm/res/container-service/managed-cluster:0.13.0' = {
       }
     }
 
-    // Disable local accounts; use Entra RBAC only.
+    // Managed AAD (Entra ID) integration — required for disableLocalAccounts and Azure RBAC on cluster.
+    aadProfile: {
+      managed: true
+      enableAzureRBAC: true
+    }
+
+    // Disable local accounts; use Entra RBAC only (requires managed AAD above).
     disableLocalAccounts: true
     enableRBAC: true
 
@@ -300,7 +311,27 @@ resource monitoringRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-
 }
 
 // ---------------------------------------------------------------------------
-// 12. Federated credential — binds workload UAMI to the Drasi resource-provider
+// 12. AKS RBAC Cluster Admin — deploying user on AKS cluster scope
+// Required because the cluster uses disableLocalAccounts + enableAzureRBAC.
+// Without this, the deploying user cannot run kubectl or drasi commands.
+// ---------------------------------------------------------------------------
+resource aksRef 'Microsoft.ContainerService/managedClusters@2024-09-01' existing = {
+  name: aksName
+  dependsOn: [aks]
+}
+
+resource aksClusterAdminAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(resourceGroup().id, principalId, aksRbacClusterAdminRoleId)
+  scope: aksRef
+  properties: {
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', aksRbacClusterAdminRoleId)
+    principalId: principalId
+    principalType: 'User'
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 13. Federated credential — binds workload UAMI to the Drasi resource-provider
 // service account so the pod can acquire Azure tokens without a client secret.
 // Subject: system:serviceaccount:drasi-system:drasi-resource-provider
 // BCP321 fix: aks.outputs.oidcIssuerUrl is nullable — use ! (non-null assertion)
@@ -321,6 +352,9 @@ resource federatedCredential 'Microsoft.ManagedIdentity/userAssignedIdentities/f
 // ---------------------------------------------------------------------------
 @description('Name of the AKS cluster.')
 output aksClusterName string = aks.outputs.name
+
+@description('Name of the Key Vault resource.')
+output keyVaultName string = keyVault.outputs.name
 
 @description('Key Vault URI for secret references.')
 output keyVaultUri string = keyVault.outputs.uri

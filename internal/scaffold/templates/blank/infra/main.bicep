@@ -9,6 +9,9 @@ param location string = resourceGroup().location
 @description('Environment name suffix applied to all resource names.')
 param environmentName string
 
+@description('Object ID of the deploying user (auto-set by azd drasi provision).')
+param principalId string
+
 @description('Tags to apply to all resources.')
 param tags object = {
   'azd-env-name': environmentName
@@ -19,13 +22,21 @@ module drasiInfra 'modules/drasi-infra.bicep' = {
   params: {
     location: location
     environmentName: environmentName
+    principalId: principalId
     tags: tags
   }
 }
 
+// ---------------------------------------------------------------------------
+// Outputs — azd writes Bicep output names verbatim to environment state.
+// These are read by azd drasi provision and azd drasi deploy commands.
+// NOTE: Do NOT output AZURE_AKS_CONTEXT here. The kubectl context name must be
+// set by the extension after running `az aks get-credentials`, not from Bicep.
+// ---------------------------------------------------------------------------
+output AZURE_RESOURCE_GROUP string = resourceGroup().name
+output AZURE_AKS_CLUSTER_NAME string = drasiInfra.outputs.aksClusterName
+output AZURE_KEY_VAULT_NAME string = drasiInfra.outputs.keyVaultName
+output AZURE_KEY_VAULT_URI string = drasiInfra.outputs.keyVaultUri
+output AZURE_LOG_ANALYTICS_WORKSPACE_ID string = drasiInfra.outputs.logAnalyticsWorkspaceId
+output AZURE_UAMI_CLIENT_ID string = drasiInfra.outputs.kubeletClientId
 output drasiResourceGroupName string = resourceGroup().name
-output aksClusterName string = drasiInfra.outputs.aksClusterName
-output keyVaultUri string = drasiInfra.outputs.keyVaultUri
-output logAnalyticsWorkspaceId string = drasiInfra.outputs.logAnalyticsWorkspaceId
-output oidcIssuerUrl string = drasiInfra.outputs.oidcIssuerUrl
-output kubeletClientId string = drasiInfra.outputs.kubeletClientId

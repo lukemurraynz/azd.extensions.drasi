@@ -131,5 +131,62 @@ func handlePreDown(ctx context.Context, args *azdext.ProjectEventArgs) error {
 		)
 	}
 
+	// Clear runtime state from azd environment so a subsequent `azd up` starts
+	// from a clean slate. Best-effort: failures are logged but do not block teardown.
+	clearPreDownState(ctx, args, projectName)
+
 	return nil
+}
+
+// clearPreDownState removes DRASI_PROVISIONED and AZURE_AKS_CONTEXT from azd
+// environment state after Drasi uninstall. This prevents stale markers from
+// short-circuiting a future provision cycle.
+func clearPreDownState(ctx context.Context, args *azdext.ProjectEventArgs, projectName string) {
+	azdClient, err := azdext.NewAzdClient()
+	if err != nil {
+		slog.WarnContext(ctx, "drasi: could not create azd client to clear state — skipping",
+			slog.String("project", projectName),
+			slog.Any("error", err),
+		)
+		return
+	}
+	defer azdClient.Close()
+
+	azdCtx := azdext.WithAccessToken(ctx)
+	envName, err := resolveEnvironmentNameFromEventArgs(azdCtx, azdClient, args)
+	if err != nil || envName == "" {
+		slog.WarnContext(ctx, "drasi: could not resolve environment name for state cleanup — skipping",
+			slog.String("project", projectName),
+			slog.Any("error", err),
+		)
+		return
+	}
+
+	adapter := &azdEnvServiceAdapter{client: azdClient}
+	for _, key := range []string{"DRASI_PROVISIONED", "AZURE_AKS_CONTEXT"} {
+		if setErr := adapter.SetValue(azdCtx, envName, key, ""); setErr != nil {
+			slog.WarnContext(ctx, "drasi: failed to clear env key — skipping",
+				slog.String("project", projectName),
+				slog.String("key", key),
+				slog.Any("error", setErr),
+			)
+		}
+	}
+	slog.InfoContext(ctx, "drasi: cleared runtime state from azd environment", slog.String("project", projectName), slog.String("environment", envName))
+}
+
+// resolveEnvironmentNameFromEventArgs resolves the environment name from event
+// args metadata or falls back to GetCurrent. Lifecycle event handlers do not
+// have access to cobra flags, so this uses a simpler resolution path.
+func resolveEnvironmentNameFromEventArgs(ctx context.Context, azdClient *azdext.AzdClient, args *azdext.ProjectEventArgs) (string, error) {
+	// ProjectEventArgs does not carry an explicit environment name today.
+	// Fall back to the azd host's current environment.
+	resp, err := azdClient.Environment().GetCurrent(ctx, &azdext.EmptyRequest{})
+	if err != nil {
+		return "", err
+	}
+	if resp == nil || resp.Environment == nil {
+		return "", fmt.Errorf("current azd environment is not set")
+	}
+	return resp.Environment.Name, nil
 }

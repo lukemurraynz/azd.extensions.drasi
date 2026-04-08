@@ -19,7 +19,6 @@ import (
 func newDeployCommand() *cobra.Command {
 	var configPath string
 	var dryRun bool
-	var envName string
 	var noRollback bool
 	var timeoutStr string
 
@@ -71,7 +70,8 @@ func newDeployCommand() *cobra.Command {
 			}
 			defer azdClient.Close()
 
-			resolvedEnv, err := resolveEnvironmentName(ctx, cmd, azdClient, envName)
+			envFlag, _ := cmd.Root().PersistentFlags().GetString("environment")
+			resolvedEnv, err := resolveEnvironmentName(ctx, cmd, azdClient, envFlag)
 			if err != nil {
 				return writeCommandError(
 					cmd,
@@ -272,7 +272,6 @@ func newDeployCommand() *cobra.Command {
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Compute changes without applying resources")
 	cmd.Flags().BoolVar(&noRollback, "no-rollback", false, "Skip rollback on deploy failure")
 	cmd.Flags().StringVar(&timeoutStr, "timeout", "", "Total deploy timeout (e.g. 30m, 1h). Default: 15m")
-	cmd.Flags().StringVar(&envName, "environment", "", "Target azd environment name")
 
 	return cmd
 }

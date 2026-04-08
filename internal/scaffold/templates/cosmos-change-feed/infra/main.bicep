@@ -9,6 +9,9 @@ param location string = resourceGroup().location
 @description('Environment name suffix applied to all resource names.')
 param environmentName string
 
+@description('Object ID of the deploying user (auto-set by azd drasi provision).')
+param principalId string
+
 @description('Tags to apply to all resources.')
 param tags object = {
   'azd-env-name': environmentName
@@ -19,18 +22,17 @@ module drasiInfra 'modules/drasi-infra.bicep' = {
   params: {
     location: location
     environmentName: environmentName
+    principalId: principalId
     tags: tags
   }
 }
 
 // ---------------------------------------------------------------------------
-// Outputs — azd maps SCREAMING_SNAKE_CASE output names to environment variables
+// Outputs — azd writes Bicep output names verbatim to environment state.
 // These are read by azd drasi provision and azd drasi deploy commands.
 // ---------------------------------------------------------------------------
 output AZURE_RESOURCE_GROUP string = resourceGroup().name
 output AZURE_AKS_CLUSTER_NAME string = drasiInfra.outputs.aksClusterName
-// AZURE_AKS_CONTEXT is the kubeconfig context name; for AKS it matches the cluster name.
-output AZURE_AKS_CONTEXT string = drasiInfra.outputs.aksClusterName
 output AZURE_KEY_VAULT_NAME string = drasiInfra.outputs.keyVaultName
 output AZURE_KEY_VAULT_URI string = drasiInfra.outputs.keyVaultUri
 output AZURE_LOG_ANALYTICS_WORKSPACE_ID string = drasiInfra.outputs.logAnalyticsWorkspaceId

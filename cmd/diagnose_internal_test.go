@@ -6,6 +6,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/azure/azure-dev/cli/azd/pkg/azdext"
 	"github.com/lukemurraynz/azd.extensions.drasi/internal/drasi"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -68,6 +69,31 @@ func stubAllChecksPass(client diagnoseDrasiClient) {
 	isDaprReady = func(context.Context, string) (bool, string, error) { return true, "Dapr operator pod is present", nil }
 }
 
+// setupDiagnoseEnvServer starts a test gRPC server that returns the given
+// env values when GetValue is called. It sets AZD_SERVER so that
+// azdext.NewAzdClient() inside the diagnose command connects to it.
+func setupDiagnoseEnvServer(t *testing.T, envValues map[string]string) {
+	t.Helper()
+
+	svc := &testEnvironmentService{
+		getCurrentFunc: func(_ context.Context, _ *azdext.EmptyRequest) (*azdext.EnvironmentResponse, error) {
+			return &azdext.EnvironmentResponse{
+				Environment: &azdext.Environment{Name: "test-env"},
+			}, nil
+		},
+		getValueFunc: func(_ context.Context, req *azdext.GetEnvRequest) (*azdext.KeyValueResponse, error) {
+			val, ok := envValues[req.Key]
+			if !ok {
+				return &azdext.KeyValueResponse{Value: ""}, nil
+			}
+			return &azdext.KeyValueResponse{Value: val}, nil
+		},
+	}
+
+	addr := startTestEnvironmentServer(t, svc)
+	t.Setenv("AZD_SERVER", addr)
+}
+
 func TestDiagnoseCommand_JSONSuccess_EmitsChecks(t *testing.T) {
 	saveDiagnoseVars(t)
 
@@ -125,7 +151,9 @@ func TestDiagnoseCommand_DrasiListFailure_ReturnsError(t *testing.T) {
 
 func TestDiagnoseKeyVaultOk(t *testing.T) {
 	saveDiagnoseVars(t)
-	t.Setenv("AZURE_KEYVAULT_NAME", "test-vault")
+	setupDiagnoseEnvServer(t, map[string]string{
+		"AZURE_KEY_VAULT_NAME": "test-vault",
+	})
 
 	client := &fakeDiagnoseClient{}
 	stubAllChecksPass(client)
@@ -148,7 +176,9 @@ func TestDiagnoseKeyVaultOk(t *testing.T) {
 
 func TestDiagnoseKeyVaultFailed(t *testing.T) {
 	saveDiagnoseVars(t)
-	t.Setenv("AZURE_KEYVAULT_NAME", "missing-vault")
+	setupDiagnoseEnvServer(t, map[string]string{
+		"AZURE_KEY_VAULT_NAME": "missing-vault",
+	})
 
 	client := &fakeDiagnoseClient{}
 	stubAllChecksPass(client)
@@ -171,7 +201,8 @@ func TestDiagnoseKeyVaultFailed(t *testing.T) {
 
 func TestDiagnoseKeyVaultSkipped(t *testing.T) {
 	saveDiagnoseVars(t)
-	// AZURE_KEYVAULT_NAME is not set — triggers "skipped"
+	// No env values configured — gRPC returns empty for AZURE_KEY_VAULT_NAME, triggering "skipped"
+	setupDiagnoseEnvServer(t, map[string]string{})
 
 	client := &fakeDiagnoseClient{}
 	stubAllChecksPass(client)
@@ -191,8 +222,10 @@ func TestDiagnoseKeyVaultSkipped(t *testing.T) {
 
 func TestDiagnoseLogAnalyticsOk(t *testing.T) {
 	saveDiagnoseVars(t)
-	t.Setenv("AZURE_LOG_ANALYTICS_WORKSPACE_NAME", "test-workspace")
-	t.Setenv("AZURE_RESOURCE_GROUP", "test-rg")
+	setupDiagnoseEnvServer(t, map[string]string{
+		"AZURE_LOG_ANALYTICS_WORKSPACE_NAME": "test-workspace",
+		"AZURE_RESOURCE_GROUP":               "test-rg",
+	})
 
 	client := &fakeDiagnoseClient{}
 	stubAllChecksPass(client)
@@ -215,8 +248,10 @@ func TestDiagnoseLogAnalyticsOk(t *testing.T) {
 
 func TestDiagnoseLogAnalyticsFailed(t *testing.T) {
 	saveDiagnoseVars(t)
-	t.Setenv("AZURE_LOG_ANALYTICS_WORKSPACE_NAME", "missing-ws")
-	t.Setenv("AZURE_RESOURCE_GROUP", "missing-rg")
+	setupDiagnoseEnvServer(t, map[string]string{
+		"AZURE_LOG_ANALYTICS_WORKSPACE_NAME": "missing-ws",
+		"AZURE_RESOURCE_GROUP":               "missing-rg",
+	})
 
 	client := &fakeDiagnoseClient{}
 	stubAllChecksPass(client)
@@ -239,7 +274,8 @@ func TestDiagnoseLogAnalyticsFailed(t *testing.T) {
 
 func TestDiagnoseLogAnalyticsSkipped(t *testing.T) {
 	saveDiagnoseVars(t)
-	// Neither AZURE_LOG_ANALYTICS_WORKSPACE_NAME nor AZURE_RESOURCE_GROUP set — triggers "skipped"
+	// No env values configured — gRPC returns empty, triggering "skipped"
+	setupDiagnoseEnvServer(t, map[string]string{})
 
 	client := &fakeDiagnoseClient{}
 	stubAllChecksPass(client)

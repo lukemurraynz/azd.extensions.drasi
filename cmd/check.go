@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/Masterminds/semver/v3"
+	drasi "github.com/lukemurraynz/azd.extensions.drasi/internal/drasi"
 	"github.com/lukemurraynz/azd.extensions.drasi/internal/output"
 	"github.com/spf13/cobra"
 )
@@ -247,10 +248,10 @@ func detectAzdVersion(ctx context.Context, path string) (string, error) {
 func detectDrasiVersion(ctx context.Context, path string) (string, error) {
 	stdout, stderr, err := checkRunCommand(ctx, path, "version")
 	if err != nil {
-		return parseSemverFromVersionOutput(stdout), formatCommandError("drasi version", stderr, err)
+		return drasi.ParseSemverFromVersionOutput(stdout), formatCommandError("drasi version", stderr, err)
 	}
 
-	version := parseSemverFromVersionOutput(stdout)
+	version := drasi.ParseSemverFromVersionOutput(stdout)
 	if strings.TrimSpace(version) == "" {
 		return "", errors.New("cannot parse drasi version output")
 	}
@@ -399,30 +400,4 @@ func isVersionAtLeast(foundVersion string, minimumVersion string) (bool, error) 
 	}
 
 	return !found.LessThan(minimum), nil
-}
-
-func parseSemverFromVersionOutput(stdout string) string {
-	raw := strings.TrimSpace(stdout)
-	if raw == "" {
-		return raw
-	}
-
-	line := raw
-	if lines := strings.Split(raw, "\n"); len(lines) > 0 {
-		line = strings.TrimSpace(lines[0])
-	}
-
-	if idx := strings.IndexByte(line, ':'); idx >= 0 {
-		line = strings.TrimSpace(line[idx+1:])
-	}
-
-	if strings.HasPrefix(line, "v") || strings.HasPrefix(line, "V") {
-		line = strings.TrimSpace(line[1:])
-	}
-	line = strings.TrimSpace(line)
-	if line == "" {
-		return strings.TrimSpace(stdout)
-	}
-
-	return line
 }

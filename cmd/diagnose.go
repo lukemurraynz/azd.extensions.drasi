@@ -3,10 +3,10 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"os"
 	"os/exec"
 	"strings"
 
+	"github.com/azure/azure-dev/cli/azd/pkg/azdext"
 	"github.com/lukemurraynz/azd.extensions.drasi/internal/drasi"
 	"github.com/lukemurraynz/azd.extensions.drasi/internal/output"
 	"github.com/spf13/cobra"
@@ -54,6 +54,21 @@ func newDiagnoseCommand() *cobra.Command {
 			if err != nil {
 				code := errorCodeFromError(err, output.ERR_AKS_CONTEXT_NOT_FOUND)
 				return writeCommandError(cmd, code, err.Error(), "Set the target azd environment and ensure AZURE_AKS_CONTEXT is present.", format, output.ExitCodes[code])
+			}
+
+			// Create azd client for environment state queries (Key Vault, Log Analytics checks).
+			// If gRPC is unavailable, env values default to empty which triggers "skipped" status.
+			var envVaultName, envRgName, envWsName string
+			azdClient, azdErr := azdext.NewAzdClient()
+			if azdErr == nil {
+				defer azdClient.Close()
+				azdCtx := azdext.WithAccessToken(ctx)
+				resolvedEnv, _ := resolveEnvironmentName(azdCtx, cmd, azdClient, "")
+				if resolvedEnv != "" {
+					envVaultName, _ = getEnvValue(azdCtx, azdClient, resolvedEnv, "AZURE_KEY_VAULT_NAME")
+					envRgName, _ = getEnvValue(azdCtx, azdClient, resolvedEnv, "AZURE_RESOURCE_GROUP")
+					envWsName, _ = getEnvValue(azdCtx, azdClient, resolvedEnv, "AZURE_LOG_ANALYTICS_WORKSPACE_NAME")
+				}
 			}
 
 			checks := []diagnosticCheck{}
@@ -163,7 +178,7 @@ func newDiagnoseCommand() *cobra.Command {
 			})
 
 			// Key Vault check
-			vaultName := os.Getenv("AZURE_KEYVAULT_NAME")
+			vaultName := envVaultName
 			if strings.TrimSpace(vaultName) == "" {
 				checks = append(checks, diagnosticCheck{
 					Name:        "key-vault-auth",
@@ -185,8 +200,8 @@ func newDiagnoseCommand() *cobra.Command {
 			}
 
 			// Log Analytics check
-			wsName := os.Getenv("AZURE_LOG_ANALYTICS_WORKSPACE_NAME")
-			rgName := os.Getenv("AZURE_RESOURCE_GROUP")
+			wsName := envWsName
+			rgName := envRgName
 			if strings.TrimSpace(wsName) == "" || strings.TrimSpace(rgName) == "" {
 				checks = append(checks, diagnosticCheck{
 					Name:        "log-analytics",

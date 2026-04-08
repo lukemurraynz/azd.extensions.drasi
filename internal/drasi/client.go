@@ -64,7 +64,7 @@ func (c *Client) CheckVersion(ctx context.Context) error {
 		return fmt.Errorf("%s: %w", output.ERR_DRASI_CLI_NOT_FOUND, err)
 	}
 
-	raw := parseSemverFromVersionOutput(stdout)
+	raw := ParseSemverFromVersionOutput(stdout)
 	got, parseErr := semver.NewVersion(raw)
 	if parseErr != nil {
 		return fmt.Errorf("%s: cannot parse version %q: %w", output.ERR_DRASI_CLI_VERSION, raw, parseErr)
@@ -88,7 +88,7 @@ func (c *Client) GetVersion(ctx context.Context) (string, error) {
 		return "", fmt.Errorf("%s: drasi version: %s", output.ERR_DRASI_CLI_ERROR, strings.TrimSpace(stderr))
 	}
 
-	version := parseSemverFromVersionOutput(stdout)
+	version := ParseSemverFromVersionOutput(stdout)
 	if strings.TrimSpace(version) == "" {
 		return "", fmt.Errorf("%s: cannot parse version from empty output", output.ERR_DRASI_CLI_VERSION)
 	}
@@ -96,7 +96,7 @@ func (c *Client) GetVersion(ctx context.Context) (string, error) {
 	return version, nil
 }
 
-func parseSemverFromVersionOutput(stdout string) string {
+func ParseSemverFromVersionOutput(stdout string) string {
 	raw := strings.TrimSpace(stdout)
 	if raw == "" {
 		return raw

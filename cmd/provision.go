@@ -29,11 +29,9 @@ func newProvisionCommand() *cobra.Command {
 			return runProvisionFunc(cmd, args)
 		},
 	}
-	cmd.Flags().String("environment", "", "Target azd environment name")
 	return cmd
 }
 
-// (doc: see NOTE in runDrasiInit for non-obvious behavior)
 func defaultRunProvision(cmd *cobra.Command, _ []string) error {
 	outputFormat, _ := cmd.Root().PersistentFlags().GetString("output")
 	format := output.FormatTable
@@ -41,7 +39,7 @@ func defaultRunProvision(cmd *cobra.Command, _ []string) error {
 		format = output.FormatJSON
 	}
 
-	envFlag, _ := cmd.Flags().GetString("environment")
+	envFlag, _ := cmd.Root().PersistentFlags().GetString("environment")
 
 	progress, err := NewProgressHelper(cmd)
 	if err != nil {
@@ -82,12 +80,47 @@ func defaultRunProvision(cmd *cobra.Command, _ []string) error {
 	var rgName string
 
 	// Provision Azure infrastructure if not already deployed.
-	// Check for both AZURE_AKS_CLUSTER_NAME and AZURE_RESOURCE_GROUP as signals
+	// Check for AZURE_AKS_CLUSTER_NAME and AZURE_RESOURCE_GROUP as signals
 	// that Bicep infrastructure has been deployed.
+	// NOTE: azd writes Bicep output names verbatim to env state.
+	// Templates use AZURE_AKS_CLUSTER_NAME and AZURE_RESOURCE_GROUP as output names.
 	aksClusterName, _ = getEnvValue(ctx, azdClient, envName, "AZURE_AKS_CLUSTER_NAME")
 	rgName, _ = getEnvValue(ctx, azdClient, envName, "AZURE_RESOURCE_GROUP")
 	if aksClusterName == "" || rgName == "" {
 		progress.Message("Provisioning Azure infrastructure...")
+
+		// Ensure infra.parameters.environmentName is configured. The Bicep template
+		// declares environmentName as a required parameter. In non-interactive mode
+		// (gRPC/extension context), azd cannot prompt for missing parameters, so we
+		// pre-set it from the resolved environment name.
+		envNameJSON, _ := json.Marshal(envName)
+		if _, err := azdClient.Environment().SetConfig(ctx, &azdext.SetConfigRequest{
+			Path:    "infra.parameters.environmentName",
+			Value:   envNameJSON,
+			EnvName: envName,
+		}); err != nil {
+			// Non-fatal: the parameter may already be configured or the user may have
+			// set it manually. Log the warning but continue with the provisioning attempt.
+			_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "warning: could not pre-set infra.parameters.environmentName: %s\n", err)
+		}
+
+		// Resolve the deploying user's Entra ID object ID and pre-set it as
+		// infra.parameters.principalId. The Bicep template uses this to assign
+		// the AKS RBAC Cluster Admin role so the user can run kubectl/drasi
+		// commands after provisioning.
+		if userOID, err := resolveSignedInUserOID(cmd.Context()); err != nil {
+			_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "warning: could not resolve signed-in user OID: %s\n", err)
+		} else {
+			oidJSON, _ := json.Marshal(userOID)
+			if _, err := azdClient.Environment().SetConfig(ctx, &azdext.SetConfigRequest{
+				Path:    "infra.parameters.principalId",
+				Value:   oidJSON,
+				EnvName: envName,
+			}); err != nil {
+				_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "warning: could not pre-set infra.parameters.principalId: %s\n", err)
+			}
+		}
+
 		provisionArgs := []string{"provision"}
 		if envName != "" {
 			provisionArgs = append(provisionArgs, "--environment", envName)
@@ -118,7 +151,7 @@ func defaultRunProvision(cmd *cobra.Command, _ []string) error {
 				cmd,
 				output.ERR_INFRA_PROVISION_FAILED,
 				"infrastructure provisioning completed but AZURE_AKS_CLUSTER_NAME or AZURE_RESOURCE_GROUP not found in environment state",
-				"Check Bicep outputs in infra/main.bicep and ensure they include aksClusterName.",
+				"Check Bicep outputs in infra/main.bicep and ensure they include AZURE_AKS_CLUSTER_NAME.",
 				format,
 				output.ExitCodes[output.ERR_INFRA_PROVISION_FAILED],
 			)
@@ -278,13 +311,32 @@ func switchKubectlContext(ctx context.Context, contextName string) error {
 	// Check current context first to avoid a no-op switch.
 	cur, err := exec.CommandContext(ctx, kubectlPath, "config", "current-context").Output() //nolint:gosec // kubectl path resolved via LookPath
 	if err == nil && strings.TrimSpace(string(cur)) == contextName {
-		return nil // already on the right context
+		return nil
 	}
 	cmd := exec.CommandContext(ctx, kubectlPath, "config", "use-context", contextName) //nolint:gosec // kubectl path resolved via LookPath
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("kubectl config use-context %s: %w\n%s", contextName, err, out)
 	}
 	return nil
+}
+
+// resolveSignedInUserOID returns the Azure AD object ID of the currently signed-in
+// user by running `az ad signed-in-user show --query id -o tsv`.
+func resolveSignedInUserOID(ctx context.Context) (string, error) {
+	azPath, err := exec.LookPath("az")
+	if err != nil {
+		return "", fmt.Errorf("az CLI not found on PATH: %w", err)
+	}
+	//nolint:gosec // az CLI path resolved via LookPath
+	out, err := exec.CommandContext(ctx, azPath, "ad", "signed-in-user", "show", "--query", "id", "-o", "tsv").Output()
+	if err != nil {
+		return "", fmt.Errorf("az ad signed-in-user show: %w", err)
+	}
+	oid := strings.TrimSpace(string(out))
+	if oid == "" {
+		return "", fmt.Errorf("az ad signed-in-user show returned empty OID")
+	}
+	return oid, nil
 }
 
 // acquireAKSCredentials runs `az aks get-credentials` to configure kubectl access

@@ -15,6 +15,9 @@ param environmentName string
 @description('Tags to apply to all resources.')
 param tags object
 
+@description('Object ID of the deploying user. Used to assign AKS RBAC Cluster Admin so the user can run kubectl/drasi commands after provisioning.')
+param principalId string
+
 @description('Kubernetes namespace where Drasi is installed.')
 param drasiNamespace string = 'drasi-system'
 
@@ -44,6 +47,7 @@ var aksSubnetPrefix = '10.0.0.0/22' // /22 = 1022 usable IPs; sufficient for Azu
 var kvSecretsUserRoleId        = '4633458b-17de-408a-b874-0445c86b69e6' // Key Vault Secrets User
 var monitoringPublisherRoleId  = '3913510d-42f4-4e42-8a64-420c390055eb' // Monitoring Metrics Publisher
 var networkContributorRoleId   = '4d97b98b-1d4f-4787-a291-c67834d212e7' // Network Contributor
+var aksRbacClusterAdminRoleId  = 'b1ff04bb-8a4e-4dc4-8eb5-8693973ce19b' // Azure Kubernetes Service RBAC Cluster Admin
 
 // ---------------------------------------------------------------------------
 // Log Analytics Workspace — AVM module
@@ -343,6 +347,26 @@ resource lawMetricsPublisherRole 'Microsoft.Authorization/roleAssignments@2022-0
     roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', monitoringPublisherRoleId)
     principalId: uami.outputs.principalId
     principalType: 'ServicePrincipal'
+  }
+}
+
+// ---------------------------------------------------------------------------
+// AKS RBAC Cluster Admin — deploying user on AKS cluster scope
+// Required because the cluster uses disableLocalAccounts + enableAzureRBAC.
+// Without this, the deploying user cannot run kubectl or drasi commands.
+// ---------------------------------------------------------------------------
+resource aksRef 'Microsoft.ContainerService/managedClusters@2024-09-01' existing = {
+  name: aksName
+  dependsOn: [aks]
+}
+
+resource aksClusterAdminAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(resourceGroup().id, principalId, aksRbacClusterAdminRoleId)
+  scope: aksRef
+  properties: {
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', aksRbacClusterAdminRoleId)
+    principalId: principalId
+    principalType: 'User'
   }
 }
 
