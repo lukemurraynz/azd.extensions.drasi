@@ -62,8 +62,8 @@ func (e *Engine) Deploy(ctx context.Context, manifest *config.ResolvedManifest, 
 
 	hashes := manifestToHashes(manifest)
 
-	// Include env vars in the hash so changed values (e.g. a rotated Key Vault name)
-	// trigger a redeploy even when the YAML template itself is unchanged.
+	// Include env vars in the hash so changed values trigger a redeploy
+	// even when the YAML template itself is unchanged.
 	envSuffix := hashEnvVars(opts.EnvVars)
 	for i := range hashes {
 		hashes[i].Hash = hashes[i].Hash + envSuffix
@@ -141,8 +141,7 @@ func (e *Engine) Deploy(ctx context.Context, manifest *config.ResolvedManifest, 
 	return nil
 }
 
-// Teardown deletes all components in reverse dependency order.
-// Clears persisted hashes on success.
+// Teardown deletes all components in reverse dependency order and clears persisted hashes.
 func (e *Engine) Teardown(ctx context.Context, manifest *config.ResolvedManifest, opts DeployOptions) error {
 	hashes := manifestToHashes(manifest)
 
