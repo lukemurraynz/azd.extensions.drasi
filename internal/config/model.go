@@ -48,8 +48,7 @@ type QueryNode struct {
 	SourceLabel string `yaml:"sourceLabel"`
 }
 
-// QuerySourcesSpec holds the subscriptions block inside a query spec.
-type QuerySourcesSpec struct {
+// QuerySourcesSpec holds the subscriptions block inside a query spec.type QuerySourcesSpec struct {
 	Subscriptions []QuerySourceSubscription `yaml:"subscriptions" json:",omitempty"`
 }
 
