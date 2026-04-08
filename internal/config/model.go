@@ -236,10 +236,8 @@ type ComponentHash struct {
 	Hash string
 }
 
-// StateKey returns the azd environment key for storing this component's hash.
-// Format: DRASI_HASH_<KIND>_<ID> (KIND uppercased, ID sanitized for .env).
-// Hyphens in ID are replaced with underscores because .env variable names
-// only support letters, digits, and underscores.
+// StateKey returns the azd environment key: DRASI_HASH_<KIND>_<ID>.
+// Hyphens in ID become underscores (.env only supports [A-Za-z0-9_]).
 func (h ComponentHash) StateKey() string {
 	sanitized := strings.ReplaceAll(h.ID, "-", "_")
 	return fmt.Sprintf("DRASI_HASH_%s_%s", strings.ToUpper(h.Kind), sanitized)
