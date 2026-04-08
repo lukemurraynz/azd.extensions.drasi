@@ -48,12 +48,12 @@ type QueryNode struct {
 	SourceLabel string `yaml:"sourceLabel"`
 }
 
-// QuerySourcesSpec holds the subscriptions block inside a query spec.type QuerySourcesSpec struct {
+// QuerySourcesSpec holds the subscriptions block inside a query spec.
+type QuerySourcesSpec struct {
 	Subscriptions []QuerySourceSubscription `yaml:"subscriptions" json:",omitempty"`
 }
 
 // QuerySpec holds the spec block of a ContinuousQuery resource.
-// Reactions is an extension field used by the azd extension's dependency-graph validation.
 type QuerySpec struct {
 	Mode      string           `yaml:"mode"                json:",omitempty"`
 	Sources   QuerySourcesSpec `yaml:"sources"             json:",omitempty"`
@@ -61,8 +61,7 @@ type QuerySpec struct {
 	Reactions []string         `yaml:"reactions,omitempty" json:",omitempty"`
 }
 
-// ReactionSpec holds the spec block of a Reaction resource.
-type ReactionSpec struct {
+// ReactionSpec holds the spec block of a Reaction resource.type ReactionSpec struct {
 	Kind    string            `yaml:"kind"`
 	Queries map[string]string `yaml:"queries,omitempty"`
 }
