@@ -16,3 +16,8 @@ environments:
   #       properties:
   #         connectionString: "postgresql://user:password@staging-host:5432/db"
 featureFlags: {}
+secretMappings:
+  - vaultName: "$(AZURE_KEY_VAULT_NAME)"
+    secretName: pg-connection-string
+    k8sSecret: pg-source-secrets
+    k8sKey: connectionString

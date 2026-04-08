@@ -8,8 +8,9 @@ spec:
   kind: PostgreSQL
   properties:
     connectionString:
-      kind: secret
-      vaultName: "$(AZURE_KEY_VAULT_NAME)"
-      secretName: pg-connection-string
+      kind: Secret
+      name: pg-source-secrets
+      key: connectionString
     database: drasidb
-    tables: public.orders
+    tables:
+      - public.orders

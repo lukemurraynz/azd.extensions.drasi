@@ -83,6 +83,27 @@ func TestValue_UnmarshalYAML_SecretRef(t *testing.T) {
 	assert.Equal(t, "my-secret", m["endpoint"].SecretRef.SecretName)
 }
 
+func TestValue_UnmarshalYAML_Sequence(t *testing.T) {
+	t.Parallel()
+	input := "tables:\n  - public.orders\n  - public.items\n"
+	var m map[string]config.Value
+	require.NoError(t, yaml.Unmarshal([]byte(input), &m))
+	// Sequence values are opaque passthrough; StringValue stays empty.
+	assert.Empty(t, m["tables"].StringValue)
+	assert.Nil(t, m["tables"].SecretRef)
+}
+
+func TestValue_UnmarshalYAML_DrasiAPIMappingPassthrough(t *testing.T) {
+	t.Parallel()
+	input := "connectionString:\n  kind: Secret\n  name: pg-source-secrets\n  key: connectionString\n"
+	var m map[string]config.Value
+	require.NoError(t, yaml.Unmarshal([]byte(input), &m))
+	// Drasi API discriminated union mappings are opaque; no extension fields populated.
+	assert.Empty(t, m["connectionString"].StringValue)
+	assert.Nil(t, m["connectionString"].SecretRef)
+	assert.Nil(t, m["connectionString"].EnvRef)
+}
+
 func writeFile(path, content string) error {
 	return os.WriteFile(path, []byte(content), 0o644)
 }

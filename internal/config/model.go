@@ -160,26 +160,46 @@ type Environment struct {
 	Components Components        `yaml:"components,omitempty" json:"components,omitempty"`
 }
 
-// Value can hold a plain string, a Key Vault secret reference, or an env var reference.
+// Value can hold a plain string, a Key Vault secret reference, an env var reference,
+// or an opaque passthrough value (e.g. YAML sequences that the Drasi API expects but
+// the extension does not interpret).
 type Value struct {
 	StringValue string     `yaml:"value,omitempty"`
 	SecretRef   *SecretRef `yaml:"secretRef,omitempty"`
 	EnvRef      *EnvRef    `yaml:"envRef,omitempty"`
+	// RawNode stores the original YAML node for value types that the extension
+	// does not model directly (e.g. sequences, Drasi API discriminated unions).
+	// The deploy engine reads the original file from disk, so this field is only
+	// used for hashing and validation; it is never re-serialised to the cluster.
+	RawNode *yaml.Node `yaml:"-"`
 }
 
-// UnmarshalYAML accepts both plain scalar strings and the {value: "..."} struct form.
-// Drasi YAML files may use either format:
-//   - Plain scalar:      inCluster: "true"      → Value{StringValue: "true"}
-//   - Struct form:       inCluster: {value: "true"} → Value{StringValue: "true"}
+// UnmarshalYAML accepts plain scalar strings, the {value: "..."} struct form,
+// and passthrough node types (sequences, Drasi API discriminated unions).
+//
+// Recognised formats:
+//   - Plain scalar:      inCluster: "true"        → Value{StringValue: "true"}
+//   - Struct form:       inCluster: {value: "true"}  → Value{StringValue: "true"}
 //   - SecretRef:         endpoint: {secretRef: {...}} → Value{SecretRef: &SecretRef{...}}
+//   - Sequence:          tables: [public.orders]      → Value{RawNode: <seq node>}
+//   - Drasi API mapping: connectionString: {kind: Secret, name: ..., key: ...}
+//     → Value{RawNode: <map node>}
 func (v *Value) UnmarshalYAML(node *yaml.Node) error {
 	// Plain string scalar: inCluster: "true"
 	if node.Kind == yaml.ScalarNode {
 		v.StringValue = node.Value
 		return nil
 	}
-	// Mapping node: {value: "...", secretRef: {...}, envRef: {...}}
-	// Decode into a shadow struct to avoid infinite recursion.
+
+	// Sequence node (YAML array): tables: [public.orders]
+	// The extension does not interpret list-valued properties; store the raw
+	// node so hashing sees a deterministic representation.
+	if node.Kind == yaml.SequenceNode {
+		v.RawNode = node
+		return nil
+	}
+
+	// Mapping node: try the extension's own {value, secretRef, envRef} shape first.
 	type valueShadow struct {
 		StringValue string     `yaml:"value,omitempty"`
 		SecretRef   *SecretRef `yaml:"secretRef,omitempty"`
@@ -189,9 +209,18 @@ func (v *Value) UnmarshalYAML(node *yaml.Node) error {
 	if err := node.Decode(&shadow); err != nil {
 		return err
 	}
-	v.StringValue = shadow.StringValue
-	v.SecretRef = shadow.SecretRef
-	v.EnvRef = shadow.EnvRef
+
+	// If the mapping matched one of our known fields, use it.
+	if shadow.StringValue != "" || shadow.SecretRef != nil || shadow.EnvRef != nil {
+		v.StringValue = shadow.StringValue
+		v.SecretRef = shadow.SecretRef
+		v.EnvRef = shadow.EnvRef
+		return nil
+	}
+
+	// Otherwise it is a Drasi API discriminated-union mapping (e.g. kind: Secret)
+	// that the extension does not model. Store the raw node for hashing.
+	v.RawNode = node
 	return nil
 }
 
