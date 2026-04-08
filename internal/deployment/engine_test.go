@@ -136,6 +136,49 @@ func TestEngine_Deploy_NoOp_WhenHashUnchanged(t *testing.T) {
 	assert.Empty(t, h.mockDrasi.commandsCalled)
 }
 
+func TestEngine_Deploy_EnvVarChange_TriggersRedeploy(t *testing.T) {
+	t.Parallel()
+
+	h := newEngineHarness()
+	manifest := &config.ResolvedManifest{
+		Sources: []config.Source{{ID: "alerts-source"}},
+	}
+
+	// First deploy with env vars A.
+	envA := map[string]string{"VAULT": "kv-old"}
+	err := h.engine.Deploy(context.Background(), manifest, DeployOptions{
+		Environment: "test-env",
+		EnvVars:     envA,
+	})
+	require.NoError(t, err)
+	// apply + wait = 2 commands
+	require.Len(t, h.mockDrasi.commandsCalled, 2)
+
+	// Reset commands log.
+	h.mockDrasi.commandsCalled = nil
+
+	// Second deploy with same env vars → no-op.
+	err = h.engine.Deploy(context.Background(), manifest, DeployOptions{
+		Environment: "test-env",
+		EnvVars:     envA,
+	})
+	require.NoError(t, err)
+	assert.Empty(t, h.mockDrasi.commandsCalled)
+
+	// Third deploy with changed env vars → triggers delete+apply+wait.
+	envB := map[string]string{"VAULT": "kv-new"}
+	err = h.engine.Deploy(context.Background(), manifest, DeployOptions{
+		Environment: "test-env",
+		EnvVars:     envB,
+	})
+	require.NoError(t, err)
+	// delete + apply + wait = 3 commands
+	require.Len(t, h.mockDrasi.commandsCalled, 3)
+	assert.Equal(t, "delete", h.mockDrasi.commandsCalled[0][0])
+	assert.Equal(t, "apply", h.mockDrasi.commandsCalled[1][0])
+	assert.Equal(t, "wait", h.mockDrasi.commandsCalled[2][0])
+}
+
 func TestEngine_Deploy_DeleteThenApply_WhenHashChanged(t *testing.T) {
 	t.Parallel()
 
@@ -597,4 +640,77 @@ func TestMarshalComponent_ExpandsEnvVarsFromFile(t *testing.T) {
 	got, err := marshalComponent(ComponentAction{Kind: "source", ID: "my-source"}, manifest, envVars)
 	require.NoError(t, err)
 	assert.Equal(t, "vaultName: \"kv-test\"\ndb: \"testdb\"\n", string(got))
+}
+
+func TestEngine_ApplyComponent_FailFast_UnresolvedEnvVars(t *testing.T) {
+	t.Parallel()
+
+	h := newEngineHarness()
+
+	manifestDir := t.TempDir()
+	relPath := filepath.Join("sources", "unresolved.yaml")
+	absPath := filepath.Join(manifestDir, relPath)
+	require.NoError(t, os.MkdirAll(filepath.Dir(absPath), 0o755))
+
+	content := []byte("vaultName: \"$(AZURE_KEY_VAULT_NAME)\"\ndb: \"$(MISSING_VAR)\"\n")
+	require.NoError(t, os.WriteFile(absPath, content, 0o600))
+
+	manifest := &config.ResolvedManifest{
+		ManifestDir: manifestDir,
+		Sources: []config.Source{{
+			ID:       "unresolved-source",
+			FilePath: filepath.ToSlash(relPath),
+			Spec:     config.SourceSpec{Kind: "CosmosGremlin"},
+		}},
+	}
+	// Only resolve one of the two vars — the other stays as $(MISSING_VAR).
+	envVars := map[string]string{"AZURE_KEY_VAULT_NAME": "kv-test"}
+
+	err := h.engine.applyComponent(
+		context.Background(),
+		ComponentAction{Kind: "source", ID: "unresolved-source"},
+		manifest,
+		envVars,
+	)
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "unresolved environment variable references")
+	assert.Contains(t, err.Error(), "$(MISSING_VAR)")
+	// No drasi commands should have been called.
+	assert.Empty(t, h.mockDrasi.commandsCalled)
+}
+
+func TestEngine_ApplyComponent_AllVarsResolved_Succeeds(t *testing.T) {
+	t.Parallel()
+
+	h := newEngineHarness()
+
+	manifestDir := t.TempDir()
+	relPath := filepath.Join("sources", "resolved.yaml")
+	absPath := filepath.Join(manifestDir, relPath)
+	require.NoError(t, os.MkdirAll(filepath.Dir(absPath), 0o755))
+
+	content := []byte("vaultName: \"$(AZURE_KEY_VAULT_NAME)\"\ndb: \"$(DB_NAME)\"\n")
+	require.NoError(t, os.WriteFile(absPath, content, 0o600))
+
+	manifest := &config.ResolvedManifest{
+		ManifestDir: manifestDir,
+		Sources: []config.Source{{
+			ID:       "resolved-source",
+			FilePath: filepath.ToSlash(relPath),
+			Spec:     config.SourceSpec{Kind: "CosmosGremlin"},
+		}},
+	}
+	envVars := map[string]string{"AZURE_KEY_VAULT_NAME": "kv-test", "DB_NAME": "testdb"}
+
+	err := h.engine.applyComponent(
+		context.Background(),
+		ComponentAction{Kind: "source", ID: "resolved-source"},
+		manifest,
+		envVars,
+	)
+
+	require.NoError(t, err)
+	require.Len(t, h.mockDrasi.commandsCalled, 1)
+	assert.Equal(t, "apply", h.mockDrasi.commandsCalled[0][0])
 }

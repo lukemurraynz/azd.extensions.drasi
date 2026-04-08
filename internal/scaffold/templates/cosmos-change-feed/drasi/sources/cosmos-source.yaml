@@ -10,10 +10,7 @@ spec:
     accountEndpoint:
       kind: secret
       vaultName: "$(AZURE_KEY_VAULT_NAME)"
-      secretName: "cosmos-account-endpoint"
-    masterKey:
-      kind: secret
-      vaultName: "$(AZURE_KEY_VAULT_NAME)"
-      secretName: "cosmos-master-key"
+      secretName: "cosmos-connection-string"
     database: "drasidb"
     container: "drasi-graph"
+    partitionKey: "pk"

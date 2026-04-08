@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"time"
 
 	"gopkg.in/yaml.v3"
@@ -54,6 +55,13 @@ func (e *Engine) Deploy(ctx context.Context, manifest *config.ResolvedManifest, 
 	defer cancel()
 
 	hashes := manifestToHashes(manifest)
+
+	// Include env vars in the hash so changed values (e.g. a rotated Key Vault name)
+	// trigger a redeploy even when the YAML template itself is unchanged.
+	envSuffix := hashEnvVars(opts.EnvVars)
+	for i := range hashes {
+		hashes[i].Hash = hashes[i].Hash + envSuffix
+	}
 
 	existingState := make(map[string]string, len(hashes))
 	for _, h := range hashes {
@@ -150,6 +158,17 @@ func (e *Engine) applyComponent(ctx context.Context, action ComponentAction, man
 		return fmt.Errorf("marshalling %s/%s: %w", action.Kind, action.ID, err)
 	}
 
+	// Fail-fast: reject any remaining $(VARNAME) references that were not resolved.
+	// Sending literal $(VARNAME) to the cluster will cause silent runtime failures.
+	if unresolved := envVarPattern.FindAll(raw, -1); len(unresolved) > 0 {
+		names := make([]string, len(unresolved))
+		for i, m := range unresolved {
+			names[i] = string(m)
+		}
+		return fmt.Errorf("unresolved environment variable references in %s/%s: %v — set these in azd environment state before deploying",
+			action.Kind, action.ID, names)
+	}
+
 	tmpFile, err := os.CreateTemp("", fmt.Sprintf("drasi-%s-%s-*.yaml", action.Kind, action.ID))
 	if err != nil {
 		return fmt.Errorf("creating temp file for %s/%s: %w", action.Kind, action.ID, err)
@@ -243,8 +262,8 @@ func expandEnvVars(data []byte, envVars map[string]string) []byte {
 		return data
 	}
 	return envVarPattern.ReplaceAllFunc(data, func(match []byte) []byte {
-		varName := string(envVarPattern.FindSubmatch(match)[1])
-		if val, ok := envVars[varName]; ok {
+		key := envVarPattern.FindSubmatch(match)[1]
+		if val, ok := envVars[string(key)]; ok {
 			return []byte(val)
 		}
 		return match
@@ -276,4 +295,28 @@ func hashYAML(v any) string {
 	}
 	digest := sha256.Sum256(raw)
 	return hex.EncodeToString(digest[:])
+}
+
+// hashEnvVars returns a deterministic hash suffix derived from the env var map.
+// Returns an empty string when the map is empty so hashes are unchanged for
+// deployments that do not use env var substitution.
+func hashEnvVars(envVars map[string]string) string {
+	if len(envVars) == 0 {
+		return ""
+	}
+	// Sort keys for deterministic ordering.
+	keys := make([]string, 0, len(envVars))
+	for k := range envVars {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	h := sha256.New()
+	for _, k := range keys {
+		_, _ = h.Write([]byte(k))
+		_, _ = h.Write([]byte("="))
+		_, _ = h.Write([]byte(envVars[k]))
+		_, _ = h.Write([]byte("\n"))
+	}
+	return ":" + hex.EncodeToString(h.Sum(nil))
 }

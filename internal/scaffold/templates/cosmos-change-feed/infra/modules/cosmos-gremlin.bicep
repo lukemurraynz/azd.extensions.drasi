@@ -1,6 +1,6 @@
 // cosmos-gremlin.bicep — Azure Cosmos DB account with Gremlin API
-// Provisions: Cosmos DB account (Gremlin), database, graph container, and Key Vault secrets
-// for the account endpoint and primary key.
+// Provisions: Cosmos DB account (Gremlin), database, graph container, and a Key Vault secret
+// for the Cosmos DB connection string.
 
 @description('The Azure region for all resources.')
 param location string
@@ -80,26 +80,19 @@ resource gremlinGraph 'Microsoft.DocumentDB/databaseAccounts/gremlinDatabases/gr
 }
 
 // ---------------------------------------------------------------------------
-// Key Vault Secrets — store Cosmos connection details for Drasi source
-// The Drasi resource-provider pod reads these via Workload Identity.
+// Key Vault Secret — Cosmos DB connection string for the Drasi CosmosGremlin source.
+// The gremlin-proxy parses AccountEndpoint and AccountKey from this value.
+// The reactivator passes it directly to CosmosClientBuilder.
 // ---------------------------------------------------------------------------
 resource existingKeyVault 'Microsoft.KeyVault/vaults@2023-07-01' existing = {
   name: keyVaultName
 }
 
-resource cosmosEndpointSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = {
+resource cosmosConnectionStringSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = {
   parent: existingKeyVault
-  name: 'cosmos-account-endpoint'
+  name: 'cosmos-connection-string'
   properties: {
-    value: cosmosAccount.properties.documentEndpoint
-  }
-}
-
-resource cosmosMasterKeySecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = {
-  parent: existingKeyVault
-  name: 'cosmos-master-key'
-  properties: {
-    value: cosmosAccount.listKeys().primaryMasterKey
+    value: 'AccountEndpoint=${cosmosAccount.properties.documentEndpoint};AccountKey=${cosmosAccount.listKeys().primaryMasterKey};'
   }
 }
 
