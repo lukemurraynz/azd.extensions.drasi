@@ -18,6 +18,6 @@ environments:
 featureFlags: {}
 secretMappings:
   - vaultName: "$(AZURE_KEY_VAULT_NAME)"
-    secretName: pg-connection-string
+    secretName: pg-password
     k8sSecret: pg-source-secrets
-    k8sKey: connectionString
+    k8sKey: password

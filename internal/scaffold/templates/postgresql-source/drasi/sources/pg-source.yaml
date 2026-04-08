@@ -1,16 +1,20 @@
 # PostgreSQL source — connects Drasi to a PostgreSQL database via logical replication (CDC).
-# Replace the connectionString, database, and tables values for your environment.
-# For local dev, use the docker-compose.yml PostgreSQL container.
+# Host, port, database, and user are resolved from azd environment state at deploy time.
+# The password is stored in Azure Key Vault and synced to a Kubernetes Secret via secretMappings.
 apiVersion: v1
 kind: Source
 name: pg-source
 spec:
   kind: PostgreSQL
   properties:
-    connectionString:
+    host: $(POSTGRESQL_SERVER_FQDN)
+    port: 5432
+    user: drasiAdmin
+    password:
       kind: Secret
       name: pg-source-secrets
-      key: connectionString
-    database: drasidb
+      key: password
+    database: $(POSTGRESQL_DATABASE_NAME)
+    ssl: true
     tables:
       - public.orders
