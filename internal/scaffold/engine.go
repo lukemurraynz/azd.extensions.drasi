@@ -11,9 +11,13 @@ import (
 // Scaffold copies the named template into targetDir, returning the relative
 // forward-slash paths of all created files.
 //
-// If force is false and any output file already exists, Scaffold returns an
-// error whose message contains "already exists" without writing any files.
-// If force is true, existing files are overwritten.
+// azure.yaml is always overwritten because `azd init` typically creates it
+// before the extension runs; the template version contains Drasi-specific
+// metadata that must take precedence.
+//
+// For all other files, if force is false and the output file already exists,
+// Scaffold returns an error whose message contains "already exists" without
+// writing any files. If force is true, existing files are overwritten.
 func Scaffold(templateName, targetDir string, force bool) ([]string, error) {
 	prefix := "templates/" + templateName
 
@@ -50,9 +54,12 @@ func Scaffold(templateName, targetDir string, force bool) ([]string, error) {
 			return fmt.Errorf("path %s escapes target directory", outputPath)
 		}
 
-		// Conflict check.
+		// Conflict check — azure.yaml is always overwritten because
+		// `azd init` creates one before the extension runs.
 		if _, statErr := os.Stat(outputPath); statErr == nil && !force {
-			return fmt.Errorf("%s already exists", outputPath)
+			if filepath.Base(outputPath) != "azure.yaml" {
+				return fmt.Errorf("%s already exists", outputPath)
+			}
 		}
 
 		// Ensure parent directories exist.

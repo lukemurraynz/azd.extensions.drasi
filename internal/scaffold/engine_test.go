@@ -69,10 +69,13 @@ func TestScaffold_BlankTemplate_ConflictWithoutForce_ReturnsError(t *testing.T) 
 	_, err := scaffold.Scaffold("blank", dir, false)
 	require.NoError(t, err)
 
-	// Second call without --force — must fail with a conflict error.
+	// Second call without --force — must fail with a conflict error on a
+	// non-azure.yaml file (azure.yaml is always overwritten).
 	_, err = scaffold.Scaffold("blank", dir, false)
 	require.Error(t, err, "expected conflict error on re-run without --force")
 	assert.Contains(t, err.Error(), "already exists")
+	assert.NotContains(t, err.Error(), "azure.yaml",
+		"azure.yaml must not trigger the conflict check")
 }
 
 func TestScaffold_BlankTemplate_ForceOverwrites(t *testing.T) {
@@ -87,6 +90,29 @@ func TestScaffold_BlankTemplate_ForceOverwrites(t *testing.T) {
 	files, err := scaffold.Scaffold("blank", dir, true)
 	require.NoError(t, err)
 	assert.NotEmpty(t, files)
+}
+
+func TestScaffold_PreExistingAzureYAML_OverwrittenWithoutForce(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+
+	// Simulate `azd init` creating an azure.yaml before the extension runs.
+	azureYAML := filepath.Join(dir, "azure.yaml")
+	require.NoError(t, os.WriteFile(azureYAML, []byte("name: from-azd-init\n"), 0600))
+
+	// `azd drasi init` (without --force) must succeed despite the existing azure.yaml.
+	files, err := scaffold.Scaffold("blank", dir, false)
+	require.NoError(t, err)
+	assert.NotEmpty(t, files)
+
+	// The template's azure.yaml must have replaced the original content.
+	content, readErr := os.ReadFile(azureYAML)
+	require.NoError(t, readErr)
+	assert.Contains(t, string(content), "azd-drasi",
+		"azure.yaml must contain Drasi template metadata, not the original azd init content")
+	assert.NotContains(t, string(content), "from-azd-init",
+		"azure.yaml must have been overwritten")
 }
 
 func TestScaffold_InvalidTemplate_ReturnsError(t *testing.T) {
