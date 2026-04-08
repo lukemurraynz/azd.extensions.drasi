@@ -31,13 +31,13 @@ type IncludeSpec struct {
 	Pattern string `yaml:"pattern"`
 }
 
-// SourceSpec holds the spec block of a Source resource (drasi CLI 0.10.0 name+spec format).
+// SourceSpec holds the spec block of a Source resource.
 type SourceSpec struct {
 	Kind       string           `yaml:"kind"`
 	Properties map[string]Value `yaml:"properties,omitempty"`
 }
 
-// QuerySourceSubscription is a source reference inside a query spec's sources block.
+// QuerySourceSubscription is a source reference inside a query's sources block.
 type QuerySourceSubscription struct {
 	ID    string      `yaml:"id"`
 	Nodes []QueryNode `yaml:"nodes,omitempty"`

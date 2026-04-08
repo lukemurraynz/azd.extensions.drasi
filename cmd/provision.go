@@ -550,9 +550,7 @@ func getEnvValue(ctx context.Context, azdClient *azdext.AzdClient, envName, key 
 }
 
 // applyDrasiNetworkPolicies applies baseline Kubernetes NetworkPolicy manifests
-// to the drasi-system namespace. These enforce Cilium-backed network segmentation:
-// default-deny ingress+egress, allow intra-namespace traffic, allow DNS, allow
-// Azure API egress (Key Vault, AAD, Monitor) on port 443.
+// to the drasi-system namespace (default-deny, intra-namespace allow, DNS, Azure API egress).
 func applyDrasiNetworkPolicies(ctx context.Context, aksContext string) error {
 	if aksContext != "" {
 		if err := switchKubectlContext(ctx, aksContext); err != nil {
