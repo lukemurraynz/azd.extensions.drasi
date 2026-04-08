@@ -13,8 +13,8 @@ capabilities:
   - metadata
 examples:
   - name: init
-    description: Scaffold a new Drasi project from the cosmos-change-feed template.
-    usage: azd drasi init --template cosmos-change-feed
+    description: Scaffold a new Drasi project from the postgresql-source template.
+    usage: azd drasi init --template postgresql-source
   - name: validate
     description: Validate Drasi configuration offline before provisioning.
     usage: azd drasi validate

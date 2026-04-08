@@ -22,7 +22,8 @@ import (
 var envVarRefPattern = regexp.MustCompile(`\$\(([A-Za-z_][A-Za-z0-9_]*)\)`)
 
 // scanEnvVarRefs reads component YAML files from the manifest directory and
-// returns the unique set of $(VARNAME) variable names referenced across all files.
+// returns the unique set of $(VARNAME) variable names referenced across all files
+// and secretMappings.
 func scanEnvVarRefs(resolved *config.ResolvedManifest) []string {
 	seen := make(map[string]struct{})
 	var paths []string
@@ -57,6 +58,20 @@ func scanEnvVarRefs(resolved *config.ResolvedManifest) []string {
 		for _, match := range envVarRefPattern.FindAllSubmatch(data, -1) {
 			if len(match) > 1 {
 				seen[string(match[1])] = struct{}{}
+			}
+		}
+	}
+
+	// Scan secretMappings for $(VARNAME) references in vaultName and secretName.
+	for _, sm := range resolved.SecretMappings {
+		for _, match := range envVarRefPattern.FindAllStringSubmatch(sm.VaultName, -1) {
+			if len(match) > 1 {
+				seen[match[1]] = struct{}{}
+			}
+		}
+		for _, match := range envVarRefPattern.FindAllStringSubmatch(sm.SecretName, -1) {
+			if len(match) > 1 {
+				seen[match[1]] = struct{}{}
 			}
 		}
 	}
@@ -255,11 +270,8 @@ func newDeployCommand() *cobra.Command {
 				}
 			}()
 
-			engine := deployment.NewEngine(state, drasiClient)
+			engine := deployment.NewEngine(state, drasiClient, nil)
 
-			// Scan component YAML files for $(VARNAME) references and resolve
-			// each from azd environment state so the deploy engine can substitute
-			// them before passing YAML to `drasi apply`.
 			envVars := make(map[string]string)
 			for _, varName := range scanEnvVarRefs(&resolved) {
 				val, err := getEnvValue(ctx, azdClient, resolvedEnv, varName)
@@ -273,6 +285,9 @@ func newDeployCommand() *cobra.Command {
 				}
 			}
 
+			// Resolve kubectl context for secret sync and component deployment.
+			kubeContext, _ := getEnvValue(ctx, azdClient, resolvedEnv, "AZURE_AKS_CONTEXT")
+
 			progress.Message("Deploying components...")
 
 			if err := engine.Deploy(ctx, &resolved, deployment.DeployOptions{
@@ -281,6 +296,7 @@ func newDeployCommand() *cobra.Command {
 				NoRollback:   noRollback,
 				TotalTimeout: totalTimeout,
 				EnvVars:      envVars,
+				KubeContext:  kubeContext,
 			}); err != nil {
 				code := errorCodeFromError(err, output.ERR_DRASI_CLI_ERROR)
 				return writeCommandError(
@@ -306,7 +322,7 @@ func newDeployCommand() *cobra.Command {
 				deployResult = "dry-run"
 			}
 
-			// Emit structured audit event to stderr (matching provision command pattern).
+			// Emit audit event to stderr (matching provision command pattern).
 			auditEvent := output.AuditEvent{
 				Operation:     "deploy",
 				Environment:   resolvedEnv,

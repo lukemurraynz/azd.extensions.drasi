@@ -8,10 +8,22 @@ import (
 )
 
 type DrasiManifest struct {
-	APIVersion   string            `yaml:"apiVersion"`
-	Includes     []IncludeSpec     `yaml:"includes"`
-	Environments map[string]string `yaml:"environments"`
-	FeatureFlags map[string]bool   `yaml:"featureFlags"`
+	APIVersion     string            `yaml:"apiVersion"`
+	Includes       []IncludeSpec     `yaml:"includes"`
+	Environments   map[string]string `yaml:"environments"`
+	FeatureFlags   map[string]bool   `yaml:"featureFlags"`
+	SecretMappings []SecretMapping   `yaml:"secretMappings,omitempty"`
+}
+
+// SecretMapping maps an Azure Key Vault secret to a key inside a Kubernetes Secret.
+// During deploy, the extension fetches the value from Key Vault and upserts the
+// Kubernetes Secret so Drasi components can reference it with kind: Secret.
+type SecretMapping struct {
+	VaultName  string `yaml:"vaultName"`
+	SecretName string `yaml:"secretName"`
+	K8sSecret  string `yaml:"k8sSecret"`
+	K8sKey     string `yaml:"k8sKey"`
+	Namespace  string `yaml:"namespace,omitempty"`
 }
 
 type IncludeSpec struct {
@@ -199,12 +211,13 @@ type EnvRef struct {
 }
 
 type ResolvedManifest struct {
-	Sources      []Source
-	Queries      []ContinuousQuery
-	Reactions    []Reaction
-	Middlewares  []Middleware
-	Environment  Environment
-	FeatureFlags map[string]bool
+	Sources        []Source
+	Queries        []ContinuousQuery
+	Reactions      []Reaction
+	Middlewares    []Middleware
+	Environment    Environment
+	FeatureFlags   map[string]bool
+	SecretMappings []SecretMapping
 	// ManifestDir is the absolute directory of the drasi.yaml file.
 	// Used by the deploy engine to locate original YAML files for each component.
 	ManifestDir string

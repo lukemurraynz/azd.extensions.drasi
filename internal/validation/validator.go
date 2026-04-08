@@ -21,6 +21,9 @@ func Validate(dir, manifestFile, envName string) (*ValidationResult, error) {
 	}
 
 	result := &ValidationResult{}
+
+	ValidateManifestSchema(manifest, manifestFile, result)
+
 	if envName != "" {
 		envFile := filepath.ToSlash(filepath.Join("environments", envName+".yaml"))
 		if rel, ok := manifest.Environments[envName]; ok {

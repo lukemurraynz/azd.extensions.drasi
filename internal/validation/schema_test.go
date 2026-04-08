@@ -159,3 +159,42 @@ func compileSchema(t *testing.T, name string) *jsonschema.Schema {
 
 	return schema
 }
+
+func TestValidateManifestSchema_ValidManifest(t *testing.T) {
+	t.Parallel()
+
+	result := &validation.ValidationResult{}
+	validation.ValidateManifestSchema(config.DrasiManifest{
+		APIVersion: "v1",
+	}, "drasi.yaml", result)
+
+	assert.False(t, result.HasErrors())
+	assert.Empty(t, result.Issues)
+}
+
+func TestValidateManifestSchema_MissingAPIVersion(t *testing.T) {
+	t.Parallel()
+
+	result := &validation.ValidationResult{}
+	validation.ValidateManifestSchema(config.DrasiManifest{}, "drasi.yaml", result)
+
+	require.NotEmpty(t, result.Issues)
+	assert.True(t, result.HasErrors())
+	assert.Contains(t, result.Issues[0].Message, "schema validation failed for manifest")
+}
+
+func TestValidateManifestSchema_InvalidSecretMapping(t *testing.T) {
+	t.Parallel()
+
+	schema := compileSchema(t, "schema/manifest.schema.json")
+	err := schema.Validate(map[string]any{
+		"APIVersion": "v1",
+		"SecretMappings": []any{
+			map[string]any{
+				"vaultName": "my-vault",
+			},
+		},
+	})
+
+	require.Error(t, err)
+}

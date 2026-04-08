@@ -196,6 +196,16 @@ spec:
     - protocol: TCP
       port: 8081   # Cosmos DB Gremlin endpoint
     - protocol: TCP
-      port: 10255  # Cosmos DB MongoDB endpoint
+      port: 10255  # Cosmos DB MongoDB endpoint / Direct mode control
+    - protocol: TCP
+      port: 10256  # Cosmos DB Direct mode control
     - protocol: TCP
       port: 27017  # MongoDB (external)
+  # Cosmos DB Direct mode (rntbd) — the .NET SDK uses TCP connections on the
+  # 11000–11999 port range when operating in Direct connectivity mode.
+  # NetworkPolicy does not support port ranges, so we use a separate rule with
+  # endPort to cover the entire range.
+  - ports:
+    - protocol: TCP
+      port: 11000
+      endPort: 11999

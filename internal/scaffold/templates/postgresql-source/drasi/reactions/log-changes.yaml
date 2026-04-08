@@ -7,4 +7,4 @@ name: log-changes
 spec:
   kind: Debug
   queries:
-    - watch-orders
+    watch-orders: ""

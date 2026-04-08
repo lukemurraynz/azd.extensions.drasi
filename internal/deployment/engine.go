@@ -34,17 +34,24 @@ type DeployOptions struct {
 	// EnvVars holds azd environment values used to resolve $(VARNAME) patterns
 	// in component YAML files before applying them to the cluster.
 	EnvVars map[string]string
+	// KubeContext is the kubectl context name for the target AKS cluster.
+	// Used by secret sync to target the correct cluster.
+	KubeContext string
 }
 
 // Engine orchestrates the full deploy lifecycle.
 type Engine struct {
 	state       *StateManager
 	drasiClient drasiRunner
+	runner      cmdRunner
 }
 
-// NewEngine creates an Engine.
-func NewEngine(state *StateManager, drasi drasiRunner) *Engine {
-	return &Engine{state: state, drasiClient: drasi}
+// NewEngine creates an Engine. If runner is nil, a default execCmdRunner is used.
+func NewEngine(state *StateManager, drasi drasiRunner, runner cmdRunner) *Engine {
+	if runner == nil {
+		runner = &execCmdRunner{}
+	}
+	return &Engine{state: state, drasiClient: drasi, runner: runner}
 }
 
 // Deploy applies a resolved manifest to the cluster in dependency order.
@@ -74,6 +81,14 @@ func (e *Engine) Deploy(ctx context.Context, manifest *config.ResolvedManifest, 
 
 	actions := SortForDeploy(Diff(hashes, existingState), manifest)
 	appliedComponents := make([]ComponentAction, 0, len(actions))
+
+	// Sync Key Vault secrets to Kubernetes Secrets before applying components.
+	// Skip in dry-run mode since it would have cluster side effects.
+	if !opts.DryRun {
+		if err := syncSecrets(ctx, manifest.SecretMappings, opts.EnvVars, opts.KubeContext, e.runner); err != nil {
+			return fmt.Errorf("syncing secrets from Key Vault to Kubernetes: %w", err)
+		}
+	}
 
 	for _, action := range actions {
 		if action.Action == ActionNoOp {

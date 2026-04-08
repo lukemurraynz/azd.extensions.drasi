@@ -12,8 +12,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// T033: init command CLI tests
-
 func TestInitCommand_BlankTemplate_ExitsZero(t *testing.T) {
 	t.Parallel()
 
@@ -31,7 +29,6 @@ func TestInitCommand_TemplateFlag_AcceptsAllTemplates(t *testing.T) {
 
 	templates := []string{
 		"blank",
-		"cosmos-change-feed",
 		"event-hub-routing",
 		"query-subscription",
 	}

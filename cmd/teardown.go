@@ -133,7 +133,7 @@ func newTeardownCommand() *cobra.Command {
 			}
 
 			state := deployment.NewStateManagerFromClient(&azdEnvServiceAdapter{client: azdClient}, resolvedEnv)
-			engine := deployment.NewEngine(state, drasiClient)
+			engine := deployment.NewEngine(state, drasiClient, nil)
 
 			progress.Message("Tearing down components...")
 

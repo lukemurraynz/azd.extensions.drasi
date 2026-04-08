@@ -1,8 +1,0 @@
-# dev.yaml — Environment overlay for dev
-# Add environment-specific overrides here.
-apiVersion: v1
-kind: Environment
-metadata:
-  name: dev
-spec:
-  overrides: {}

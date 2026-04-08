@@ -157,6 +157,13 @@ func statusAllKinds(cmd *cobra.Command, client statusDrasiClient, kubeContext st
 			res, err = client.ListComponentsInContext(cmd.Context(), wireKind, kubeContext)
 		}
 		if err != nil {
+			// Tolerate 404 / "not found" for kinds the Drasi API may not support yet
+			// (e.g. middleware in v0.10.0). Skip the kind instead of aborting the
+			// entire status command.
+			if strings.Contains(err.Error(), "404") || strings.Contains(strings.ToLower(err.Error()), "not found") {
+				results = append(results, kindResult{kind: k, resources: nil})
+				continue
+			}
 			code := errorCodeFromError(err, output.ERR_DRASI_CLI_ERROR)
 			return writeCommandError(
 				cmd,

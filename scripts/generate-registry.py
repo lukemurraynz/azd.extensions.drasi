@@ -69,8 +69,8 @@ def main() -> int:
                         "examples": [
                             {
                                 "name": "init",
-                                "description": "Scaffold a new Drasi project from the cosmos-change-feed template.",
-                                "usage": "azd drasi init --template cosmos-change-feed",
+                                "description": "Scaffold a new Drasi project from the postgresql-source template.",
+                                "usage": "azd drasi init --template postgresql-source",
                             },
                             {
                                 "name": "validate",

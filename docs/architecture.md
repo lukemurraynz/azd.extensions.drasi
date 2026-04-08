@@ -66,7 +66,7 @@ azd drasi provision
        ├─ 1. Read environment via gRPC (env name, subscription, resource group)
        │
        ├─ 2. bicep build + az deployment sub create
-       │      Creates: AKS, Key Vault, UAMI, Log Analytics, optional ACR/Cosmos/Event Hub
+       │      Creates: AKS, Key Vault, UAMI, Log Analytics, optional ACR/Event Hub
        │
        ├─ 3. drasi init (subprocess)
        │      Installs Drasi runtime on AKS

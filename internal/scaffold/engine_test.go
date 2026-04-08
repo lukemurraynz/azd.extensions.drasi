@@ -3,15 +3,12 @@ package scaffold_test
 import (
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/lukemurraynz/azd.extensions.drasi/internal/scaffold"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
-
-// T032: blank template scaffold tests
 
 func TestScaffold_BlankTemplate_CreatesExpectedTree(t *testing.T) {
 	t.Parallel()
@@ -160,59 +157,12 @@ func TestScaffold_PostgreSQLSourceTemplate_CreatesExpectedTree(t *testing.T) {
 	}
 }
 
-// T104: cosmos-change-feed reaction scaffold tests
-
-func TestScaffold_CosmosFeed_CreatesDebugReaction(t *testing.T) {
-	t.Parallel()
-
-	dir := t.TempDir()
-	files, err := scaffold.Scaffold("cosmos-change-feed", dir, false)
-	require.NoError(t, err)
-	require.NotEmpty(t, files)
-
-	// A Debug reaction YAML must exist under drasi/reactions/.
-	reactionPath := filepath.Join(dir, "drasi", "reactions", "log-changes.yaml")
-	_, statErr := os.Stat(reactionPath)
-	assert.NoError(t, statErr, "drasi/reactions/log-changes.yaml must exist")
-}
-
-func TestScaffold_CosmosFeed_ReactionIsDebugKind(t *testing.T) {
-	t.Parallel()
-
-	dir := t.TempDir()
-	_, err := scaffold.Scaffold("cosmos-change-feed", dir, false)
-	require.NoError(t, err)
-
-	reactionPath := filepath.Join(dir, "drasi", "reactions", "log-changes.yaml")
-	content, readErr := os.ReadFile(reactionPath)
-	require.NoError(t, readErr)
-	assert.Contains(t, string(content), "kind: Debug", "reaction must be Debug kind")
-}
-
-func TestScaffold_CosmosFeed_HasCosmosGremlinBicepModule(t *testing.T) {
-	t.Parallel()
-
-	dir := t.TempDir()
-	files, err := scaffold.Scaffold("cosmos-change-feed", dir, false)
-	require.NoError(t, err)
-
-	hasCosmosModule := false
-	for _, f := range files {
-		if strings.HasSuffix(filepath.ToSlash(f), "infra/modules/cosmos-gremlin.bicep") {
-			hasCosmosModule = true
-			break
-		}
-	}
-	assert.True(t, hasCosmosModule, "cosmos-change-feed template must emit infra/modules/cosmos-gremlin.bicep")
-}
-
 func TestScaffold_AllTemplates_ProduceFiles(t *testing.T) {
 	t.Parallel()
 
 	templates := []string{
 		"blank",
 		"blank-terraform",
-		"cosmos-change-feed",
 		"event-hub-routing",
 		"postgresql-source",
 		"query-subscription",

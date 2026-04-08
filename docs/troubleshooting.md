@@ -18,7 +18,7 @@ Every failure the extension emits includes a structured error code. The table be
 | `ERR_MISSING_REFERENCE` | 1 | A query references a source ID that does not exist in the project | Add the missing source entity or fix the `sources[].id` reference in the query file. |
 | `ERR_CIRCULAR_DEPENDENCY` | 1 | Two or more entities form a circular dependency | Review the `sources` and `reactions` fields on your queries for cycles. |
 | `ERR_MISSING_QUERY_LANGUAGE` | 1 | A `ContinuousQuery` entity is missing the `queryLanguage` field | Add `queryLanguage: Cypher` (or the appropriate language) to the query entity. |
-| `ERR_KV_AUTH_FAILED` | 2 | The managed identity does not have permission to read secrets from Key Vault | Assign the `Key Vault Secrets User` role to the provisioned UAMI on the Key Vault. Run `azd drasi provision` again to re-apply the role assignment, or assign it manually via the Azure portal. |
+| `ERR_KV_AUTH_FAILED` | 2 | The caller's Azure CLI identity does not have permission to read secrets from Key Vault | Assign the `Key Vault Secrets User` role to the caller's identity on the Key Vault. Run `azd drasi provision` again to re-apply the role assignment, or assign it manually: `az role assignment create --assignee "$(az account show --query user.name -o tsv)" --role "Key Vault Secrets User" --scope <key-vault-resource-id>`. |
 | `ERR_AKS_CONTEXT_NOT_FOUND` | 2 | The kubeconfig context for the provisioned AKS cluster could not be found | Run `az aks get-credentials --resource-group <rg> --name <aks-name>` to refresh the kubeconfig, then retry. |
 | `ERR_FORCE_REQUIRED` | 2 | A destructive operation was attempted without `--force` (for example `teardown` or `upgrade`) | Re-run the command with `--force` to confirm the destructive action. |
 | `ERR_NO_MANIFEST` | 2 | `drasi/drasi.yaml` was not found in the current directory | Run the command from the project root that contains the `drasi/` directory, or run `azd drasi init` to scaffold one. |
@@ -48,6 +48,17 @@ If `azd drasi status` shows components in `Pending` for more than a few minutes:
 ### Key Vault secret reference fails silently
 
 If a component deploys successfully but behaves as if a secret is missing, check that the secret name and vault name in the `secretRef` match exactly what is in Key Vault (including case). Key Vault secret names are case-insensitive in storage but the extension passes the name verbatim to the Key Vault API.
+
+### Key Vault access denied during deploy
+
+If `azd drasi deploy` fails with a Key Vault access error, the **caller's Azure CLI identity** may lack permissions. The extension uses `az keyvault secret show` under the currently logged-in Azure CLI session to fetch secrets defined in `secretMappings`. Ensure the caller has the `Key Vault Secrets User` role:
+
+```bash
+az role assignment create \
+  --assignee "$(az account show --query user.name -o tsv)" \
+  --role "Key Vault Secrets User" \
+  --scope /subscriptions/<sub-id>/resourceGroups/<rg>/providers/Microsoft.KeyVault/vaults/<vault-name>
+```
 
 ### `ERR_NO_AUTH` in CI
 

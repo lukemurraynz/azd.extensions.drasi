@@ -48,7 +48,7 @@ func TestDeployEngine_Deploy_RegistersAllComponents(t *testing.T) {
 
 	sc := newStubEnvSvc(nil)
 	state := deployment.NewStateManagerFromClient(sc, "test-env")
-	engine := deployment.NewEngine(state, &noOpDrasiRunner{})
+	engine := deployment.NewEngine(state, &noOpDrasiRunner{}, nil)
 
 	err := engine.Deploy(t.Context(), manifest, deployment.DeployOptions{DryRun: true})
 	require.NoError(t, err, "Deploy must not return an error when processing a valid manifest")
@@ -88,7 +88,7 @@ func TestDeployEngine_Deploy_IdempotentOnMatchingHash(t *testing.T) {
 	sc := newStubEnvSvc(map[string]string{h.StateKey(): stableHash})
 
 	state := deployment.NewStateManagerFromClient(sc, "test-env")
-	engine := deployment.NewEngine(state, &noOpDrasiRunner{})
+	engine := deployment.NewEngine(state, &noOpDrasiRunner{}, nil)
 
 	err := engine.Deploy(t.Context(), manifest, deployment.DeployOptions{DryRun: true})
 	require.NoError(t, err, "Deploy must succeed on an unchanged manifest")
@@ -121,7 +121,7 @@ func TestDeployEngine_Deploy_DetectsChangedComponent(t *testing.T) {
 	}
 
 	state := deployment.NewStateManagerFromClient(sc, "test-env")
-	engine := deployment.NewEngine(state, &noOpDrasiRunner{})
+	engine := deployment.NewEngine(state, &noOpDrasiRunner{}, nil)
 
 	err := engine.Deploy(t.Context(), manifest, deployment.DeployOptions{DryRun: true})
 	require.NoError(t, err)

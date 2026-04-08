@@ -21,12 +21,13 @@ func ResolveManifest(
 	envName string,
 ) (ResolvedManifest, []OverlayWarning, error) {
 	resolved := ResolvedManifest{
-		Sources:      append([]Source(nil), sources...),
-		Queries:      append([]ContinuousQuery(nil), queries...),
-		Reactions:    append([]Reaction(nil), reactions...),
-		Middlewares:  append([]Middleware(nil), middlewares...),
-		FeatureFlags: manifest.FeatureFlags,
-		ManifestDir:  dir,
+		Sources:        append([]Source(nil), sources...),
+		Queries:        append([]ContinuousQuery(nil), queries...),
+		Reactions:      append([]Reaction(nil), reactions...),
+		Middlewares:    append([]Middleware(nil), middlewares...),
+		FeatureFlags:   manifest.FeatureFlags,
+		SecretMappings: manifest.SecretMappings,
+		ManifestDir:    dir,
 	}
 
 	warnings := make([]OverlayWarning, 0)

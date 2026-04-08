@@ -79,15 +79,21 @@ func defaultRunProvision(cmd *cobra.Command, _ []string) error {
 	var aksClusterName string
 	var rgName string
 
-	// Provision Azure infrastructure if not already deployed.
 	// Check for AZURE_AKS_CLUSTER_NAME and AZURE_RESOURCE_GROUP as signals
 	// that Bicep infrastructure has been deployed.
 	// NOTE: azd writes Bicep output names verbatim to env state.
-	// Templates use AZURE_AKS_CLUSTER_NAME and AZURE_RESOURCE_GROUP as output names.
 	aksClusterName, _ = getEnvValue(ctx, azdClient, envName, "AZURE_AKS_CLUSTER_NAME")
 	rgName, _ = getEnvValue(ctx, azdClient, envName, "AZURE_RESOURCE_GROUP")
 	if aksClusterName == "" || rgName == "" {
 		progress.Message("Provisioning Azure infrastructure...")
+
+		// Ensure the azd environment exists before setting config. When the user
+		// passes --environment <name> for a fresh project, the environment may not
+		// exist yet. Running `env new` creates it; if it already exists, azd returns
+		// a non-zero exit but we ignore that since the environment is already present.
+		if err := ensureAzdEnvironment(cmd.Context(), envName); err != nil {
+			_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "warning: could not ensure environment exists: %s\n", err)
+		}
 
 		// Ensure infra.parameters.environmentName is configured. The Bicep template
 		// declares environmentName as a required parameter. In non-interactive mode
@@ -104,21 +110,29 @@ func defaultRunProvision(cmd *cobra.Command, _ []string) error {
 			_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "warning: could not pre-set infra.parameters.environmentName: %s\n", err)
 		}
 
-		// Resolve the deploying user's Entra ID object ID and pre-set it as
+		// Resolve the caller's Entra ID object ID and pre-set it as
 		// infra.parameters.principalId. The Bicep template uses this to assign
-		// the AKS RBAC Cluster Admin role so the user can run kubectl/drasi
-		// commands after provisioning.
-		if userOID, err := resolveSignedInUserOID(cmd.Context()); err != nil {
-			_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "warning: could not resolve signed-in user OID: %s\n", err)
-		} else {
-			oidJSON, _ := json.Marshal(userOID)
-			if _, err := azdClient.Environment().SetConfig(ctx, &azdext.SetConfigRequest{
-				Path:    "infra.parameters.principalId",
-				Value:   oidJSON,
-				EnvName: envName,
-			}); err != nil {
-				_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "warning: could not pre-set infra.parameters.principalId: %s\n", err)
-			}
+		// the AKS RBAC Cluster Admin role so the caller can run kubectl/drasi
+		// commands after provisioning. Supports both user accounts and service
+		// principals.
+		callerOID, err := resolveCallerOID(cmd.Context())
+		if err != nil {
+			return writeCommandError(
+				cmd,
+				output.ERR_NO_AUTH,
+				fmt.Sprintf("resolving caller identity OID: %s", err),
+				"Run `azd auth login` as a user or service principal with directory read permissions.",
+				format,
+				output.ExitCodes[output.ERR_NO_AUTH],
+			)
+		}
+		oidJSON, _ := json.Marshal(callerOID)
+		if _, err := azdClient.Environment().SetConfig(ctx, &azdext.SetConfigRequest{
+			Path:    "infra.parameters.principalId",
+			Value:   oidJSON,
+			EnvName: envName,
+		}); err != nil {
+			_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "warning: could not pre-set infra.parameters.principalId: %s\n", err)
 		}
 
 		provisionArgs := []string{"provision"}
@@ -249,7 +263,7 @@ func defaultRunProvision(cmd *cobra.Command, _ []string) error {
 
 	_ = progress.Stop()
 
-	// Emit structured audit event to stderr (audit output goes to stderr per spec).
+	// Emit audit event to stderr.
 	auditEvent := output.AuditEvent{
 		Operation:     "provision",
 		Environment:   envName,
@@ -290,9 +304,8 @@ func runDrasiInit(ctx context.Context, aksContext string, usePrivateAcr bool, ac
 			return fmt.Errorf("switching kubectl context to %s: %w", aksContext, err)
 		}
 	}
-	// Register the current kubectl context as the active Drasi environment.
-	// This ensures `drasi init` (and subsequent drasi commands) target the right cluster
-	// regardless of any previously registered drasi environments.
+	// Register the current kubectl context as the active Drasi environment
+	// so `drasi init` targets the right cluster.
 	if err := runDrasiCommand(ctx, "env", "kube"); err != nil {
 		return fmt.Errorf("registering drasi environment from kubectl context: %w", err)
 	}
@@ -320,27 +333,64 @@ func switchKubectlContext(ctx context.Context, contextName string) error {
 	return nil
 }
 
-// resolveSignedInUserOID returns the Azure AD object ID of the currently signed-in
-// user by running `az ad signed-in-user show --query id -o tsv`.
-func resolveSignedInUserOID(ctx context.Context) (string, error) {
+// resolveCallerOID returns the Entra ID object ID of the currently signed-in
+// identity. It supports both user accounts and service principals by detecting
+// the account type via `az account show --query user -o json`.
+func resolveCallerOID(ctx context.Context) (string, error) {
 	azPath, err := exec.LookPath("az")
 	if err != nil {
 		return "", fmt.Errorf("az CLI not found on PATH: %w", err)
 	}
+
 	//nolint:gosec // az CLI path resolved via LookPath
-	out, err := exec.CommandContext(ctx, azPath, "ad", "signed-in-user", "show", "--query", "id", "-o", "tsv").Output()
+	acctOut, err := exec.CommandContext(ctx, azPath, "account", "show", "--query", "user", "-o", "json").Output()
 	if err != nil {
-		return "", fmt.Errorf("az ad signed-in-user show: %w", err)
+		return "", fmt.Errorf("az account show: %w", err)
 	}
-	oid := strings.TrimSpace(string(out))
-	if oid == "" {
-		return "", fmt.Errorf("az ad signed-in-user show returned empty OID")
+
+	var acctUser struct {
+		Name string `json:"name"`
+		Type string `json:"type"`
 	}
-	return oid, nil
+	if err := json.Unmarshal(acctOut, &acctUser); err != nil {
+		return "", fmt.Errorf("parsing az account show output: %w", err)
+	}
+
+	switch acctUser.Type {
+	case "user":
+		//nolint:gosec // az CLI path resolved via LookPath
+		out, err := exec.CommandContext(ctx, azPath, "ad", "signed-in-user", "show", "--query", "id", "-o", "tsv").Output()
+		if err != nil {
+			return "", fmt.Errorf("az ad signed-in-user show: %w", err)
+		}
+		oid := strings.TrimSpace(string(out))
+		if oid == "" {
+			return "", fmt.Errorf("az ad signed-in-user show returned empty OID")
+		}
+		return oid, nil
+
+	case "servicePrincipal":
+		appID := acctUser.Name
+		if appID == "" {
+			return "", fmt.Errorf("az account show returned empty service principal name")
+		}
+		//nolint:gosec // az CLI path resolved via LookPath
+		out, err := exec.CommandContext(ctx, azPath, "ad", "sp", "show", "--id", appID, "--query", "id", "-o", "tsv").Output()
+		if err != nil {
+			return "", fmt.Errorf("az ad sp show --id %s: %w", appID, err)
+		}
+		oid := strings.TrimSpace(string(out))
+		if oid == "" {
+			return "", fmt.Errorf("az ad sp show returned empty OID for appId %s", appID)
+		}
+		return oid, nil
+
+	default:
+		return "", fmt.Errorf("unsupported az account type %q", acctUser.Type)
+	}
 }
 
-// acquireAKSCredentials runs `az aks get-credentials` to configure kubectl access
-// to the AKS cluster, then reads back the actual context name from kubectl.
+// acquireAKSCredentials runs `az aks get-credentials` and returns the kubectl context name.
 func acquireAKSCredentials(ctx context.Context, resourceGroup, clusterName string) (string, error) {
 	azPath, err := exec.LookPath("az")
 	if err != nil {
@@ -358,8 +408,7 @@ func acquireAKSCredentials(ctx context.Context, resourceGroup, clusterName strin
 		return "", fmt.Errorf("az aks get-credentials: %w\n%s", err, string(out))
 	}
 
-	// Read back the actual kubectl context name rather than assuming it matches
-	// the cluster name.
+	// Read back the actual kubectl context name rather than assuming it matches the cluster name.
 	kubectlPath, err := exec.LookPath("kubectl")
 	if err != nil {
 		return "", fmt.Errorf("kubectl not found on PATH: %w", err)
@@ -381,6 +430,20 @@ func runDrasiCommand(ctx context.Context, args ...string) error {
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("%s: %w\n%s", output.ERR_DRASI_CLI_ERROR, err, string(out))
 	}
+	return nil
+}
+
+// ensureAzdEnvironment creates the named azd environment if it does not already exist.
+// It runs `azd env new <name> --no-prompt` which is idempotent — if the environment
+// already exists azd returns an error, which we ignore.
+func ensureAzdEnvironment(ctx context.Context, envName string) error {
+	azdPath, err := exec.LookPath("azd")
+	if err != nil {
+		return fmt.Errorf("azd not found on PATH: %w", err)
+	}
+	//nolint:gosec // azd path resolved via LookPath
+	cmd := exec.CommandContext(ctx, azdPath, "env", "new", envName, "--no-prompt")
+	_ = cmd.Run() // Ignore error: env may already exist.
 	return nil
 }
 

@@ -50,7 +50,7 @@ func newEngineHarness() *engineTestHarness {
 	return &engineTestHarness{
 		mockState: mc,
 		mockDrasi: md,
-		engine:    NewEngine(sm, md),
+		engine:    NewEngine(sm, md, nil),
 	}
 }
 

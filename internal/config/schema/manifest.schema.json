@@ -17,6 +17,20 @@
       }
     },
     "Environments": { "type": "object" },
-    "FeatureFlags": { "type": "object" }
+    "FeatureFlags": { "type": "object" },
+    "SecretMappings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["vaultName", "secretName", "k8sSecret", "k8sKey"],
+        "properties": {
+          "vaultName": { "type": "string", "description": "Azure Key Vault name. Supports $(VARNAME) expansion." },
+          "secretName": { "type": "string", "description": "Secret name within the Key Vault." },
+          "k8sSecret": { "type": "string", "description": "Kubernetes Secret name to create/update." },
+          "k8sKey": { "type": "string", "description": "Key within the Kubernetes Secret." },
+          "namespace": { "type": "string", "description": "Kubernetes namespace. Defaults to drasi-system." }
+        }
+      }
+    }
   }
 }

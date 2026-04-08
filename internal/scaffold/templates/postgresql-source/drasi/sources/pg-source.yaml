@@ -12,5 +12,4 @@ spec:
       vaultName: "$(AZURE_KEY_VAULT_NAME)"
       secretName: pg-connection-string
     database: drasidb
-    tables:
-      - public.orders
+    tables: public.orders

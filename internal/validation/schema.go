@@ -42,6 +42,64 @@ func ValidateEnvironmentOverlaySchema(environment config.Environment, file strin
 	validateSchema("schema/environment-overlay.schema.json", environment, file, 1, "environment overlay", result)
 }
 
+// ValidateManifestSchema validates a DrasiManifest against the JSON schema.
+func ValidateManifestSchema(manifest config.DrasiManifest, file string, result *ValidationResult) {
+	validateSchema("schema/manifest.schema.json", manifestSchemaValue(manifest), file, 1, "manifest", result)
+}
+
+func manifestSchemaValue(manifest config.DrasiManifest) map[string]any {
+	m := map[string]any{}
+
+	if manifest.APIVersion != "" {
+		m["APIVersion"] = manifest.APIVersion
+	}
+	if manifest.Includes != nil {
+		includes := make([]map[string]any, 0, len(manifest.Includes))
+		for _, include := range manifest.Includes {
+			item := map[string]any{}
+			if include.Kind != "" {
+				item["Kind"] = include.Kind
+			}
+			if include.Pattern != "" {
+				item["Pattern"] = include.Pattern
+			}
+			includes = append(includes, item)
+		}
+		m["Includes"] = includes
+	}
+	if manifest.Environments != nil {
+		m["Environments"] = manifest.Environments
+	}
+	if manifest.FeatureFlags != nil {
+		m["FeatureFlags"] = manifest.FeatureFlags
+	}
+	if manifest.SecretMappings != nil {
+		secretMappings := make([]map[string]any, 0, len(manifest.SecretMappings))
+		for _, mapping := range manifest.SecretMappings {
+			item := map[string]any{}
+			if mapping.VaultName != "" {
+				item["vaultName"] = mapping.VaultName
+			}
+			if mapping.SecretName != "" {
+				item["secretName"] = mapping.SecretName
+			}
+			if mapping.K8sSecret != "" {
+				item["k8sSecret"] = mapping.K8sSecret
+			}
+			if mapping.K8sKey != "" {
+				item["k8sKey"] = mapping.K8sKey
+			}
+			if mapping.Namespace != "" {
+				item["namespace"] = mapping.Namespace
+			}
+			secretMappings = append(secretMappings, item)
+		}
+		m["SecretMappings"] = secretMappings
+	}
+
+	return m
+}
+
 func validateSchema(schemaName string, value any, file string, line int, componentKind string, result *ValidationResult) {
 	schemaMap, err := compiledSchemas()
 	if err != nil {
@@ -84,13 +142,14 @@ func validateSchema(schemaName string, value any, file string, line int, compone
 func compiledSchemas() (map[string]*jsonschema.Schema, error) {
 	loadSchemaOnce.Do(func() {
 		compiler := jsonschema.NewCompiler()
-		schemas = make(map[string]*jsonschema.Schema, 5)
+		schemas = make(map[string]*jsonschema.Schema, 6)
 		for _, name := range []string{
 			"schema/source.schema.json",
 			"schema/continuousquery.schema.json",
 			"schema/reaction.schema.json",
 			"schema/middleware.schema.json",
 			"schema/environment-overlay.schema.json",
+			"schema/manifest.schema.json",
 		} {
 			data, err := config.SchemaFS.ReadFile(name)
 			if err != nil {
@@ -115,6 +174,7 @@ func compiledSchemas() (map[string]*jsonschema.Schema, error) {
 			"schema/reaction.schema.json",
 			"schema/middleware.schema.json",
 			"schema/environment-overlay.schema.json",
+			"schema/manifest.schema.json",
 		} {
 			compiled, err := compiler.Compile(name)
 			if err != nil {
