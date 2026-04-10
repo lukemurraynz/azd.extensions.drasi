@@ -33,6 +33,7 @@ module drasiInfra 'modules/drasi-infra.bicep' = {
     environmentName: environmentName
     principalId: principalId
     tags: tags
+    postgresAdminPassword: postgresAdminPassword
   }
 }
 

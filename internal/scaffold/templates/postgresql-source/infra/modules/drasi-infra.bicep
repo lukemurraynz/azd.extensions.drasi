@@ -18,6 +18,10 @@ param tags object
 @description('Object ID of the deploying user. Used to assign AKS RBAC Cluster Admin so the user can run kubectl/drasi commands after provisioning.')
 param principalId string
 
+@secure()
+@description('PostgreSQL admin password to store in Key Vault for Drasi secret sync.')
+param postgresAdminPassword string = ''
+
 @description('Kubernetes namespace where Drasi is installed.')
 param drasiNamespace string = 'drasi-system'
 
@@ -45,6 +49,7 @@ var aksSubnetPrefix = '10.0.0.0/22' // /22 = 1022 usable IPs; sufficient for Azu
 // Role definition GUIDs (built-in, verified against Azure RBAC docs)
 // https://learn.microsoft.com/azure/role-based-access-control/built-in-roles
 var kvSecretsUserRoleId        = '4633458b-17de-408a-b874-0445c86b69e6' // Key Vault Secrets User
+var kvSecretsOfficerRoleId     = 'b86a8fe4-44ce-4948-aee5-eccb2c155cd7' // Key Vault Secrets Officer
 var monitoringPublisherRoleId  = '3913510d-42f4-4e42-8a64-420c390055eb' // Monitoring Metrics Publisher
 var networkContributorRoleId   = '4d97b98b-1d4f-4787-a291-c67834d212e7' // Network Contributor
 var aksRbacClusterAdminRoleId  = 'b1ff04bb-8a4e-4dc4-8eb5-8693973ce19b' // Azure Kubernetes Service RBAC Cluster Admin
@@ -113,7 +118,31 @@ module keyVault 'br/public:avm/res/key-vault/vault:0.13.3' = {
         roleDefinitionIdOrName: kvSecretsUserRoleId
         principalType: 'ServicePrincipal'
       }
+      // Grant the deploying user Key Vault Secrets Officer so the provision step can
+      // store the PostgreSQL password and the deploy step can read it via `az keyvault secret show`.
+      {
+        principalId: principalId
+        roleDefinitionIdOrName: kvSecretsOfficerRoleId
+        principalType: 'User'
+      }
     ]
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Store the PostgreSQL admin password in Key Vault so the Drasi deploy step
+// can sync it to a Kubernetes Secret via secretMappings (pg-source-secrets/password).
+// ---------------------------------------------------------------------------
+resource kvRef 'Microsoft.KeyVault/vaults@2023-07-01' existing = {
+  name: kvName
+  dependsOn: [keyVault]
+}
+
+resource pgPasswordSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = {
+  parent: kvRef
+  name: 'pg-password'
+  properties: {
+    value: postgresAdminPassword
   }
 }
 
@@ -133,8 +162,7 @@ module publicIp 'br/public:avm/res/network/public-ip-address:0.9.1' = {
     skuTier: 'Regional'
     publicIPAllocationMethod: 'Static'
     publicIPAddressVersion: 'IPv4'
-    // Zone-redundant: all three availability zones
-    availabilityZones: [1, 2, 3]
+    // Development: no zone pinning. For production, add zones: [1, 2, 3].
   }
 }
 
@@ -286,28 +314,21 @@ module aks 'br/public:avm/res/container-service/managed-cluster:0.13.0' = {
     // can provision PersistentVolumeClaims using the 'default' StorageClass.
     enableStorageProfileDiskCSIDriver: true
 
-    // System node pool: AKS skill requirements
-    //   - Minimum 3 nodes
-    //   - Standard_D4s_v5 or larger
-    //   - Azure Linux 3.0 (osSku: AzureLinux)
-    //   - CriticalAddonsOnly=true:NoSchedule taint
-    //   - Availability zones [1, 2, 3]
-    //   - VNet subnet wired here (not a top-level cluster param in AVM 0.13.0)
+    // System node pool — development configuration.
+    //   - Single node with Standard_D2s_v5 to minimise vCPU quota usage.
+    //   - Azure Linux (osSku: AzureLinux)
+    //   - CriticalAddonsOnly taint keeps workloads on the user pool.
+    //   - For production, increase count to 3, use D4s_v5+, and add availability zones.
     primaryAgentPoolProfiles: [
       {
         name: 'systempool'
-        count: 3
-        vmSize: 'Standard_D4s_v5'
+        count: 1
+        vmSize: 'Standard_D2s_v5'
         osType: 'Linux'
         osSKU: 'AzureLinux'
         mode: 'System'
         enableAutoScaling: false
         vnetSubnetResourceId: '${vnet.outputs.resourceId}/subnets/snet-aks'
-        availabilityZones: [
-          1
-          2
-          3
-        ]
         nodeTaints: [
           'CriticalAddonsOnly=true:NoSchedule'
         ]
@@ -315,24 +336,18 @@ module aks 'br/public:avm/res/container-service/managed-cluster:0.13.0' = {
     ]
 
     // User node pool — Dapr, Drasi, and application workloads schedule here.
-    // System pools carry CriticalAddonsOnly=true:NoSchedule automatically, so a
-    // separate User pool with no taints is required for non-system pods to schedule.
-    // Node count >= zone count for balanced zonal HA.
+    // Development configuration: single node to minimise quota usage.
+    // For production, increase count to 3, use D4s_v5+, and add availability zones.
     agentPools: [
       {
         name: 'workload'
-        count: 3
-        vmSize: 'Standard_D4s_v5'
+        count: 1
+        vmSize: 'Standard_D2s_v5'
         osType: 'Linux'
         osSKU: 'AzureLinux'
         mode: 'User'
         enableAutoScaling: false
         vnetSubnetResourceId: '${vnet.outputs.resourceId}/subnets/snet-aks'
-        availabilityZones: [
-          1
-          2
-          3
-        ]
         // No nodeTaints — all workloads (Dapr, Drasi) must be able to schedule here.
         nodeTaints: []
       }

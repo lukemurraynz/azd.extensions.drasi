@@ -2,9 +2,11 @@ package cmd
 
 import (
 	"context"
+	"crypto/rand"
 	_ "embed"
 	"encoding/json"
 	"fmt"
+	"math/big"
 	"os/exec"
 	"strings"
 	"time"
@@ -133,6 +135,42 @@ func defaultRunProvision(cmd *cobra.Command, _ []string) error {
 			EnvName: envName,
 		}); err != nil {
 			_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "warning: could not pre-set infra.parameters.principalId: %s\n", err)
+		}
+
+		// Generate a secure password for PostgreSQL and pre-set it as
+		// infra.parameters.postgresAdminPassword. The Bicep template stores
+		// it in Key Vault so the deploy step can sync it to a Kubernetes Secret.
+		// Only generate if not already set (idempotent across retries).
+		existingPW, _ := getEnvValue(ctx, azdClient, envName, "POSTGRES_ADMIN_PASSWORD_SET")
+		if existingPW != "true" {
+			pgPassword, err := generatePassword(20)
+			if err != nil {
+				return writeCommandError(
+					cmd,
+					output.ERR_INFRA_PROVISION_FAILED,
+					fmt.Sprintf("generating PostgreSQL admin password: %s", err),
+					"Ensure the system has a working crypto/rand source.",
+					format,
+					output.ExitCodes[output.ERR_INFRA_PROVISION_FAILED],
+				)
+			}
+			pwJSON, _ := json.Marshal(pgPassword)
+			if _, err := azdClient.Environment().SetConfig(ctx, &azdext.SetConfigRequest{
+				Path:    "infra.parameters.postgresAdminPassword",
+				Value:   pwJSON,
+				EnvName: envName,
+			}); err != nil {
+				_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "warning: could not pre-set infra.parameters.postgresAdminPassword: %s\n", err)
+			}
+			// Mark that we've generated the password so subsequent provision retries
+			// reuse the same value (azd config is persisted across runs).
+			if _, err := azdClient.Environment().SetValue(ctx, &azdext.SetEnvRequest{
+				EnvName: envName,
+				Key:     "POSTGRES_ADMIN_PASSWORD_SET",
+				Value:   "true",
+			}); err != nil {
+				_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "warning: could not persist POSTGRES_ADMIN_PASSWORD_SET: %s\n", err)
+			}
 		}
 
 		provisionArgs := []string{"provision"}
@@ -547,6 +585,46 @@ func getEnvValue(ctx context.Context, azdClient *azdext.AzdClient, envName, key 
 		return "", nil
 	}
 	return resp.Value, nil
+}
+
+// generatePassword creates a cryptographically random password suitable for
+// Azure Database for PostgreSQL. The password contains a mix of uppercase,
+// lowercase, digits, and special characters to satisfy Azure complexity requirements.
+func generatePassword(length int) (string, error) {
+	const (
+		upper   = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+		lower   = "abcdefghijklmnopqrstuvwxyz"
+		digits  = "0123456789"
+		special = "!@#$%^&*"
+	)
+	charset := upper + lower + digits + special
+
+	if length < 8 {
+		length = 16
+	}
+
+	for attempts := 0; attempts < 10; attempts++ {
+		buf := make([]byte, length)
+		for i := range buf {
+			idx, err := rand.Int(rand.Reader, big.NewInt(int64(len(charset))))
+			if err != nil {
+				return "", fmt.Errorf("generating random byte: %w", err)
+			}
+			buf[i] = charset[idx.Int64()]
+		}
+		pw := string(buf)
+
+		// Verify complexity: at least one char from each required set.
+		hasUpper := strings.ContainsAny(pw, upper)
+		hasLower := strings.ContainsAny(pw, lower)
+		hasDigit := strings.ContainsAny(pw, digits)
+		hasSpecial := strings.ContainsAny(pw, special)
+		if hasUpper && hasLower && hasDigit && hasSpecial {
+			return pw, nil
+		}
+	}
+
+	return "", fmt.Errorf("failed to generate compliant password after 10 attempts")
 }
 
 // applyDrasiNetworkPolicies applies baseline Kubernetes NetworkPolicy manifests
