@@ -45,6 +45,7 @@ module postgresServer 'modules/postgresql.bicep' = {
     tags: tags
     administratorLoginPassword: postgresAdminPassword
     publicNetworkAccess: postgresPublicNetworkAccess
+    scriptIdentityId: drasiInfra.outputs.uamiResourceId
   }
 }
 

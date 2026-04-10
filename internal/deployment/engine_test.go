@@ -79,9 +79,9 @@ func TestEngine_Deploy_HappyPath_AllCreate(t *testing.T) {
 			err := h.engine.Deploy(context.Background(), tt.manifest, tt.opts)
 			require.NoError(t, err)
 
-			// Both components should have been applied + waited
-			// apply source, wait source, apply query, wait query → 4 commands
-			assert.Len(t, h.mockDrasi.commandsCalled, 4)
+			// Both components should have been applied; source also waited.
+			// apply source, wait source, apply query → 3 commands
+			assert.Len(t, h.mockDrasi.commandsCalled, 3)
 		})
 	}
 }
@@ -209,19 +209,17 @@ func TestEngine_Deploy_DeployOrder_SourcesBeforeQueries(t *testing.T) {
 	err := h.engine.Deploy(context.Background(), manifest, DeployOptions{Environment: "test-env"})
 	require.NoError(t, err)
 
-	// 4 commands: apply source, wait source, apply query, wait query
-	require.Len(t, h.mockDrasi.commandsCalled, 4)
+	// 3 commands: apply source, wait source, apply query
+	// drasi wait only supports source and reaction; queries are not waited on.
+	require.Len(t, h.mockDrasi.commandsCalled, 3)
 
-	// First two commands are for source (apply -f <file>)
+	// First command: apply source
 	assert.Equal(t, "apply", h.mockDrasi.commandsCalled[0][0])
-	// Third command is wait for source
+	// Second command: wait for source
 	assert.Equal(t, "wait", h.mockDrasi.commandsCalled[1][0])
 	assert.Equal(t, "source", h.mockDrasi.commandsCalled[1][1])
-	// Then apply query
+	// Third command: apply query (no wait — drasi wait does not support continuousquery)
 	assert.Equal(t, "apply", h.mockDrasi.commandsCalled[2][0])
-	// Wait for query
-	assert.Equal(t, "wait", h.mockDrasi.commandsCalled[3][0])
-	assert.Equal(t, "continuousquery", h.mockDrasi.commandsCalled[3][1])
 }
 
 func TestEngine_Deploy_PropagatesRunCommandError(t *testing.T) {
@@ -249,22 +247,29 @@ func TestDeployRollbackOnFailure(t *testing.T) {
 		Reactions: []config.Reaction{{ID: "reaction-three"}},
 	}
 
+	// Fail on wait for the reaction (drasi wait supports source and reaction).
+	// Queries and middleware are NOT waited on, so we trigger failure on reaction wait.
 	h.mockDrasi.runCommandFunc = func(ctx context.Context, args ...string) error {
-		if len(args) > 0 && args[0] == "wait" && len(args) > 2 && args[1] == "continuousquery" && args[2] == "query-two" {
-			return fmt.Errorf("query wait failed")
+		if len(args) > 0 && args[0] == "wait" && len(args) > 2 && args[1] == "reaction" && args[2] == "reaction-three" {
+			return fmt.Errorf("reaction wait failed")
 		}
 		return nil
 	}
 
 	err := h.engine.Deploy(context.Background(), manifest, DeployOptions{Environment: "test-env"})
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "query wait failed")
+	assert.Contains(t, err.Error(), "reaction wait failed")
 
-	require.Len(t, h.mockDrasi.commandsCalled, 5)
+	// Commands: apply source, wait source, apply query, apply reaction, wait reaction (fail),
+	// then rollback: delete query, delete source → 7 total
+	require.Len(t, h.mockDrasi.commandsCalled, 7)
 	assert.Equal(t, []string{"wait", "source", "source-one", "--timeout", "300"}, h.mockDrasi.commandsCalled[1])
-	assert.Equal(t, []string{"wait", "continuousquery", "query-two", "--timeout", "300"}, h.mockDrasi.commandsCalled[3])
-	assert.Equal(t, []string{"delete", "source", "source-one"}, h.mockDrasi.commandsCalled[4])
-	assert.Equal(t, "", h.mockState.store["DRASI_HASH_CONTINUOUSQUERY_query_two"])
+	assert.Equal(t, []string{"wait", "reaction", "reaction-three", "--timeout", "300"}, h.mockDrasi.commandsCalled[4])
+	// Rollback deletes in reverse order: query first (last applied), then source
+	assert.Equal(t, []string{"delete", "continuousquery", "query-two"}, h.mockDrasi.commandsCalled[5])
+	assert.Equal(t, []string{"delete", "source", "source-one"}, h.mockDrasi.commandsCalled[6])
+	// Reaction state should not be persisted since it failed
+	assert.Equal(t, "", h.mockState.store["DRASI_HASH_REACTION_reaction_three"])
 }
 
 func TestDeployNoRollback(t *testing.T) {
@@ -272,24 +277,27 @@ func TestDeployNoRollback(t *testing.T) {
 
 	h := newEngineHarness()
 	manifest := &config.ResolvedManifest{
-		Sources: []config.Source{{ID: "source-one"}},
-		Queries: []config.ContinuousQuery{{ID: "query-two"}},
+		Sources:   []config.Source{{ID: "source-one"}},
+		Reactions: []config.Reaction{{ID: "reaction-two"}},
 	}
 
+	// Fail on wait for the reaction (drasi wait supports source and reaction).
 	h.mockDrasi.runCommandFunc = func(ctx context.Context, args ...string) error {
-		if len(args) > 0 && args[0] == "wait" && len(args) > 2 && args[1] == "continuousquery" && args[2] == "query-two" {
-			return fmt.Errorf("query wait failed")
+		if len(args) > 0 && args[0] == "wait" && len(args) > 2 && args[1] == "reaction" && args[2] == "reaction-two" {
+			return fmt.Errorf("reaction wait failed")
 		}
 		return nil
 	}
 
 	err := h.engine.Deploy(context.Background(), manifest, DeployOptions{Environment: "test-env", NoRollback: true})
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "query wait failed")
+	assert.Contains(t, err.Error(), "reaction wait failed")
 
+	// With NoRollback, no delete commands should be issued.
 	for _, cmd := range h.mockDrasi.commandsCalled {
-		assert.NotEqual(t, []string{"delete", "source", "source-one"}, cmd)
+		assert.NotEqual(t, "delete", cmd[0], "no rollback deletes should occur with NoRollback: true")
 	}
+	// Commands: apply source, wait source, apply reaction, wait reaction (fail) → 4
 	assert.Len(t, h.mockDrasi.commandsCalled, 4)
 }
 
@@ -298,24 +306,29 @@ func TestDeployRollbackFailure(t *testing.T) {
 
 	h := newEngineHarness()
 	manifest := &config.ResolvedManifest{
-		Sources: []config.Source{{ID: "source-one"}},
-		Queries: []config.ContinuousQuery{{ID: "query-two"}},
+		Sources:   []config.Source{{ID: "source-one"}},
+		Reactions: []config.Reaction{{ID: "reaction-two"}},
 	}
 
 	h.mockDrasi.runCommandFunc = func(ctx context.Context, args ...string) error {
+		// Rollback delete of source-one fails
 		if len(args) == 3 && args[0] == "delete" && args[1] == "source" && args[2] == "source-one" {
 			return fmt.Errorf("rollback delete failed")
 		}
-		if len(args) > 0 && args[0] == "wait" && len(args) > 2 && args[1] == "continuousquery" && args[2] == "query-two" {
-			return fmt.Errorf("query wait failed")
+		// Reaction wait fails, triggering rollback
+		if len(args) > 0 && args[0] == "wait" && len(args) > 2 && args[1] == "reaction" && args[2] == "reaction-two" {
+			return fmt.Errorf("reaction wait failed")
 		}
 		return nil
 	}
 
 	err := h.engine.Deploy(context.Background(), manifest, DeployOptions{Environment: "test-env"})
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "query wait failed")
+	// The original deploy error is returned, not the rollback failure.
+	assert.Contains(t, err.Error(), "reaction wait failed")
 	assert.NotContains(t, err.Error(), "rollback delete failed")
+	// Commands: apply source, wait source, apply reaction, wait reaction (fail),
+	// rollback: delete source (fails) → 5 total
 	require.Len(t, h.mockDrasi.commandsCalled, 5)
 	assert.Equal(t, []string{"delete", "source", "source-one"}, h.mockDrasi.commandsCalled[4])
 }

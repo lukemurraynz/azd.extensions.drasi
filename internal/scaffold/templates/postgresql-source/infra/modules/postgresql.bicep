@@ -79,6 +79,75 @@ resource drasiDatabase 'Microsoft.DBforPostgreSQL/flexibleServers/databases@2024
   }
 }
 
+// Allow Azure services (including AKS) to connect to PostgreSQL.
+// Start/end IP of 0.0.0.0 is the Azure-internal signal for "Allow Azure services".
+// For production, use private endpoints instead.
+resource allowAzureServices 'Microsoft.DBforPostgreSQL/flexibleServers/firewallRules@2024-08-01' = {
+  parent: postgresServer
+  name: 'AllowAllAzureServicesAndResourcesWithinAzureIps'
+  properties: {
+    startIpAddress: '0.0.0.0'
+    endIpAddress: '0.0.0.0'
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Deployment Script — bootstrap the database schema and grant REPLICATION role.
+// Uses psql to connect directly to PostgreSQL with the admin credentials.
+// The AllowAllAzureServicesAndResourcesWithinAzureIps firewall rule allows
+// connectivity from the Azure Container Instance that runs this script.
+// Requires a user-assigned managed identity (no Azure roles needed — auth is
+// via PostgreSQL admin credentials, not Azure RBAC).
+// ---------------------------------------------------------------------------
+
+@description('Resource ID of a user-assigned managed identity for the deployment script.')
+param scriptIdentityId string
+
+// The deployment script runs psql to:
+// 1. Create the orders table (IF NOT EXISTS) — required by the sample continuous query.
+// 2. Grant REPLICATION to the admin role — required for Drasi PostgreSQL CDC.
+// The script is idempotent and safe to re-run on subsequent provisions.
+resource dbBootstrap 'Microsoft.Resources/deploymentScripts@2023-08-01' = {
+  name: 'pg-bootstrap-${uniqueString(resourceGroup().id)}'
+  location: location
+  kind: 'AzureCLI'
+  identity: {
+    type: 'UserAssigned'
+    userAssignedIdentities: {
+      '${scriptIdentityId}': {}
+    }
+  }
+  properties: {
+    azCliVersion: '2.67.0'
+    retentionInterval: 'PT1H'
+    timeout: 'PT10M'
+    cleanupPreference: 'OnSuccess'
+    environmentVariables: [
+      { name: 'PGHOST', value: postgresServer.properties.fullyQualifiedDomainName }
+      { name: 'PGUSER', value: adminLogin }
+      { name: 'PGDATABASE', value: databaseName }
+      { name: 'PGPASSWORD', secureValue: administratorLoginPassword }
+    ]
+    scriptContent: '''
+      set -euo pipefail
+      apk add --no-cache postgresql16-client
+
+      echo "Creating orders table..."
+      psql "sslmode=require" -c "CREATE TABLE IF NOT EXISTS public.orders (id SERIAL PRIMARY KEY, status VARCHAR(50) NOT NULL DEFAULT 'pending', created_at TIMESTAMPTZ NOT NULL DEFAULT NOW());"
+
+      echo "Granting REPLICATION role..."
+      psql "sslmode=require" -c "DO \$\$BEGIN IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = current_user AND rolreplication) THEN EXECUTE format('ALTER ROLE %I REPLICATION', current_user); END IF; END\$\$;"
+
+      echo "Database bootstrap completed successfully"
+    '''
+  }
+  dependsOn: [
+    drasiDatabase
+    walLevelParam
+    allowAzureServices
+  ]
+}
+
 output serverFqdn string = postgresServer.properties.fullyQualifiedDomainName
 output databaseName string = databaseName
 output serverName string = postgresServer.name

@@ -108,7 +108,10 @@ func (e *Engine) Deploy(ctx context.Context, manifest *config.ResolvedManifest, 
 			applyErr = e.applyComponent(compCtx, action, manifest, opts.EnvVars)
 		}
 
-		if applyErr == nil {
+		// drasi wait only supports source and reaction kinds.
+		// Continuous queries and middleware become ready implicitly once their
+		// dependencies are healthy; there is no separate readiness probe for them.
+		if applyErr == nil && (action.Kind == "source" || action.Kind == "reaction") {
 			applyErr = e.drasiClient.RunCommand(compCtx, "wait", action.Kind, action.ID, "--timeout", "300")
 		}
 
