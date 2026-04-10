@@ -21,11 +21,17 @@ type cmdRunner interface {
 type execCmdRunner struct{}
 
 func (r *execCmdRunner) RunCmd(ctx context.Context, stdin io.Reader, name string, args ...string) ([]byte, error) {
-	path, err := exec.LookPath(name)
-	if err != nil {
-		return nil, fmt.Errorf("%s not found on PATH: %w", name, err)
+	var cmd *exec.Cmd
+	switch name {
+	case "az":
+		// #nosec G204 -- executable is hardcoded to az; args are constructed internally for Azure CLI invocations only.
+		cmd = exec.CommandContext(ctx, "az", args...)
+	case "kubectl":
+		// #nosec G204 -- executable is hardcoded to kubectl; args are constructed internally for Kubernetes secret apply only.
+		cmd = exec.CommandContext(ctx, "kubectl", args...)
+	default:
+		return nil, fmt.Errorf("unsupported command %q", name)
 	}
-	cmd := exec.CommandContext(ctx, path, args...)
 	cmd.Stdin = stdin
 	out, err := cmd.CombinedOutput()
 	if err != nil {

@@ -66,7 +66,7 @@ func (e *Engine) Deploy(ctx context.Context, manifest *config.ResolvedManifest, 
 	// even when the YAML template itself is unchanged.
 	envSuffix := hashEnvVars(opts.EnvVars)
 	for i := range hashes {
-		hashes[i].Hash = hashes[i].Hash + envSuffix
+		hashes[i].Hash += envSuffix
 	}
 
 	existingState := make(map[string]string, len(hashes))
