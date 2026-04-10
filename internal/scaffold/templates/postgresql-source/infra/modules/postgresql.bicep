@@ -93,9 +93,9 @@ resource allowAzureServices 'Microsoft.DBforPostgreSQL/flexibleServers/firewallR
 
 // ---------------------------------------------------------------------------
 // Deployment Script — bootstrap the database schema and grant REPLICATION role.
-// Uses `az postgres flexible-server execute` from the AzureCLI deployment script
-// container. This command routes through the ARM management plane so the script
-// does not require direct network connectivity to the PostgreSQL server.
+// Uses psql from the AzureCLI deployment script container (CBL-Mariner based).
+// The AllowAllAzureServicesAndResourcesWithinAzureIps firewall rule permits
+// connectivity from the Azure Container Instance that runs this script.
 // Requires a user-assigned managed identity (no special Azure roles needed — auth
 // is via PostgreSQL admin credentials, not Azure RBAC).
 // ---------------------------------------------------------------------------
@@ -123,31 +123,44 @@ resource dbBootstrap 'Microsoft.Resources/deploymentScripts@2023-08-01' = {
     timeout: 'PT10M'
     cleanupPreference: 'OnSuccess'
     environmentVariables: [
-      { name: 'PG_SERVER_NAME', value: postgresServer.name }
-      { name: 'PG_ADMIN_USER', value: adminLogin }
-      { name: 'PG_DATABASE', value: databaseName }
-      { name: 'PG_ADMIN_PASSWORD', secureValue: administratorLoginPassword }
+      { name: 'PGHOST', value: postgresServer.properties.fullyQualifiedDomainName }
+      { name: 'PGUSER', value: adminLogin }
+      { name: 'PGDATABASE', value: databaseName }
+      { name: 'PGPASSWORD', secureValue: administratorLoginPassword }
     ]
     scriptContent: '''
       set -euo pipefail
+      pip install psycopg2-binary -q
 
-      echo "Creating orders table..."
-      az postgres flexible-server execute \
-        --name "$PG_SERVER_NAME" \
-        --admin-user "$PG_ADMIN_USER" \
-        --admin-password "$PG_ADMIN_PASSWORD" \
-        --database-name "$PG_DATABASE" \
-        --querytext "CREATE TABLE IF NOT EXISTS public.orders (id SERIAL PRIMARY KEY, status VARCHAR(50) NOT NULL DEFAULT 'pending', created_at TIMESTAMPTZ NOT NULL DEFAULT NOW());"
+      python3 <<'PYEOF'
+import os, psycopg2
 
-      echo "Granting REPLICATION role..."
-      az postgres flexible-server execute \
-        --name "$PG_SERVER_NAME" \
-        --admin-user "$PG_ADMIN_USER" \
-        --admin-password "$PG_ADMIN_PASSWORD" \
-        --database-name "$PG_DATABASE" \
-        --querytext "ALTER ROLE \"$PG_ADMIN_USER\" REPLICATION;"
+conn = psycopg2.connect(
+    host=os.environ["PGHOST"],
+    user=os.environ["PGUSER"],
+    password=os.environ["PGPASSWORD"],
+    dbname=os.environ["PGDATABASE"],
+    sslmode="require"
+)
+conn.autocommit = True
+cur = conn.cursor()
 
-      echo "Database bootstrap completed successfully"
+print("Creating orders table...")
+cur.execute("""
+    CREATE TABLE IF NOT EXISTS public.orders (
+        id SERIAL PRIMARY KEY,
+        status VARCHAR(50) NOT NULL DEFAULT 'pending',
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+""")
+
+print("Granting REPLICATION role...")
+cur.execute("ALTER ROLE \"%s\" REPLICATION;" % os.environ["PGUSER"])
+
+cur.close()
+conn.close()
+print("Database bootstrap completed successfully")
+PYEOF
     '''
   }
   dependsOn: [
