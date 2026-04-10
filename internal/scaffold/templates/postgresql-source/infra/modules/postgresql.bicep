@@ -130,37 +130,24 @@ resource dbBootstrap 'Microsoft.Resources/deploymentScripts@2023-08-01' = {
     ]
     scriptContent: '''
       set -euo pipefail
-      pip install psycopg2-binary -q
 
-      python3 <<'PYEOF'
-import os, psycopg2
+      # Install psql via tdnf (CBL-Mariner / Azure Linux package manager).
+      tdnf install -y postgresql
 
-conn = psycopg2.connect(
-    host=os.environ["PGHOST"],
-    user=os.environ["PGUSER"],
-    password=os.environ["PGPASSWORD"],
-    dbname=os.environ["PGDATABASE"],
-    sslmode="require"
-)
-conn.autocommit = True
-cur = conn.cursor()
+      export PGHOST PGUSER PGDATABASE PGPASSWORD
+      export PGSSLMODE=require
 
-print("Creating orders table...")
-cur.execute("""
-    CREATE TABLE IF NOT EXISTS public.orders (
-        id SERIAL PRIMARY KEY,
-        status VARCHAR(50) NOT NULL DEFAULT 'pending',
-        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    );
-""")
+      echo "Creating orders table..."
+      psql -c "CREATE TABLE IF NOT EXISTS public.orders (
+          id SERIAL PRIMARY KEY,
+          status VARCHAR(50) NOT NULL DEFAULT 'pending',
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );"
 
-print("Granting REPLICATION role...")
-cur.execute("ALTER ROLE \"%s\" REPLICATION;" % os.environ["PGUSER"])
+      echo "Granting REPLICATION role..."
+      psql -c "ALTER ROLE \"${PGUSER}\" REPLICATION;"
 
-cur.close()
-conn.close()
-print("Database bootstrap completed successfully")
-PYEOF
+      echo "Database bootstrap completed successfully"
     '''
   }
   dependsOn: [

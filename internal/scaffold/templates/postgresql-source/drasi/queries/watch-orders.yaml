@@ -9,5 +9,5 @@ spec:
     subscriptions:
       - id: pg-source
   query: >
-    MATCH (o:public_orders)
+    MATCH (o:orders)
     RETURN o.id AS orderId, o.status AS status, o.created_at AS createdAt
