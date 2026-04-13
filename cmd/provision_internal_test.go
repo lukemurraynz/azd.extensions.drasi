@@ -6,8 +6,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/azure/azure-dev/cli/azd/pkg/azdext"
 	"github.com/lukemurraynz/azd.extensions.drasi/internal/output"
@@ -373,7 +375,7 @@ exit 1
 func TestRunDrasiInit_DrasiMissingReturnsError(t *testing.T) {
 	t.Setenv("PATH", t.TempDir())
 
-	err := runDrasiInit(context.Background(), "", false, "")
+	err := runDrasiInit(context.Background(), "", false, "", nil)
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "drasi binary not found")
@@ -395,7 +397,7 @@ exit 1
 `, logFile)),
 	})
 
-	err := runDrasiInit(context.Background(), "", false, "")
+	err := runDrasiInit(context.Background(), "", false, "", nil)
 
 	require.NoError(t, err)
 	assert.Equal(t, []string{"env kube", "init"}, readNonEmptyLines(t, logFile))
@@ -417,10 +419,136 @@ exit 1
 `, logFile)),
 	})
 
-	err := runDrasiInit(context.Background(), "", true, "example.azurecr.io")
+	err := runDrasiInit(context.Background(), "", true, "example.azurecr.io", nil)
 
 	require.NoError(t, err)
 	assert.Equal(t, []string{"env kube", "init --registry example.azurecr.io"}, readNonEmptyLines(t, logFile))
+}
+
+func TestRunDrasiInit_RetriesOnTransientFailure(t *testing.T) {
+	// NOTE: Cannot use t.Parallel() — this test mutates the package-level drasiInitBaseDelay.
+	origDelay := drasiInitBaseDelay
+	drasiInitBaseDelay = 10 * time.Millisecond
+	t.Cleanup(func() { drasiInitBaseDelay = origDelay })
+
+	markerDir := filepath.Join(t.TempDir(), "markers")
+	require.NoError(t, os.MkdirAll(markerDir, 0o755))
+	logFile := filepath.Join(t.TempDir(), "drasi.log")
+
+	// Fake drasi: "env kube" always succeeds; "init" creates a marker file on
+	// each invocation. When marker "3" exists (third call), init succeeds.
+	installFakeCommands(t, map[string]string{
+		"drasi": fakeScript(fmt.Sprintf(`
+echo %%*>>"%s"
+if "%%1 %%2"=="env kube" exit /b 0
+if NOT "%%1"=="init" exit /b 1
+if exist "%s\3" exit /b 0
+if exist "%s\2" echo.>"%s\3" & exit /b 0
+if exist "%s\1" echo.>"%s\2" & echo tunnel panic 1>&2 & exit /b 2
+echo.>"%s\1" & echo tunnel panic 1>&2 & exit /b 2
+`, logFile, markerDir, markerDir, markerDir, markerDir, markerDir, markerDir), fmt.Sprintf(`
+echo "$@" >> "%s"
+if [ "$1 $2" = "env kube" ]; then exit 0; fi
+if [ "$1" = "init" ]; then
+  if [ -f "%s/3" ]; then exit 0; fi
+  if [ -f "%s/2" ]; then touch "%s/3"; exit 0; fi
+  if [ -f "%s/1" ]; then touch "%s/2"; echo "tunnel panic" >&2; exit 2; fi
+  touch "%s/1"; echo "tunnel panic" >&2; exit 2
+fi
+exit 1
+`, logFile, markerDir, markerDir, markerDir, markerDir, markerDir, markerDir)),
+	})
+
+	var msgs []string
+	progressFn := func(msg string) { msgs = append(msgs, msg) }
+
+	err := runDrasiInit(context.Background(), "", false, "", progressFn)
+
+	require.NoError(t, err, "should succeed on third attempt")
+	assert.Len(t, msgs, 2, "should report 2 retry messages (attempts 1 and 2)")
+	assert.Contains(t, msgs[0], "attempt 1/3 failed")
+	assert.Contains(t, msgs[1], "attempt 2/3 failed")
+}
+
+func TestRunDrasiInit_AllAttemptsFailReturnsLastError(t *testing.T) {
+	// NOTE: Cannot use t.Parallel() — this test mutates the package-level drasiInitBaseDelay.
+	origDelay := drasiInitBaseDelay
+	drasiInitBaseDelay = 10 * time.Millisecond
+	t.Cleanup(func() { drasiInitBaseDelay = origDelay })
+
+	logFile := filepath.Join(t.TempDir(), "drasi.log")
+	installFakeCommands(t, map[string]string{
+		"drasi": fakeScript(fmt.Sprintf(`
+echo %%*>>"%s"
+if "%%1 %%2"=="env kube" exit /b 0
+if "%%1"=="init" (
+  echo lost connection to pod 1>&2
+  exit /b 2
+)
+exit /b 1
+`, logFile), fmt.Sprintf(`
+echo "$@" >> "%s"
+if [ "$1 $2" = "env kube" ]; then exit 0; fi
+if [ "$1" = "init" ]; then
+  echo "lost connection to pod" >&2
+  exit 2
+fi
+exit 1
+`, logFile)),
+	})
+
+	var msgs []string
+	progressFn := func(msg string) { msgs = append(msgs, msg) }
+
+	err := runDrasiInit(context.Background(), "", false, "", progressFn)
+
+	require.Error(t, err, "should fail after exhausting all attempts")
+	assert.Contains(t, err.Error(), "exit status 2")
+	assert.Len(t, msgs, 2, "should report retry messages for the first 2 failed attempts")
+}
+
+func TestRunDrasiInit_RetryCancelledByContext(t *testing.T) {
+	// NOTE: Cannot use t.Parallel() — this test mutates the package-level drasiInitBaseDelay.
+	origDelay := drasiInitBaseDelay
+	drasiInitBaseDelay = 10 * time.Second // long delay so we can verify cancellation during backoff
+	t.Cleanup(func() { drasiInitBaseDelay = origDelay })
+
+	logFile := filepath.Join(t.TempDir(), "drasi.log")
+	installFakeCommands(t, map[string]string{
+		"drasi": fakeScript(fmt.Sprintf(`
+echo %%*>>"%s"
+if "%%1 %%2"=="env kube" exit /b 0
+if "%%1"=="init" (
+  echo tunnel panic 1>&2
+  exit /b 2
+)
+exit /b 1
+`, logFile), fmt.Sprintf(`
+echo "$@" >> "%s"
+if [ "$1 $2" = "env kube" ]; then exit 0; fi
+if [ "$1" = "init" ]; then
+  echo "tunnel panic" >&2
+  exit 2
+fi
+exit 1
+`, logFile)),
+	})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	// Cancel shortly after runDrasiInit starts the backoff sleep.
+	// The progressFn is called just before the sleep, so cancel there.
+	progressFn := func(_ string) {
+		// First retry message means init failed once and backoff starts next.
+		go func() {
+			time.Sleep(50 * time.Millisecond)
+			cancel()
+		}()
+	}
+
+	err := runDrasiInit(ctx, "", false, "", progressFn)
+
+	require.Error(t, err)
+	assert.ErrorIs(t, err, context.Canceled, "should return context.Canceled when cancelled during backoff")
 }
 
 func TestApplyDrasiNetworkPolicies_KubectlMissingReturnsError(t *testing.T) {

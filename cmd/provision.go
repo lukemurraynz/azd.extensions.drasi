@@ -17,6 +17,19 @@ import (
 	"github.com/spf13/cobra"
 )
 
+const (
+	// drasiInitMaxAttempts is the maximum number of times to attempt `drasi init`.
+	// The upstream Drasi CLI can panic with "lost connection to pod" when its
+	// Kubernetes port-forward tunnel drops during the QueryContainer wait phase.
+	// Retrying after a short delay allows the API pod to stabilise.
+	drasiInitMaxAttempts = 3
+)
+
+// drasiInitBaseDelay is the initial backoff between retry attempts.
+// Subsequent attempts double this delay (15 s → 30 s).
+// This is a variable (not a constant) so tests can override it.
+var drasiInitBaseDelay = 15 * time.Second
+
 //go:embed network_policies.yaml
 var drasiNetworkPoliciesYAML string
 
@@ -279,7 +292,9 @@ func defaultRunProvision(cmd *cobra.Command, _ []string) error {
 
 	// Run `drasi init` to bootstrap the Drasi runtime onto AKS.
 	progress.Message("Installing Drasi runtime...")
-	if err := runDrasiInit(cmd.Context(), aksContext, usePrivateAcr == "true", acrLoginServer); err != nil {
+	if err := runDrasiInit(cmd.Context(), aksContext, usePrivateAcr == "true", acrLoginServer, func(msg string) {
+		progress.Message(msg)
+	}); err != nil {
 		return writeCommandError(
 			cmd,
 			output.ERR_DRASI_CLI_ERROR,
@@ -360,7 +375,7 @@ func defaultRunProvision(cmd *cobra.Command, _ []string) error {
 	return nil
 }
 
-func runDrasiInit(ctx context.Context, aksContext string, usePrivateAcr bool, acrLoginServer string) error {
+func runDrasiInit(ctx context.Context, aksContext string, usePrivateAcr bool, acrLoginServer string, progressFn func(string)) error {
 	if aksContext != "" {
 		if err := switchKubectlContext(ctx, aksContext); err != nil {
 			return fmt.Errorf("switching kubectl context to %s: %w", aksContext, err)
@@ -375,7 +390,33 @@ func runDrasiInit(ctx context.Context, aksContext string, usePrivateAcr bool, ac
 	if usePrivateAcr && acrLoginServer != "" {
 		args = append(args, "--registry", acrLoginServer)
 	}
-	return runDrasiCommand(ctx, args...)
+
+	// Retry `drasi init` with exponential backoff.  The upstream Drasi CLI
+	// can panic ("lost connection to pod") when its Kubernetes port-forward
+	// tunnel drops during the QueryContainer wait phase.  A short delay
+	// allows the API pod to stabilise before the next attempt.
+	var lastErr error
+	delay := drasiInitBaseDelay
+	for attempt := 1; attempt <= drasiInitMaxAttempts; attempt++ {
+		lastErr = runDrasiCommand(ctx, args...)
+		if lastErr == nil {
+			return nil
+		}
+
+		if attempt < drasiInitMaxAttempts {
+			if progressFn != nil {
+				progressFn(fmt.Sprintf("Drasi init attempt %d/%d failed, retrying in %s...", attempt, drasiInitMaxAttempts, delay))
+			}
+
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(delay):
+			}
+			delay *= 2
+		}
+	}
+	return lastErr
 }
 
 func switchKubectlContext(ctx context.Context, contextName string) error {
