@@ -102,7 +102,7 @@ func defaultRunProvision(cmd *cobra.Command, _ []string) error {
 		// interactively, but in the gRPC extension context those prompts fail with
 		// "interrupt". We use the PromptService to collect these values first, then
 		// persist them so `azd provision` can proceed non-interactively.
-		if err := ensureSubscriptionAndLocation(ctx, azdClient, envName, progress); err != nil {
+		if err := ensureSubscriptionAndLocation(ctx, azdClient, envName); err != nil {
 			return writeCommandError(
 				cmd,
 				output.ERR_INFRA_PROVISION_FAILED,
@@ -112,8 +112,6 @@ func defaultRunProvision(cmd *cobra.Command, _ []string) error {
 				output.ExitCodes[output.ERR_INFRA_PROVISION_FAILED],
 			)
 		}
-
-		progress.Message("Provisioning Azure infrastructure...")
 
 		// Ensure infra.parameters.environmentName is configured. The Bicep template
 		// declares environmentName as a required parameter. In non-interactive mode
@@ -498,14 +496,11 @@ func ensureSubscriptionAndLocation(
 	ctx context.Context,
 	azdClient *azdext.AzdClient,
 	envName string,
-	progress *ProgressHelper,
 ) error {
 	subID, _ := getEnvValue(ctx, azdClient, envName, "AZURE_SUBSCRIPTION_ID")
 	location, _ := getEnvValue(ctx, azdClient, envName, "AZURE_LOCATION")
 
 	if subID == "" {
-		progress.Message("Selecting Azure subscription...")
-
 		resp, err := azdClient.Prompt().PromptSubscription(ctx, &azdext.PromptSubscriptionRequest{
 			Message: "Select an Azure Subscription to use",
 		})
@@ -524,8 +519,6 @@ func ensureSubscriptionAndLocation(
 	}
 
 	if location == "" {
-		progress.Message("Selecting Azure location...")
-
 		azureContext := &azdext.AzureContext{
 			Scope: &azdext.AzureScope{
 				SubscriptionId: subID,

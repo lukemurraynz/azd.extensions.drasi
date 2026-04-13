@@ -498,8 +498,7 @@ func TestEnsureSubscriptionAndLocation_BothAlreadySet(t *testing.T) {
 		},
 	)
 
-	progress := &ProgressHelper{noop: true}
-	err := ensureSubscriptionAndLocation(context.Background(), azdClient, "dev", progress)
+	err := ensureSubscriptionAndLocation(context.Background(), azdClient, "dev")
 
 	require.NoError(t, err)
 }
@@ -542,8 +541,7 @@ func TestEnsureSubscriptionAndLocation_PromptsAndPersistsBoth(t *testing.T) {
 		},
 	)
 
-	progress := &ProgressHelper{noop: true}
-	err := ensureSubscriptionAndLocation(context.Background(), azdClient, "dev", progress)
+	err := ensureSubscriptionAndLocation(context.Background(), azdClient, "dev")
 
 	require.NoError(t, err)
 	assert.Equal(t, "prompted-sub-id", persisted["AZURE_SUBSCRIPTION_ID"])
@@ -582,8 +580,7 @@ func TestEnsureSubscriptionAndLocation_SubscriptionSetLocationMissing(t *testing
 		},
 	)
 
-	progress := &ProgressHelper{noop: true}
-	err := ensureSubscriptionAndLocation(context.Background(), azdClient, "dev", progress)
+	err := ensureSubscriptionAndLocation(context.Background(), azdClient, "dev")
 
 	require.NoError(t, err)
 	assert.NotContains(t, persisted, "AZURE_SUBSCRIPTION_ID", "should not re-persist existing subscription")
@@ -606,8 +603,7 @@ func TestEnsureSubscriptionAndLocation_SubscriptionPromptFails(t *testing.T) {
 		},
 	)
 
-	progress := &ProgressHelper{noop: true}
-	err := ensureSubscriptionAndLocation(context.Background(), azdClient, "dev", progress)
+	err := ensureSubscriptionAndLocation(context.Background(), azdClient, "dev")
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "prompting for subscription")
@@ -632,8 +628,7 @@ func TestEnsureSubscriptionAndLocation_LocationPromptFails(t *testing.T) {
 		},
 	)
 
-	progress := &ProgressHelper{noop: true}
-	err := ensureSubscriptionAndLocation(context.Background(), azdClient, "dev", progress)
+	err := ensureSubscriptionAndLocation(context.Background(), azdClient, "dev")
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "prompting for location")
