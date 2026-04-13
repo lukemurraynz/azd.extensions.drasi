@@ -87,8 +87,6 @@ func defaultRunProvision(cmd *cobra.Command, _ []string) error {
 	aksClusterName, _ = getEnvValue(ctx, azdClient, envName, "AZURE_AKS_CLUSTER_NAME")
 	rgName, _ = getEnvValue(ctx, azdClient, envName, "AZURE_RESOURCE_GROUP")
 	if aksClusterName == "" || rgName == "" {
-		progress.Message("Provisioning Azure infrastructure...")
-
 		// Ensure the azd environment exists before setting config. When the user
 		// passes --environment <name> for a fresh project, the environment may not
 		// exist yet. Running `env new` creates it; if it already exists, azd returns
@@ -96,6 +94,12 @@ func defaultRunProvision(cmd *cobra.Command, _ []string) error {
 		if err := ensureAzdEnvironment(cmd.Context(), envName); err != nil {
 			_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "warning: could not ensure environment exists: %s\n", err)
 		}
+
+		// Stop the extension spinner before calling PromptService and Workflow().Run().
+		// These route through the azd host's terminal which renders its own interactive
+		// prompts and provisioning progress. An active extension spinner overlaps with
+		// that native UX, producing confusing duplicated output.
+		_ = progress.Stop()
 
 		// Pre-set AZURE_SUBSCRIPTION_ID and AZURE_LOCATION before calling `azd provision`.
 		// The provisioning manager prompts for subscription, location, and resource group
@@ -225,6 +229,10 @@ func defaultRunProvision(cmd *cobra.Command, _ []string) error {
 			)
 		}
 	}
+
+	// Restart the extension spinner for post-provisioning steps that azd does
+	// not handle natively (AKS credentials, Drasi runtime, network policies).
+	_ = progress.Start()
 
 	// Detect unmanaged resources (warn-only, never mutate).
 	if err := warnUnmanagedResources(cmd, ctx, azdClient, envName, format); err != nil {
