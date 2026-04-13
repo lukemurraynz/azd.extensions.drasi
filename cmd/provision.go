@@ -113,6 +113,8 @@ func defaultRunProvision(cmd *cobra.Command, _ []string) error {
 			)
 		}
 
+		progress.Message("Provisioning Azure infrastructure...")
+
 		// Ensure infra.parameters.environmentName is configured. The Bicep template
 		// declares environmentName as a required parameter. In non-interactive mode
 		// (gRPC/extension context), azd cannot prompt for missing parameters, so we
