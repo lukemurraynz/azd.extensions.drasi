@@ -82,6 +82,65 @@ func newTestAzdClient(t *testing.T, service *testEnvironmentService) *azdext.Azd
 	return client
 }
 
+// testPromptService stubs the azdext PromptService for unit tests.
+type testPromptService struct {
+	azdext.UnimplementedPromptServiceServer
+	promptSubscriptionFunc func(context.Context, *azdext.PromptSubscriptionRequest) (*azdext.PromptSubscriptionResponse, error)
+	promptLocationFunc     func(context.Context, *azdext.PromptLocationRequest) (*azdext.PromptLocationResponse, error)
+}
+
+func (s *testPromptService) PromptSubscription(
+	ctx context.Context,
+	req *azdext.PromptSubscriptionRequest,
+) (*azdext.PromptSubscriptionResponse, error) {
+	if s.promptSubscriptionFunc != nil {
+		return s.promptSubscriptionFunc(ctx, req)
+	}
+	return nil, nil
+}
+
+func (s *testPromptService) PromptLocation(
+	ctx context.Context,
+	req *azdext.PromptLocationRequest,
+) (*azdext.PromptLocationResponse, error) {
+	if s.promptLocationFunc != nil {
+		return s.promptLocationFunc(ctx, req)
+	}
+	return nil, nil
+}
+
+// newTestAzdClientWithPrompt creates a test AzdClient with both EnvironmentService
+// and PromptService registered. Use this for tests that exercise prompt-dependent code.
+func newTestAzdClientWithPrompt(
+	t *testing.T,
+	envService *testEnvironmentService,
+	promptService *testPromptService,
+) *azdext.AzdClient {
+	t.Helper()
+
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+
+	server := grpc.NewServer()
+	azdext.RegisterEnvironmentServiceServer(server, envService)
+	azdext.RegisterPromptServiceServer(server, promptService)
+
+	go func() {
+		_ = server.Serve(listener)
+	}()
+
+	t.Cleanup(func() {
+		server.Stop()
+		_ = listener.Close()
+	})
+
+	client, err := azdext.NewAzdClient(azdext.WithAddress(listener.Addr().String()))
+	require.NoError(t, err)
+	t.Cleanup(client.Close)
+
+	return client
+}
+
 func installFakeCommands(t *testing.T, scripts map[string]string) string {
 	t.Helper()
 

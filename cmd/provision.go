@@ -97,6 +97,22 @@ func defaultRunProvision(cmd *cobra.Command, _ []string) error {
 			_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "warning: could not ensure environment exists: %s\n", err)
 		}
 
+		// Pre-set AZURE_SUBSCRIPTION_ID and AZURE_LOCATION before calling `azd provision`.
+		// The provisioning manager prompts for subscription, location, and resource group
+		// interactively, but in the gRPC extension context those prompts fail with
+		// "interrupt". We use the PromptService to collect these values first, then
+		// persist them so `azd provision` can proceed non-interactively.
+		if err := ensureSubscriptionAndLocation(ctx, azdClient, envName, progress); err != nil {
+			return writeCommandError(
+				cmd,
+				output.ERR_INFRA_PROVISION_FAILED,
+				fmt.Sprintf("collecting subscription and location: %s", err),
+				"Run `azd auth login` and ensure you have an active Azure subscription.",
+				format,
+				output.ExitCodes[output.ERR_INFRA_PROVISION_FAILED],
+			)
+		}
+
 		// Ensure infra.parameters.environmentName is configured. The Bicep template
 		// declares environmentName as a required parameter. In non-interactive mode
 		// (gRPC/extension context), azd cannot prompt for missing parameters, so we
@@ -468,6 +484,68 @@ func runDrasiCommand(ctx context.Context, args ...string) error {
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("%s: %w\n%s", output.ERR_DRASI_CLI_ERROR, err, string(out))
 	}
+	return nil
+}
+
+// ensureSubscriptionAndLocation checks whether AZURE_SUBSCRIPTION_ID and
+// AZURE_LOCATION are already set in the azd environment. If either is missing,
+// the user is prompted via the azd PromptService (which routes through the host's
+// interactive terminal). The selected values are persisted so that `azd provision`
+// can proceed without further interactive prompts.
+func ensureSubscriptionAndLocation(
+	ctx context.Context,
+	azdClient *azdext.AzdClient,
+	envName string,
+	progress *ProgressHelper,
+) error {
+	subID, _ := getEnvValue(ctx, azdClient, envName, "AZURE_SUBSCRIPTION_ID")
+	location, _ := getEnvValue(ctx, azdClient, envName, "AZURE_LOCATION")
+
+	if subID == "" {
+		progress.Message("Selecting Azure subscription...")
+
+		resp, err := azdClient.Prompt().PromptSubscription(ctx, &azdext.PromptSubscriptionRequest{
+			Message: "Select an Azure Subscription to use",
+		})
+		if err != nil {
+			return fmt.Errorf("prompting for subscription: %w", err)
+		}
+		subID = resp.Subscription.Id
+
+		if _, err := azdClient.Environment().SetValue(ctx, &azdext.SetEnvRequest{
+			EnvName: envName,
+			Key:     "AZURE_SUBSCRIPTION_ID",
+			Value:   subID,
+		}); err != nil {
+			return fmt.Errorf("persisting AZURE_SUBSCRIPTION_ID: %w", err)
+		}
+	}
+
+	if location == "" {
+		progress.Message("Selecting Azure location...")
+
+		azureContext := &azdext.AzureContext{
+			Scope: &azdext.AzureScope{
+				SubscriptionId: subID,
+			},
+		}
+		resp, err := azdClient.Prompt().PromptLocation(ctx, &azdext.PromptLocationRequest{
+			AzureContext: azureContext,
+		})
+		if err != nil {
+			return fmt.Errorf("prompting for location: %w", err)
+		}
+		location = resp.Location.Name
+
+		if _, err := azdClient.Environment().SetValue(ctx, &azdext.SetEnvRequest{
+			EnvName: envName,
+			Key:     "AZURE_LOCATION",
+			Value:   location,
+		}); err != nil {
+			return fmt.Errorf("persisting AZURE_LOCATION: %w", err)
+		}
+	}
+
 	return nil
 }
 

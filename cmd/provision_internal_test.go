@@ -467,3 +467,174 @@ exit 1
 	require.NoError(t, err)
 	assert.Equal(t, []string{"config current-context", "config use-context desired-context", "apply -f -"}, readNonEmptyLines(t, logFile))
 }
+
+// ---------------------------------------------------------------------------
+// ensureSubscriptionAndLocation tests
+// ---------------------------------------------------------------------------
+
+func TestEnsureSubscriptionAndLocation_BothAlreadySet(t *testing.T) {
+	t.Parallel()
+
+	envValues := map[string]string{
+		"AZURE_SUBSCRIPTION_ID": "existing-sub",
+		"AZURE_LOCATION":        "westus2",
+	}
+
+	azdClient := newTestAzdClientWithPrompt(t,
+		&testEnvironmentService{
+			getValueFunc: func(_ context.Context, req *azdext.GetEnvRequest) (*azdext.KeyValueResponse, error) {
+				return &azdext.KeyValueResponse{Value: envValues[req.Key]}, nil
+			},
+		},
+		&testPromptService{
+			promptSubscriptionFunc: func(_ context.Context, _ *azdext.PromptSubscriptionRequest) (*azdext.PromptSubscriptionResponse, error) {
+				t.Fatal("PromptSubscription should not be called when value already set")
+				return nil, nil
+			},
+			promptLocationFunc: func(_ context.Context, _ *azdext.PromptLocationRequest) (*azdext.PromptLocationResponse, error) {
+				t.Fatal("PromptLocation should not be called when value already set")
+				return nil, nil
+			},
+		},
+	)
+
+	progress := &ProgressHelper{noop: true}
+	err := ensureSubscriptionAndLocation(context.Background(), azdClient, "dev", progress)
+
+	require.NoError(t, err)
+}
+
+func TestEnsureSubscriptionAndLocation_PromptsAndPersistsBoth(t *testing.T) {
+	t.Parallel()
+
+	persisted := map[string]string{}
+
+	azdClient := newTestAzdClientWithPrompt(t,
+		&testEnvironmentService{
+			getValueFunc: func(_ context.Context, req *azdext.GetEnvRequest) (*azdext.KeyValueResponse, error) {
+				// Return empty for both — triggers prompting.
+				return &azdext.KeyValueResponse{Value: ""}, nil
+			},
+			setValueFunc: func(_ context.Context, req *azdext.SetEnvRequest) (*azdext.EmptyResponse, error) {
+				persisted[req.Key] = req.Value
+				return &azdext.EmptyResponse{}, nil
+			},
+		},
+		&testPromptService{
+			promptSubscriptionFunc: func(_ context.Context, _ *azdext.PromptSubscriptionRequest) (*azdext.PromptSubscriptionResponse, error) {
+				return &azdext.PromptSubscriptionResponse{
+					Subscription: &azdext.Subscription{
+						Id:   "prompted-sub-id",
+						Name: "My Sub",
+					},
+				}, nil
+			},
+			promptLocationFunc: func(_ context.Context, req *azdext.PromptLocationRequest) (*azdext.PromptLocationResponse, error) {
+				// Verify the subscription ID was passed through.
+				assert.Equal(t, "prompted-sub-id", req.AzureContext.Scope.SubscriptionId)
+				return &azdext.PromptLocationResponse{
+					Location: &azdext.Location{
+						Name:        "eastus2",
+						DisplayName: "East US 2",
+					},
+				}, nil
+			},
+		},
+	)
+
+	progress := &ProgressHelper{noop: true}
+	err := ensureSubscriptionAndLocation(context.Background(), azdClient, "dev", progress)
+
+	require.NoError(t, err)
+	assert.Equal(t, "prompted-sub-id", persisted["AZURE_SUBSCRIPTION_ID"])
+	assert.Equal(t, "eastus2", persisted["AZURE_LOCATION"])
+}
+
+func TestEnsureSubscriptionAndLocation_SubscriptionSetLocationMissing(t *testing.T) {
+	t.Parallel()
+
+	persisted := map[string]string{}
+
+	azdClient := newTestAzdClientWithPrompt(t,
+		&testEnvironmentService{
+			getValueFunc: func(_ context.Context, req *azdext.GetEnvRequest) (*azdext.KeyValueResponse, error) {
+				if req.Key == "AZURE_SUBSCRIPTION_ID" {
+					return &azdext.KeyValueResponse{Value: "pre-set-sub"}, nil
+				}
+				return &azdext.KeyValueResponse{Value: ""}, nil
+			},
+			setValueFunc: func(_ context.Context, req *azdext.SetEnvRequest) (*azdext.EmptyResponse, error) {
+				persisted[req.Key] = req.Value
+				return &azdext.EmptyResponse{}, nil
+			},
+		},
+		&testPromptService{
+			promptSubscriptionFunc: func(_ context.Context, _ *azdext.PromptSubscriptionRequest) (*azdext.PromptSubscriptionResponse, error) {
+				t.Fatal("PromptSubscription should not be called when subscription already set")
+				return nil, nil
+			},
+			promptLocationFunc: func(_ context.Context, req *azdext.PromptLocationRequest) (*azdext.PromptLocationResponse, error) {
+				assert.Equal(t, "pre-set-sub", req.AzureContext.Scope.SubscriptionId)
+				return &azdext.PromptLocationResponse{
+					Location: &azdext.Location{Name: "westeurope"},
+				}, nil
+			},
+		},
+	)
+
+	progress := &ProgressHelper{noop: true}
+	err := ensureSubscriptionAndLocation(context.Background(), azdClient, "dev", progress)
+
+	require.NoError(t, err)
+	assert.NotContains(t, persisted, "AZURE_SUBSCRIPTION_ID", "should not re-persist existing subscription")
+	assert.Equal(t, "westeurope", persisted["AZURE_LOCATION"])
+}
+
+func TestEnsureSubscriptionAndLocation_SubscriptionPromptFails(t *testing.T) {
+	t.Parallel()
+
+	azdClient := newTestAzdClientWithPrompt(t,
+		&testEnvironmentService{
+			getValueFunc: func(_ context.Context, _ *azdext.GetEnvRequest) (*azdext.KeyValueResponse, error) {
+				return &azdext.KeyValueResponse{Value: ""}, nil
+			},
+		},
+		&testPromptService{
+			promptSubscriptionFunc: func(_ context.Context, _ *azdext.PromptSubscriptionRequest) (*azdext.PromptSubscriptionResponse, error) {
+				return nil, errors.New("user cancelled")
+			},
+		},
+	)
+
+	progress := &ProgressHelper{noop: true}
+	err := ensureSubscriptionAndLocation(context.Background(), azdClient, "dev", progress)
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "prompting for subscription")
+}
+
+func TestEnsureSubscriptionAndLocation_LocationPromptFails(t *testing.T) {
+	t.Parallel()
+
+	azdClient := newTestAzdClientWithPrompt(t,
+		&testEnvironmentService{
+			getValueFunc: func(_ context.Context, req *azdext.GetEnvRequest) (*azdext.KeyValueResponse, error) {
+				if req.Key == "AZURE_SUBSCRIPTION_ID" {
+					return &azdext.KeyValueResponse{Value: "sub-123"}, nil
+				}
+				return &azdext.KeyValueResponse{Value: ""}, nil
+			},
+		},
+		&testPromptService{
+			promptLocationFunc: func(_ context.Context, _ *azdext.PromptLocationRequest) (*azdext.PromptLocationResponse, error) {
+				return nil, errors.New("no locations available")
+			},
+		},
+	)
+
+	progress := &ProgressHelper{noop: true}
+	err := ensureSubscriptionAndLocation(context.Background(), azdClient, "dev", progress)
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "prompting for location")
+}
