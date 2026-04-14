@@ -106,6 +106,7 @@ param scriptIdentityId string
 // The deployment script runs psql to:
 // 1. Create the orders table (IF NOT EXISTS) — required by the sample continuous query.
 // 2. Grant REPLICATION to the admin role — required for Drasi PostgreSQL CDC.
+// 3. Create a publication for the orders table — required for logical replication.
 // The script is idempotent and safe to re-run on subsequent provisions.
 resource dbBootstrap 'Microsoft.Resources/deploymentScripts@2023-08-01' = {
   name: 'pg-bootstrap-${uniqueString(resourceGroup().id)}'
@@ -146,6 +147,15 @@ resource dbBootstrap 'Microsoft.Resources/deploymentScripts@2023-08-01' = {
 
       echo "Granting REPLICATION role..."
       psql -c "ALTER ROLE \"${PGUSER}\" REPLICATION;"
+
+      echo "Creating publication for Drasi CDC..."
+      psql -c "DO \$\$
+      BEGIN
+        IF NOT EXISTS (SELECT 1 FROM pg_publication WHERE pubname = 'drasi_publication') THEN
+          CREATE PUBLICATION drasi_publication FOR TABLE public.orders;
+        END IF;
+      END
+      \$\$;"
 
       echo "Database bootstrap completed successfully"
     '''

@@ -173,6 +173,8 @@ func TestListComponents_EmptyList_ReturnsEmptySlice(t *testing.T) {
 		stdout string
 	}{
 		{name: "pipe delimited with header only", stdout: "  ID | AVAILABLE | INGRESS URL\n------+-----------+------------\n"},
+		{name: "single column ID with separator", stdout: "  ID\n------\n"},
+		{name: "single column ID with separator and trailing newline", stdout: "  ID\n------\n\n"},
 		{name: "legacy header only", stdout: "ID KIND STATUS\n"},
 		{name: "empty output", stdout: ""},
 		{name: "whitespace only", stdout: "  \n  \n"},

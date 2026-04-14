@@ -90,7 +90,11 @@ func parseListOutput(stdout, kind string) ([]ComponentSummary, error) {
 	}
 
 	// Detect pipe-delimited format (real Drasi CLI output).
-	if strings.Contains(headerLine, "|") {
+	// Also handle single-column tables (e.g. just "ID" with no pipes) that
+	// the Drasi CLI emits when a kind has no components. A header that
+	// consists solely of "ID" followed by a separator line is a valid
+	// pipe-delimited table with zero data rows.
+	if strings.Contains(headerLine, "|") || hasSeparatorLine(lines, headerIndex) {
 		return parsePipeDelimited(lines, headerIndex, kind)
 	}
 
@@ -200,6 +204,20 @@ func splitPipeRow(line string) []string {
 		cols[i] = strings.TrimSpace(p)
 	}
 	return cols
+}
+
+// hasSeparatorLine checks whether the line immediately after headerIndex is a
+// separator (e.g. "------"). This lets us detect single-column pipe-delimited
+// tables that lack a "|" character.
+func hasSeparatorLine(lines []string, headerIndex int) bool {
+	for _, line := range lines[headerIndex+1:] {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" {
+			continue
+		}
+		return isSeparatorLine(trimmed)
+	}
+	return false
 }
 
 // isSeparatorLine returns true for lines like "---+---+---" or "------+------".
