@@ -30,7 +30,6 @@ func TestInitCommand_TemplateFlag_AcceptsAllTemplates(t *testing.T) {
 	templates := []string{
 		"blank",
 		"event-hub-routing",
-		"query-subscription",
 	}
 
 	for _, tmpl := range templates {

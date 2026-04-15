@@ -7,11 +7,10 @@ includes:
     pattern: "queries/*.yaml"
   - kind: reactions
     pattern: "reactions/*.yaml"
-environments:
-  # staging:
-  #   components:
-  #     - kind: source
-  #       id: my-source
-  #       properties:
-  #         connectionString: "staging-connection-string"
+environments: {}
 featureFlags: {}
+secretMappings:
+  - vaultName: "$(AZURE_KEY_VAULT_NAME)"
+    secretName: eventhub-connection-string
+    k8sSecret: eventhub-source-secrets
+    k8sKey: connectionString

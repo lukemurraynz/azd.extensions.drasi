@@ -1,8 +1,0 @@
-# subscription-reaction.yaml - Drasi SignalR Reaction for query subscription pattern
-apiVersion: v1
-kind: Reaction
-name: subscription-reaction
-spec:
-  kind: SignalR
-  queries:
-    subscription-query: ""

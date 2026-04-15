@@ -1,13 +1,16 @@
+# Event Hub source — connects Drasi to Azure Event Hubs for routing-based event processing.
+# Namespace, event hub, and connection string are resolved from azd environment state at deploy time.
+# The connection string is stored in Azure Key Vault and synced to a Kubernetes Secret via secretMappings.
 apiVersion: v1
 kind: Source
 name: eventhub-source
 spec:
   kind: EventHub
   properties:
-    namespace: "<your-eventhub-namespace>"
-    eventHub: "<your-eventhub-name>"
+    namespace: $(AZURE_EVENTHUB_NAMESPACE)
+    eventHub: $(AZURE_EVENTHUB_NAME)
     consumerGroup: "$Default"
     connectionString:
-      secretRef:
-        vaultName: "<your-keyvault-name>"
-        secretName: "eventhub-connection-string"
+      kind: Secret
+      name: eventhub-source-secrets
+      key: connectionString

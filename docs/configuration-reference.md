@@ -28,10 +28,8 @@ Use this guide to pick the right starter template for `azd drasi init --template
 
 | Template | Use when | Data source | What you get |
 | -------- | -------- | ----------- | ------------ |
-| `cosmos-change-feed` | You need to react to changes in Azure Cosmos DB (**experimental** — see template README for known limitations) | Cosmos DB change feed | Cosmos DB source, sample query, debug reaction, AKS + Key Vault + Cosmos DB infra |
 | `postgresql-source` | You need to react to changes in PostgreSQL via logical replication | PostgreSQL (logical replication) | PostgreSQL source, sample query, debug reaction, AKS + Key Vault + PostgreSQL infra |
 | `event-hub-routing` | You need to route events from Azure Event Hubs through Drasi queries | Azure Event Hubs | Event Hub source, routing query, reaction, AKS + Key Vault + Event Hub infra |
-| `query-subscription` | You need a notification workflow triggered by query result changes | Any (bring your own source) | Sample query with subscription reaction, minimal infra |
 | `blank` | You want an empty Drasi project structure with Bicep infra | N/A | Empty drasi/ directory structure, blank Bicep modules |
 | `blank-terraform` | You want an empty Drasi project structure with Terraform infra | N/A | Empty drasi/ directory structure, blank Terraform modules |
 

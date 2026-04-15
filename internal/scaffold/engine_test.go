@@ -165,7 +165,6 @@ func TestScaffold_AllTemplates_ProduceFiles(t *testing.T) {
 		"blank-terraform",
 		"event-hub-routing",
 		"postgresql-source",
-		"query-subscription",
 	}
 
 	for _, tmpl := range templates {
@@ -193,7 +192,6 @@ func TestScaffold_AllTemplates_ForceOverwrite(t *testing.T) {
 	templates := []string{
 		"blank-terraform",
 		"event-hub-routing",
-		"query-subscription",
 	}
 
 	for _, tmpl := range templates {

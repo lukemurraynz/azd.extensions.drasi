@@ -10,7 +10,7 @@ Drasi requires coordinating several Azure resources (AKS, Key Vault, managed ide
 
 ## Features
 
-- Scaffold new Drasi projects from built-in templates (blank, blank-terraform, event-hub-routing, query-subscription, postgresql-source)
+- Scaffold new Drasi projects from built-in templates (blank, blank-terraform, event-hub-routing, postgresql-source)
 - Offline validation of sources, queries, reactions, and middleware before any deployment
 - Provision AKS with OIDC and Workload Identity, Key Vault, Log Analytics, and the Drasi runtime in a single command
 - Deploy components in dependency order with per-component health checks
@@ -95,7 +95,7 @@ Scaffold a new Drasi project from a built-in template.
 
 | Flag           | Type   | Default | Description                                                                                                                              |
 | -------------- | ------ | ------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| `--template`   | string | `blank` | Template name. One of: `blank`, `blank-terraform`, `event-hub-routing`, `query-subscription`, `postgresql-source`. |
+| `--template`   | string | `blank` | Template name. One of: `blank`, `blank-terraform`, `event-hub-routing`, `postgresql-source`. |
 | `--output-dir` | string | `.`     | Directory to write scaffolded files into.                                                                                                |
 | `--force`      | bool   | `false` | Overwrite existing files without prompting.                                                                                              |
 

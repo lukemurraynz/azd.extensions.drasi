@@ -41,7 +41,7 @@ func newInitCommand() *cobra.Command {
 		},
 	}
 
-	command.Flags().StringVar(&templateName, "template", "blank", "Template to scaffold. One of: blank, blank-terraform, event-hub-routing, query-subscription, postgresql-source")
+	command.Flags().StringVar(&templateName, "template", "blank", "Template to scaffold. One of: blank, blank-terraform, event-hub-routing, postgresql-source")
 	command.Flags().BoolVar(&force, "force", false, "Overwrite existing files")
 	command.Flags().StringVar(&outputDir, "output-dir", ".", "Directory to scaffold into")
 	// NOTE: --environment is accepted for future use (environment overlay selection).

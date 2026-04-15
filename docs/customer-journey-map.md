@@ -90,7 +90,7 @@ Alex is a senior platform engineer at a mid-size SaaS company that runs its oper
 - Reviews the prerequisites table: `azd >= 1.10.0`, `drasi >= 0.10.0`, `Azure CLI >= 2.60.0`, `Go >= 1.22`, `Docker >= 24.0`, `kubectl >= 1.28`.
 - Checks the team's CI environment against those versions.
 - Reads the "Why this exists" section and the features list.
-- Explores available templates: `cosmos-change-feed`, `event-hub-routing`, `query-subscription`, `postgresql-source`, `blank`, `blank-terraform`.
+- Explores available templates: `event-hub-routing`, `postgresql-source`, `blank`, `blank-terraform`.
 - Considers the Terraform template as a potential path for teams with existing Terraform state.
 - Evaluates the Key Vault secret reference pattern (no secrets in source control) against the team's security requirements.
 - Reads the error code reference to assess how debuggable failures will be.
@@ -230,7 +230,7 @@ Alex is a senior platform engineer at a mid-size SaaS company that runs its oper
 
 - Iterates on openCypher query syntax using `azd drasi validate` before each deploy.
 - Uses `azd drasi deploy --dry-run` to preview component changes in a staging environment.
-- Adds a second continuous query (`azd drasi init --template query-subscription`) as a new use case emerges.
+- Adds a second continuous query (`azd drasi init --template event-hub-routing`) as a new use case emerges.
 - Sets up `drasi/environments/staging.yaml` with staging-specific Key Vault references and confirms the overlay applies correctly.
 - Integrates `azd drasi validate` into the GitHub Actions CI pipeline as a pre-deploy gate.
 - Uses `--output json` on status and diagnose commands to feed a team dashboard.
@@ -422,7 +422,7 @@ Move the devcontainer mention to the top of the "Quick start" section in the REA
 
 **3. Add a templates decision guide**
 
-A short table or paragraph in the docs explaining when to use each template (`cosmos-change-feed` for Cosmos DB CDC, `postgresql-source` for PostgreSQL logical replication, `event-hub-routing` for Event Hub fan-out, `query-subscription` for notification workflows, `blank` for custom configurations) removes a question that currently requires reading multiple quickstart files.
+A short table or paragraph in the docs explaining when to use each template (`postgresql-source` for PostgreSQL logical replication, `event-hub-routing` for Event Hub fan-out, `blank` for custom configurations) removes a question that currently requires reading multiple quickstart files.
 
 **4. Clarify FederatedIdentityCredential automation**
 
