@@ -45,6 +45,7 @@ var aksSubnetPrefix = '10.0.0.0/22' // /22 = 1022 usable IPs; sufficient for Azu
 // Role definition GUIDs (built-in, verified against Azure RBAC docs)
 // https://learn.microsoft.com/azure/role-based-access-control/built-in-roles
 var kvSecretsUserRoleId        = '4633458b-17de-408a-b874-0445c86b69e6' // Key Vault Secrets User
+var kvSecretsOfficerRoleId     = 'b86a8fe4-44ce-4948-aee5-eccb2c155cd7' // Key Vault Secrets Officer
 var monitoringPublisherRoleId  = '3913510d-42f4-4e42-8a64-420c390055eb' // Monitoring Metrics Publisher
 var networkContributorRoleId   = '4d97b98b-1d4f-4787-a291-c67834d212e7' // Network Contributor
 var aksRbacClusterAdminRoleId  = 'b1ff04bb-8a4e-4dc4-8eb5-8693973ce19b' // Azure Kubernetes Service RBAC Cluster Admin
@@ -112,6 +113,13 @@ module keyVault 'br/public:avm/res/key-vault/vault:0.13.3' = {
         principalId: uami.outputs.principalId
         roleDefinitionIdOrName: kvSecretsUserRoleId
         principalType: 'ServicePrincipal'
+      }
+      // Grant the deploying user Key Vault Secrets Officer so the provision step can
+      // store secrets and the deploy step can read them via `az keyvault secret show`.
+      {
+        principalId: principalId
+        roleDefinitionIdOrName: kvSecretsOfficerRoleId
+        principalType: 'User'
       }
     ]
   }
