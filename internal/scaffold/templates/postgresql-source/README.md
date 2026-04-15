@@ -33,6 +33,8 @@ azd drasi deploy
 azd drasi status
 ```
 
+> **Note**: If you encounter "LocationIsOfferRestricted" errors during provisioning, your Azure subscription may be restricted in certain regions. Set a different location using `azd env set AZURE_LOCATION <region>` (e.g., `australiaeast`, `westeurope`). Run `az postgres flexible-server list-skus --location <region>` to check PostgreSQL availability in your preferred region.
+
 ## Customizing
 
 ### Change the watched tables
@@ -59,4 +61,12 @@ azd drasi deploy --environment <name>
 
 The `infra/modules/postgresql.bicep` module provisions a Burstable B1ms server with public network access and logical replication enabled. This configuration is intended for development. For production, consider private endpoints and a larger SKU.
 
-The admin password uses `uniqueString()` as a placeholder for development only. Replace it with a Key Vault secret reference for production deployments.
+The admin password is auto-generated during `azd drasi provision` and stored securely in Azure Key Vault. No secrets are stored in source control.
+
+### Changing the deployment location
+
+Azure Database for PostgreSQL Flexible Server availability varies by region. If provisioning fails with a location restriction error:
+
+1. Check available regions: `az postgres flexible-server list-skus --location <region>`
+2. Set your preferred location: `azd env set AZURE_LOCATION <region>`
+3. Re-run: `azd drasi provision`

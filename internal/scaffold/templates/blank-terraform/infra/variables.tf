@@ -7,8 +7,8 @@ variable "resource_group_name" {
 
 variable "location" {
   type        = string
-  description = "Azure region for all resources."
-  default     = "eastus"
+  description = "Azure region for all resources. azd sets this from AZURE_LOCATION environment variable."
+  default     = "" # Empty default defers to azd's AZURE_LOCATION
 }
 
 variable "environment_name" {

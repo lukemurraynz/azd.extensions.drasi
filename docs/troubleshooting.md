@@ -37,6 +37,28 @@ Check the deployment error in the Azure portal under the resource group's deploy
 az deployment sub show --name <deployment-name> --query properties.error
 ```
 
+### `LocationIsOfferRestricted` error during PostgreSQL provisioning
+
+Azure Database for PostgreSQL Flexible Server availability varies by region and subscription type. If you receive this error:
+
+1. Check available regions for your subscription:
+   ```bash
+   az postgres flexible-server list-skus --location <region>
+   ```
+   Look for regions where `"reason": null` (not "Subscriptions are restricted...").
+
+2. Set your preferred location before provisioning:
+   ```bash
+   azd env set AZURE_LOCATION australiaeast  # or your preferred region
+   ```
+
+3. Re-run the provision:
+   ```bash
+   azd drasi provision
+   ```
+
+If the issue persists, your subscription may have a general PostgreSQL restriction. Contact Azure support or use a different subscription type (e.g., Visual Studio Enterprise).
+
 ### Components stuck in `Pending` after deploy
 
 If `azd drasi status` shows components in `Pending` for more than a few minutes:
